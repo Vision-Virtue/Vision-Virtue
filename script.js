@@ -50,7 +50,7 @@ const observer = new IntersectionObserver((entries) => {
 }, observerOptions);
 
 // Observe animated elements
-document.querySelectorAll('.who-card, .step, .apart-card, .team-card').forEach(el => {
+document.querySelectorAll('.who-card, .step, .apart-card, .team-card, .pf-step, .vi-card').forEach(el => {
   observer.observe(el);
 });
 
