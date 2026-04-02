@@ -339,36 +339,179 @@ body {
   width: 340px;
   height: 340px;
   border-radius: 50%;
-  background:
-    radial-gradient(ellipse at 30% 30%, #5ba4c8 0%, #2a7aad 25%, #1a4f7a 55%, #0d2a4a 80%, #080f20 100%);
-  box-shadow:
-    0 0 80px rgba(30, 100, 160, 0.35),
-    0 0 0 1px rgba(255,255,255,0.08),
-    inset 0 1px 0 rgba(255,255,255,0.15);
   position: relative;
   overflow: hidden;
+  box-shadow:
+    0 0 0 6px rgba(255,255,255,0.08),
+    0 0 0 12px rgba(255,255,255,0.04),
+    0 20px 80px rgba(10, 80, 140, 0.5),
+    0 0 120px rgba(80, 160, 210, 0.2);
+  /* Sky: pale blue-white at top, deepening to horizon */
+  background: linear-gradient(
+    180deg,
+    #e8f5fc 0%,
+    #c8e8f5 12%,
+    #9fd0eb 25%,
+    #70b5de 38%,
+    #4a9acf 44%,
+    /* Horizon bright line */
+    #d4eefa 47%,
+    #b8dfef 49%,
+    /* Water surface */
+    #5da8cc 51%,
+    #3a8ab4 58%,
+    #1e6a96 67%,
+    #0d4d7a 78%,
+    #073660 90%,
+    #041f3a 100%
+  );
 }
 
-/* Horizon line inside circle */
+/* Horizon glow */
 .hero-circle::before {
   content: '';
   position: absolute;
-  top: 52%;
-  left: 0; right: 0;
-  height: 1px;
-  background: rgba(255,255,255,0.2);
+  top: 44%;
+  left: -10%;
+  width: 120%;
+  height: 12%;
+  background: radial-gradient(
+    ellipse at 50% 50%,
+    rgba(220, 242, 255, 0.9) 0%,
+    rgba(180, 225, 248, 0.5) 35%,
+    transparent 70%
+  );
+  filter: blur(3px);
 }
 
-/* Light reflection */
+/* Water surface shimmer / ripple */
 .hero-circle::after {
   content: '';
   position: absolute;
-  top: 5%;
-  left: 10%;
-  width: 80%;
-  height: 45%;
-  background: linear-gradient(180deg, rgba(160,210,240,0.25) 0%, transparent 100%);
-  border-radius: 50%;
+  top: 48%;
+  left: -20%;
+  width: 140%;
+  height: 55%;
+  background:
+    /* Wide shimmer bands */
+    repeating-linear-gradient(
+      180deg,
+      transparent 0px,
+      transparent 6px,
+      rgba(255,255,255,0.04) 6px,
+      rgba(255,255,255,0.04) 7px,
+      transparent 7px,
+      transparent 14px,
+      rgba(255,255,255,0.06) 14px,
+      rgba(255,255,255,0.06) 15px
+    ),
+    /* Diagonal sparkle streaks */
+    repeating-linear-gradient(
+      85deg,
+      transparent 0px,
+      transparent 40px,
+      rgba(255,255,255,0.05) 40px,
+      rgba(255,255,255,0.05) 42px,
+      transparent 42px,
+      transparent 90px,
+      rgba(255,255,255,0.03) 90px,
+      rgba(255,255,255,0.03) 92px
+    );
+  animation: oceanShimmer 6s ease-in-out infinite alternate;
+}
+
+@keyframes oceanShimmer {
+  0%   { transform: translateX(0) skewX(0deg); opacity: 0.8; }
+  50%  { transform: translateX(8px) skewX(0.5deg); opacity: 1; }
+  100% { transform: translateX(-4px) skewX(-0.3deg); opacity: 0.85; }
+}
+
+/* Ocean inner layers */
+.ocean-sky {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    #eef8fd 0%,
+    #d0eaf8 15%,
+    #a5d2ed 30%,
+    #72b6e0 42%,
+    #4e9dcf 47%
+  );
+}
+
+.ocean-water {
+  position: absolute;
+  top: 47%; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(
+    180deg,
+    #b6dcef 0%,
+    #5aaccf 8%,
+    #2e86b0 22%,
+    #166592 40%,
+    #0a4a74 60%,
+    #062d50 80%,
+    #03192e 100%
+  );
+}
+
+/* Horizon glow line */
+.ocean-sky::after {
+  content: '';
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  height: 8px;
+  background: linear-gradient(180deg,
+    rgba(200,235,252,0) 0%,
+    rgba(220,245,255,0.95) 50%,
+    rgba(185,228,248,0.6) 100%
+  );
+  filter: blur(2px);
+}
+
+/* Wave ripples */
+.ocean-waves {
+  position: absolute;
+  top: 47%; left: 0; right: 0; bottom: 0;
+  background:
+    repeating-linear-gradient(
+      180deg,
+      transparent 0px, transparent 8px,
+      rgba(255,255,255,0.045) 8px, rgba(255,255,255,0.045) 9px,
+      transparent 9px, transparent 18px,
+      rgba(255,255,255,0.03) 18px, rgba(255,255,255,0.03) 19px
+    );
+  animation: waveDrift 8s ease-in-out infinite alternate;
+}
+
+@keyframes waveDrift {
+  0%   { transform: scaleX(1) translateY(0px); }
+  50%  { transform: scaleX(1.03) translateY(-2px); }
+  100% { transform: scaleX(0.98) translateY(1px); }
+}
+
+/* Sun reflection streak */
+.ocean-reflection {
+  position: absolute;
+  top: 48%;
+  left: 30%;
+  width: 40%;
+  bottom: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(255,255,255,0.35) 0%,
+    rgba(255,255,255,0.12) 15%,
+    rgba(180,225,248,0.06) 40%,
+    transparent 70%
+  );
+  filter: blur(4px);
+  animation: reflectionPulse 5s ease-in-out infinite alternate;
+}
+
+@keyframes reflectionPulse {
+  0%   { opacity: 0.7; transform: scaleX(0.9); }
+  50%  { opacity: 1;   transform: scaleX(1.1); }
+  100% { opacity: 0.8; transform: scaleX(0.95); }
 }
 
 .hero-v-mark {
