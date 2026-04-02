@@ -415,7 +415,7 @@ body {
 .what-section {
   display: grid;
   grid-template-columns: 1fr 1.6fr;
-  min-height: 600px;
+  min-height: 680px;
 }
 
 .what-left {
@@ -446,8 +446,8 @@ body {
   padding: 5rem 4rem;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 3rem;
+  justify-content: space-evenly;
+  gap: 2.5rem;
 }
 
 .what-statement {
@@ -521,7 +521,7 @@ body {
    WHO WE ARE
    ============================================================ */
 .who-section {
-  padding: 6rem 2rem;
+  padding: 6rem 2rem 7rem;
   background: var(--white);
 }
 
@@ -539,7 +539,7 @@ body {
   margin: 0 auto;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 1.5rem;
+  gap: 1.75rem;
 }
 
 .who-card {
@@ -1342,18 +1342,29 @@ body {
    ============================================================ */
 .methodology-section {
   display: grid;
-  grid-template-columns: 320px 1fr;
-  min-height: 560px;
+  grid-template-columns: 380px 1fr;
+  min-height: 620px;
 }
 
 .meth-left {
   background: linear-gradient(160deg, var(--navy-900) 0%, var(--navy-700) 100%);
-  padding: 5rem 3rem;
+  padding: 5rem 3.5rem;
   display: flex;
   flex-direction: column;
   justify-content: center;
   position: relative;
   overflow: hidden;
+}
+
+/* Constrain titles inside narrow left panels */
+.meth-left .section-title,
+.ripple-left .section-title,
+.what-left .section-title,
+.team-header-col .section-title {
+  font-size: clamp(1.6rem, 2.4vw, 2.4rem);
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: none;
 }
 
 .meth-v-bg {
@@ -1377,22 +1388,22 @@ body {
 
 .meth-wheel-wrap {
   position: relative;
-  width: 420px;
-  height: 420px;
+  width: 500px;
+  height: 500px;
   flex-shrink: 0;
 }
 
 /* 4-quadrant wheel */
 .meth-wheel {
-  width: 360px;
-  height: 360px;
+  width: 420px;
+  height: 420px;
   position: absolute;
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
-  gap: 4px;
+  gap: 5px;
   border-radius: 50%;
   overflow: hidden;
 }
@@ -1422,9 +1433,9 @@ body {
 .mw-br .mw-label { transform: translate(15%, 15%); }
 
 .mw-icon-wrap {
-  width: 36px;
-  height: 36px;
-  background: rgba(255,255,255,0.15);
+  width: 44px;
+  height: 44px;
+  background: rgba(255,255,255,0.18);
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -1432,14 +1443,14 @@ body {
 }
 
 .mw-icon-wrap svg {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   color: white;
 }
 
 .mw-label {
   font-family: var(--font-head);
-  font-size: 0.62rem;
+  font-size: 0.7rem;
   font-weight: 800;
   letter-spacing: 0.1em;
   color: var(--white);
@@ -1451,20 +1462,20 @@ body {
   position: absolute;
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  width: 100px;
-  height: 100px;
+  width: 116px;
+  height: 116px;
   background: var(--white);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 24px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 32px rgba(0,0,0,0.18);
   z-index: 10;
 }
 
 .mw-center svg {
-  width: 44px;
-  height: 44px;
+  width: 52px;
+  height: 52px;
   color: var(--navy-700);
 }
 
@@ -1477,18 +1488,22 @@ body {
 
 .meth-ann {
   position: absolute;
-  font-size: 0.78rem;
+  font-size: 0.8rem;
   font-weight: 500;
   color: var(--gray-600);
-  max-width: 100px;
-  text-align: center;
+  max-width: 115px;
   line-height: 1.4;
+  background: var(--white);
+  padding: 0.35rem 0.6rem;
+  border-radius: 5px;
+  border: 1px solid var(--gray-100);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
 }
 
-.meth-ann-tl { top: 4px; left: 4px; text-align: left; }
-.meth-ann-tr { top: 4px; right: 4px; text-align: right; }
-.meth-ann-bl { bottom: 4px; left: 4px; text-align: left; }
-.meth-ann-br { bottom: 4px; right: 4px; text-align: right; }
+.meth-ann-tl { top: 8px; left: 8px; text-align: left; }
+.meth-ann-tr { top: 8px; right: 8px; text-align: right; }
+.meth-ann-bl { bottom: 8px; left: 8px; text-align: left; }
+.meth-ann-br { bottom: 8px; right: 8px; text-align: right; }
 
 /* ============================================================
    THE PILLAR FLOW
@@ -2109,10 +2124,11 @@ body {
 
   .vi-metrics { flex-direction: column; }
 
-  .meth-wheel-wrap { width: 300px; height: 300px; }
-  .meth-wheel { width: 260px; height: 260px; }
-  .mw-center { width: 72px; height: 72px; }
-  .mw-center svg { width: 32px; height: 32px; }
+  .meth-wheel-wrap { width: 320px; height: 320px; }
+  .meth-wheel { width: 280px; height: 280px; }
+  .mw-center { width: 80px; height: 80px; }
+  .mw-center svg { width: 36px; height: 36px; }
+  .meth-ann { font-size: 0.7rem; max-width: 90px; }
 
   .form-row { grid-template-columns: 1fr; }
 
