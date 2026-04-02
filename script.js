@@ -49,8 +49,8 @@ const observer = new IntersectionObserver((entries) => {
   });
 }, observerOptions);
 
-// Observe who-cards and steps
-document.querySelectorAll('.who-card, .step').forEach(el => {
+// Observe animated elements
+document.querySelectorAll('.who-card, .step, .apart-card, .team-card').forEach(el => {
   observer.observe(el);
 });
 
