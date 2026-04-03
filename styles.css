@@ -342,176 +342,112 @@ body {
   position: relative;
   overflow: hidden;
   box-shadow:
-    0 0 0 6px rgba(255,255,255,0.08),
-    0 0 0 12px rgba(255,255,255,0.04),
-    0 20px 80px rgba(10, 80, 140, 0.5),
-    0 0 120px rgba(80, 160, 210, 0.2);
-  /* Sky: pale blue-white at top, deepening to horizon */
-  background: linear-gradient(
-    180deg,
-    #e8f5fc 0%,
-    #c8e8f5 12%,
-    #9fd0eb 25%,
-    #70b5de 38%,
-    #4a9acf 44%,
-    /* Horizon bright line */
-    #d4eefa 47%,
-    #b8dfef 49%,
-    /* Water surface */
-    #5da8cc 51%,
-    #3a8ab4 58%,
-    #1e6a96 67%,
-    #0d4d7a 78%,
-    #073660 90%,
-    #041f3a 100%
-  );
+    0 0 0 4px rgba(255,255,255,0.06),
+    0 0 0 10px rgba(20,160,190,0.12),
+    0 20px 80px rgba(20,160,190,0.45),
+    0 0 60px rgba(255,255,255,0.06);
+  background: #f0f8fd;
 }
 
-/* Horizon glow */
-.hero-circle::before {
-  content: '';
-  position: absolute;
-  top: 44%;
-  left: -10%;
-  width: 120%;
-  height: 12%;
-  background: radial-gradient(
-    ellipse at 50% 50%,
-    rgba(220, 242, 255, 0.9) 0%,
-    rgba(180, 225, 248, 0.5) 35%,
-    transparent 70%
-  );
-  filter: blur(3px);
-}
-
-/* Water surface shimmer / ripple */
-.hero-circle::after {
-  content: '';
-  position: absolute;
-  top: 48%;
-  left: -20%;
-  width: 140%;
-  height: 55%;
-  background:
-    /* Wide shimmer bands */
-    repeating-linear-gradient(
-      180deg,
-      transparent 0px,
-      transparent 6px,
-      rgba(255,255,255,0.04) 6px,
-      rgba(255,255,255,0.04) 7px,
-      transparent 7px,
-      transparent 14px,
-      rgba(255,255,255,0.06) 14px,
-      rgba(255,255,255,0.06) 15px
-    ),
-    /* Diagonal sparkle streaks */
-    repeating-linear-gradient(
-      85deg,
-      transparent 0px,
-      transparent 40px,
-      rgba(255,255,255,0.05) 40px,
-      rgba(255,255,255,0.05) 42px,
-      transparent 42px,
-      transparent 90px,
-      rgba(255,255,255,0.03) 90px,
-      rgba(255,255,255,0.03) 92px
-    );
-  animation: oceanShimmer 6s ease-in-out infinite alternate;
-}
-
-@keyframes oceanShimmer {
-  0%   { transform: translateX(0) skewX(0deg); opacity: 0.8; }
-  50%  { transform: translateX(8px) skewX(0.5deg); opacity: 1; }
-  100% { transform: translateX(-4px) skewX(-0.3deg); opacity: 0.85; }
-}
-
-/* Ocean inner layers */
+/* Sky layer — very pale almost-white at top, clear light blue, mid-blue near horizon */
 .ocean-sky {
   position: absolute;
   inset: 0;
   background: linear-gradient(
     180deg,
-    #eef8fd 0%,
-    #d0eaf8 15%,
-    #a5d2ed 30%,
-    #72b6e0 42%,
-    #4e9dcf 47%
+    #f0f8fd 0%,
+    #e2f4fb 8%,
+    #c8eaf6 18%,
+    #9fd4e8 30%,
+    #6fbedd 40%,
+    #5aafd4 44%
   );
 }
 
-.ocean-water {
-  position: absolute;
-  top: 47%; left: 0; right: 0; bottom: 0;
-  background: linear-gradient(
-    180deg,
-    #b6dcef 0%,
-    #5aaccf 8%,
-    #2e86b0 22%,
-    #166592 40%,
-    #0a4a74 60%,
-    #062d50 80%,
-    #03192e 100%
-  );
-}
-
-/* Horizon glow line */
+/* Horizon glowing white-teal line at ~44% */
 .ocean-sky::after {
   content: '';
   position: absolute;
-  bottom: 0; left: 0; right: 0;
-  height: 8px;
-  background: linear-gradient(180deg,
-    rgba(200,235,252,0) 0%,
-    rgba(220,245,255,0.95) 50%,
-    rgba(185,228,248,0.6) 100%
+  bottom: 0; left: -10%; width: 120%; height: 14%;
+  background: radial-gradient(
+    ellipse at 50% 90%,
+    rgba(255,255,255,0.96) 0%,
+    rgba(180,235,248,0.7) 30%,
+    rgba(120,210,235,0.25) 60%,
+    transparent 85%
   );
-  filter: blur(2px);
+  filter: blur(3px);
 }
 
-/* Wave ripples */
+/* Water surface — bright teal-turquoise fading to rich ocean blue then dark deep */
+.ocean-water {
+  position: absolute;
+  top: 46%; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(
+    180deg,
+    #1da8c4 0%,
+    #18909e 12%,
+    #0f7488 25%,
+    #0d6080 38%,
+    #0a4e68 55%,
+    #074058 72%,
+    #052e48 86%,
+    #043a54 100%
+  );
+}
+
+/* Wave-ripple texture — thin semi-transparent white horizontal lines */
 .ocean-waves {
   position: absolute;
-  top: 47%; left: 0; right: 0; bottom: 0;
+  top: 46%; left: 0; right: 0; bottom: 0;
   background:
     repeating-linear-gradient(
       180deg,
-      transparent 0px, transparent 8px,
-      rgba(255,255,255,0.045) 8px, rgba(255,255,255,0.045) 9px,
-      transparent 9px, transparent 18px,
-      rgba(255,255,255,0.03) 18px, rgba(255,255,255,0.03) 19px
+      transparent 0px, transparent 5px,
+      rgba(255,255,255,0.07) 5px, rgba(255,255,255,0.07) 6px,
+      transparent 6px, transparent 12px,
+      rgba(255,255,255,0.05) 12px, rgba(255,255,255,0.05) 13px,
+      transparent 13px, transparent 22px,
+      rgba(255,255,255,0.035) 22px, rgba(255,255,255,0.035) 23px
     );
   animation: waveDrift 8s ease-in-out infinite alternate;
 }
 
 @keyframes waveDrift {
   0%   { transform: scaleX(1) translateY(0px); }
-  50%  { transform: scaleX(1.03) translateY(-2px); }
-  100% { transform: scaleX(0.98) translateY(1px); }
+  50%  { transform: scaleX(1.04) translateY(-2px); }
+  100% { transform: scaleX(0.97) translateY(1px); }
 }
 
-/* Sun reflection streak */
+/* Sun-path reflection — vertical strip of white shimmer down center of water */
 .ocean-reflection {
   position: absolute;
-  top: 48%;
-  left: 30%;
-  width: 40%;
+  top: 46%;
+  left: 28%;
+  width: 44%;
   bottom: 0;
   background: linear-gradient(
     180deg,
-    rgba(255,255,255,0.35) 0%,
-    rgba(255,255,255,0.12) 15%,
-    rgba(180,225,248,0.06) 40%,
-    transparent 70%
+    rgba(255,255,255,0.55) 0%,
+    rgba(255,255,255,0.28) 10%,
+    rgba(200,240,250,0.14) 30%,
+    rgba(150,220,240,0.07) 55%,
+    transparent 80%
   );
-  filter: blur(4px);
+  filter: blur(5px);
   animation: reflectionPulse 5s ease-in-out infinite alternate;
 }
 
 @keyframes reflectionPulse {
-  0%   { opacity: 0.7; transform: scaleX(0.9); }
-  50%  { opacity: 1;   transform: scaleX(1.1); }
-  100% { opacity: 0.8; transform: scaleX(0.95); }
+  0%   { opacity: 0.72; transform: scaleX(0.88); }
+  50%  { opacity: 1;    transform: scaleX(1.12); }
+  100% { opacity: 0.8;  transform: scaleX(0.94); }
+}
+
+@keyframes oceanShimmer {
+  0%   { transform: translateX(0) skewX(0deg); opacity: 0.8; }
+  50%  { transform: translateX(8px) skewX(0.5deg); opacity: 1; }
+  100% { transform: translateX(-4px) skewX(-0.3deg); opacity: 0.85; }
 }
 
 .hero-v-mark {
@@ -790,6 +726,7 @@ body {
   opacity: 0;
   transform: translateX(-20px);
   transition: opacity 0.5s ease, transform 0.5s ease;
+  padding-bottom: 0.5rem;
 }
 
 .step.visible {
@@ -804,40 +741,52 @@ body {
 }
 
 .step-badge {
-  width: 64px;
-  height: 64px;
-  background: var(--navy-600);
-  border: 2px solid var(--navy-400);
+  width: 90px;
+  height: 90px;
+  background: var(--navy-800);
+  border: 2px solid var(--navy-500);
   display: flex;
   align-items: center;
   justify-content: center;
   position: relative;
-  clip-path: polygon(0 0, 100% 0, 100% 75%, 50% 100%, 0 75%);
+  clip-path: polygon(0 0, 100% 0, 100% 72%, 50% 100%, 0 72%);
+  box-shadow: 0 4px 18px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.08);
 }
 
 .step-badge span {
   font-family: var(--font-head);
-  font-size: 1.5rem;
+  font-size: 2rem;
   font-weight: 800;
   color: var(--white);
-  padding-bottom: 10px;
+  padding-bottom: 16px;
+  letter-spacing: -0.02em;
 }
 
-.step-connector {
-  width: 2px;
-  flex: 1;
-  background: linear-gradient(180deg, var(--navy-500) 0%, transparent 100%);
-  margin: 0 auto;
-  min-height: 40px;
+/* Downward-pointing chevron connector arrow between steps */
+.step-arrow-down {
+  width: 90px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 4px 0 4px 0;
+  /* Use a CSS-only chevron via clip-path */
+  position: relative;
+  margin-left: 15px; /* align with badge column center */
 }
 
-.step-number-col .step-connector {
-  width: 2px;
+.step-arrow-down::before {
+  content: '';
+  display: block;
+  width: 48px;
+  height: 28px;
+  background: rgba(26, 47, 94, 0.75);
+  clip-path: polygon(0 0, 100% 0, 50% 100%);
 }
+
+/* Remove old step-connector references */
 
 .step-content {
-  padding: 0 2rem 3rem 2rem;
-  padding-top: 0.75rem;
+  padding: 0.75rem 2rem 1.5rem 2rem;
 }
 
 .step-content h3 {
@@ -905,95 +854,11 @@ body {
   overflow: hidden;
 }
 
-.apart-img-1 {
-  background:
-    linear-gradient(135deg, #1a2f5e 0%, #0d1830 100%);
-}
-/* Desk/laptop suggestion */
-.apart-img-1::before {
-  content: '';
-  position: absolute;
-  bottom: 20px; left: 50%; transform: translateX(-50%);
-  width: 80px; height: 50px;
-  border: 2px solid rgba(255,255,255,0.25);
-  border-radius: 4px;
-}
-.apart-img-1::after {
-  content: '';
-  position: absolute;
-  bottom: 16px; left: 50%; transform: translateX(-50%);
-  width: 40px; height: 4px;
-  background: rgba(255,255,255,0.15);
-  border-radius: 2px;
-}
-
-.apart-img-2 {
-  background:
-    linear-gradient(135deg, #112045 0%, #1e3a72 100%);
-}
-/* Watch / efficiency */
-.apart-img-2::before {
-  content: '';
-  position: absolute;
-  top: 50%; left: 50%; transform: translate(-50%, -50%);
-  width: 60px; height: 60px;
-  border: 2px solid rgba(255,255,255,0.25);
-  border-radius: 50%;
-}
-.apart-img-2::after {
-  content: '';
-  position: absolute;
-  top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-45deg);
-  width: 1px; height: 24px;
-  background: rgba(255,255,255,0.4);
-  transform-origin: bottom center;
-}
-
-.apart-img-3 {
-  background:
-    linear-gradient(135deg, #0d1830 0%, #2c4f8c 100%);
-}
-/* Handshake suggestion */
-.apart-img-3::before {
-  content: '';
-  position: absolute;
-  top: 50%; left: 35%; transform: translateY(-50%);
-  width: 30%; height: 3px;
-  background: rgba(255,255,255,0.3);
-  border-radius: 2px;
-}
-.apart-img-3::after {
-  content: '';
-  position: absolute;
-  top: 50%; left: 35%; transform: translateY(-50%);
-  width: 30%; height: 3px;
-  background: rgba(255,255,255,0.3);
-  border-radius: 2px;
-  box-shadow: 0 8px 0 rgba(255,255,255,0.2), 0 -8px 0 rgba(255,255,255,0.2);
-}
-
-.apart-img-4 {
-  background:
-    linear-gradient(135deg, #1a2f5e 0%, #080f20 100%);
-}
-/* Summit / mountain */
-.apart-img-4::before {
-  content: '';
-  position: absolute;
-  bottom: 0; left: 50%; transform: translateX(-50%);
-  border-left: 40px solid transparent;
-  border-right: 40px solid transparent;
-  border-bottom: 70px solid rgba(255,255,255,0.1);
-}
-.apart-img-4::after {
-  content: '';
-  position: absolute;
-  bottom: 0; left: 50%; transform: translateX(-20%);
-  border-left: 25px solid transparent;
-  border-right: 25px solid transparent;
-  border-bottom: 50px solid rgba(255,255,255,0.07);
-}
-
+/* SVG illustrations are embedded directly in HTML — no CSS pseudo-element placeholders needed */
+.apart-img-1 { background: linear-gradient(135deg, #1a2f5e 0%, #0d1830 100%); }
+.apart-img-2 { background: linear-gradient(135deg, #112045 0%, #1e3a72 100%); }
+.apart-img-3 { background: linear-gradient(135deg, #0d1830 0%, #2c4f8c 100%); }
+.apart-img-4 { background: linear-gradient(135deg, #1a2f5e 0%, #080f20 100%); }
 .apart-img-overlay {
   position: absolute;
   inset: 0;
@@ -1522,7 +1387,7 @@ body {
 }
 
 .meth-right {
-  background: var(--off-white);
+  background: linear-gradient(135deg, #0d1830 0%, #112045 100%);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1536,93 +1401,16 @@ body {
   flex-shrink: 0;
 }
 
-/* 4-quadrant wheel */
-.meth-wheel {
-  width: 420px;
-  height: 420px;
+/* SVG-based donut wheel */
+.meth-wheel-svg {
+  width: 100%;
+  height: 100%;
   position: absolute;
   top: 50%; left: 50%;
   transform: translate(-50%, -50%);
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  grid-template-rows: 1fr 1fr;
-  gap: 5px;
-  border-radius: 50%;
-  overflow: hidden;
 }
 
-.mw-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 0.4rem;
-  padding: 0.75rem;
-  position: relative;
-}
-
-.mw-tl { background: var(--navy-600); border-radius: 100% 0 0 0; }
-.mw-tr { background: #4a7ab5; border-radius: 0 100% 0 0; }
-.mw-bl { background: #3a6bc4; border-radius: 0 0 0 100%; }
-.mw-br { background: #2a8a7a; border-radius: 0 0 100% 0; }
-
-.mw-tl .mw-icon-wrap,
-.mw-tl .mw-label { transform: translate(-15%, -15%); }
-.mw-tr .mw-icon-wrap,
-.mw-tr .mw-label { transform: translate(15%, -15%); }
-.mw-bl .mw-icon-wrap,
-.mw-bl .mw-label { transform: translate(-15%, 15%); }
-.mw-br .mw-icon-wrap,
-.mw-br .mw-label { transform: translate(15%, 15%); }
-
-.mw-icon-wrap {
-  width: 44px;
-  height: 44px;
-  background: rgba(255,255,255,0.18);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.mw-icon-wrap svg {
-  width: 22px;
-  height: 22px;
-  color: white;
-}
-
-.mw-label {
-  font-family: var(--font-head);
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  color: var(--white);
-  text-align: center;
-}
-
-/* Center gear circle */
-.mw-center {
-  position: absolute;
-  top: 50%; left: 50%;
-  transform: translate(-50%, -50%);
-  width: 116px;
-  height: 116px;
-  background: var(--white);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 4px 32px rgba(0,0,0,0.18);
-  z-index: 10;
-}
-
-.mw-center svg {
-  width: 52px;
-  height: 52px;
-  color: var(--navy-700);
-}
-
-/* Annotation labels outside the wheel */
+/* Annotation labels — white text on dark background */
 .meth-annotations {
   position: absolute;
   inset: 0;
@@ -1633,20 +1421,18 @@ body {
   position: absolute;
   font-size: 0.8rem;
   font-weight: 500;
-  color: var(--gray-600);
+  color: rgba(255,255,255,0.7);
   max-width: 115px;
   line-height: 1.4;
-  background: var(--white);
-  padding: 0.35rem 0.6rem;
-  border-radius: 5px;
-  border: 1px solid var(--gray-100);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  padding: 0.35rem 0;
+  border-left: 2px solid rgba(255,255,255,0.25);
+  padding-left: 0.5rem;
 }
 
 .meth-ann-tl { top: 8px; left: 8px; text-align: left; }
-.meth-ann-tr { top: 8px; right: 8px; text-align: right; }
+.meth-ann-tr { top: 8px; right: 8px; text-align: right; border-left: none; border-right: 2px solid rgba(255,255,255,0.25); padding-left: 0; padding-right: 0.5rem; }
 .meth-ann-bl { bottom: 8px; left: 8px; text-align: left; }
-.meth-ann-br { bottom: 8px; right: 8px; text-align: right; }
+.meth-ann-br { bottom: 8px; right: 8px; text-align: right; border-left: none; border-right: 2px solid rgba(255,255,255,0.25); padding-left: 0; padding-right: 0.5rem; }
 
 /* ============================================================
    THE PILLAR FLOW
