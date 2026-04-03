@@ -597,6 +597,78 @@ body {
 }
 
 /* ============================================================
+   WHAT WE DO
+   ============================================================ */
+.whatwedo-section {
+  background: linear-gradient(160deg, var(--navy-900) 0%, var(--navy-800) 60%, var(--navy-700) 100%);
+  padding: 5rem 4rem 6rem;
+}
+
+.whatwedo-header {
+  text-align: center;
+  margin-bottom: 3.5rem;
+}
+
+.whatwedo-header .section-title {
+  color: var(--white);
+}
+
+.whatwedo-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 2rem 1.5rem;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.wwd-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 1.1rem;
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+.wwd-card.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.wwd-icon {
+  width: 72px;
+  height: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255,255,255,0.06);
+  border: 1.5px solid rgba(255,255,255,0.12);
+  border-radius: 16px;
+  transition: background var(--transition), border-color var(--transition);
+}
+
+.wwd-card:hover .wwd-icon {
+  background: rgba(91,141,224,0.15);
+  border-color: rgba(91,141,224,0.4);
+}
+
+.wwd-icon svg {
+  width: 38px;
+  height: 38px;
+  color: var(--accent-light);
+}
+
+.wwd-card p {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.82);
+  line-height: 1.45;
+  max-width: 150px;
+}
+
+/* ============================================================
    WHO WE ARE
    ============================================================ */
 .who-section {
@@ -2085,6 +2157,9 @@ body {
   .step-content { padding: 0 1rem 2.5rem; }
 
   .apart-grid { grid-template-columns: 1fr; }
+
+  .whatwedo-grid { grid-template-columns: repeat(2, 1fr); }
+  .whatwedo-section { padding: 4rem 2rem 5rem; }
 
   .team-cards { grid-template-columns: 1fr; padding: 1.5rem; }
 
