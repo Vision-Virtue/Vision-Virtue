@@ -1079,12 +1079,13 @@ body {
 }
 
 .team-avatar {
-  height: 200px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
+  width: 90px;
+  height: 90px;
+  flex-shrink: 0;
+  border-radius: 50%;
   overflow: hidden;
+  border: 3px solid var(--gray-100);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.12);
 }
 
 .team-photo {
@@ -1116,6 +1117,23 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.team-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem 1.5rem 0;
+}
+
+.team-header-text h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.team-header-text .team-role {
+  display: block;
+  margin-top: 0.2rem;
 }
 
 .team-info h3 {
