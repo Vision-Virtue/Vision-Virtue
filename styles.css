@@ -1396,7 +1396,7 @@ body {
 }
 
 .meth-right {
-  background: linear-gradient(135deg, #0d1830 0%, #112045 100%);
+  background: var(--off-white);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1419,7 +1419,7 @@ body {
   transform: translate(-50%, -50%);
 }
 
-/* Annotation labels — white text on dark background */
+/* Annotation labels */
 .meth-annotations {
   position: absolute;
   inset: 0;
@@ -1430,18 +1430,18 @@ body {
   position: absolute;
   font-size: 0.8rem;
   font-weight: 500;
-  color: rgba(255,255,255,0.7);
+  color: var(--navy-700);
   max-width: 115px;
   line-height: 1.4;
   padding: 0.35rem 0;
-  border-left: 2px solid rgba(255,255,255,0.25);
+  border-left: 2px solid var(--accent);
   padding-left: 0.5rem;
 }
 
 .meth-ann-tl { top: 8px; left: 8px; text-align: left; }
-.meth-ann-tr { top: 8px; right: 8px; text-align: right; border-left: none; border-right: 2px solid rgba(255,255,255,0.25); padding-left: 0; padding-right: 0.5rem; }
+.meth-ann-tr { top: 8px; right: 8px; text-align: right; border-left: none; border-right: 2px solid var(--accent); padding-left: 0; padding-right: 0.5rem; }
 .meth-ann-bl { bottom: 8px; left: 8px; text-align: left; }
-.meth-ann-br { bottom: 8px; right: 8px; text-align: right; border-left: none; border-right: 2px solid rgba(255,255,255,0.25); padding-left: 0; padding-right: 0.5rem; }
+.meth-ann-br { bottom: 8px; right: 8px; text-align: right; border-left: none; border-right: 2px solid var(--accent); padding-left: 0; padding-right: 0.5rem; }
 
 /* ============================================================
    THE PILLAR FLOW
