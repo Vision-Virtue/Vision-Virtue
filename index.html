@@ -762,9 +762,11 @@
     <div class="market-right">
       <div class="market-col">
         <div class="market-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M12 2C8 2 5 5 5 9c0 2.5 1.5 4.7 3.7 5.8L12 22l3.3-7.2C17.5 13.7 19 11.5 19 9c0-4-3-7-7-7z"/>
-            <circle cx="12" cy="9" r="2.5"/>
+          <!-- Seedling / sprout -->
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22V12"/>
+            <path d="M12 12C12 12 7 11 7 6a5 5 0 0 1 10 0c0 5-5 6-5 6z"/>
+            <path d="M12 14c0 0-4 .5-4 4"/>
           </svg>
         </div>
         <h3>Early Stage</h3>
@@ -781,9 +783,21 @@
       <div class="market-divider"></div>
       <div class="market-col">
         <div class="market-icon">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M17 3h4v4"/><path d="M21 3l-7 7"/><path d="M3 21l7-7"/>
-            <path d="M3 17V3h14"/><path d="M3 21h14v-4"/>
+          <!-- Three pine trees -->
+          <svg viewBox="0 0 32 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <!-- left tree -->
+            <polygon points="6,16 2,22 10,22" fill="none"/>
+            <polygon points="6,11 3,16 9,16" fill="none"/>
+            <line x1="6" y1="22" x2="6" y2="24"/>
+            <!-- middle tree (tallest) -->
+            <polygon points="16,13 11,21 21,21" fill="none"/>
+            <polygon points="16,8 12,14 20,14" fill="none"/>
+            <polygon points="16,3 13,9 19,9" fill="none"/>
+            <line x1="16" y1="21" x2="16" y2="24"/>
+            <!-- right tree -->
+            <polygon points="26,16 22,22 30,22" fill="none"/>
+            <polygon points="26,11 23,16 29,16" fill="none"/>
+            <line x1="26" y1="22" x2="26" y2="24"/>
           </svg>
         </div>
         <h3>Mature</h3>
