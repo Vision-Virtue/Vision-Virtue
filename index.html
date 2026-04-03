@@ -416,120 +416,90 @@
     </div>
     <div class="meth-right">
       <div class="meth-wheel-wrap">
-        <!-- SVG Donut Ring Wheel -->
         <svg class="meth-wheel-svg" viewBox="0 0 500 500" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <!-- Segment gap mask via white stroke on paths -->
-          </defs>
 
-          <!-- SUCCESS: upper-left arc, ~315° to 45° (i.e. -45° to 45°) -->
-          <!-- Arc from 315° to 45°, outer r=180, inner r=100 -->
-          <!-- 315° = -45°: cos=-0.7071, sin=-0.7071 → point (250-127.3, 250-127.3) = (122.7, 122.7) at outer -->
-          <!-- 45°: cos=0.7071, sin=-0.7071 → (250+127.3, 250-127.3) = (377.3, 122.7) at outer -->
-          <!-- inner at 315°: (250-70.7, 250-70.7) = (179.3, 179.3) -->
-          <!-- inner at 45°: (250+70.7, 250-70.7) = (320.7, 179.3) -->
-          <path d="M 250,70 A 180,180 0 0,1 430,250 L 350,250 A 100,100 0 0,0 250,150 Z"
-                fill="none" stroke="none"/>
-          <!-- Redoing with correct arc paths for 4 quadrants, each 90° -->
-          <!-- SUCCESS upper-left: 225° to 315° -->
-          <!-- 225°: cos(225)=-0.7071, sin(225)=-0.7071 outer=(122.7,122.7), inner=(179.3,179.3) -->
-          <!-- 315°: cos(315)=0.7071, sin(315)=-0.7071 outer=(377.3,122.7), inner=(320.7,179.3) -->
-          <path d="M 122.7,122.7 A 180,180 0 0,1 377.3,122.7 L 320.7,179.3 A 100,100 0 0,0 179.3,179.3 Z"
-                fill="#1e3a72" stroke="white" stroke-width="3"/>
+          <!-- === DONUT SEGMENTS === -->
+          <!-- SUCCESS upper-left: LEFT→TOP clockwise -->
+          <path d="M 70,250 A 180,180 0 0,1 250,70 L 250,148 A 102,102 0 0,0 148,250 Z"
+                fill="#1e3a72" stroke="white" stroke-width="5"/>
+          <!-- VISION upper-right: TOP→RIGHT clockwise -->
+          <path d="M 250,70 A 180,180 0 0,1 430,250 L 352,250 A 102,102 0 0,0 250,148 Z"
+                fill="#4a7ab5" stroke="white" stroke-width="5"/>
+          <!-- STRATEGY lower-right: RIGHT→BOTTOM clockwise -->
+          <path d="M 430,250 A 180,180 0 0,1 250,430 L 250,352 A 102,102 0 0,0 352,250 Z"
+                fill="#2a9d8f" stroke="white" stroke-width="5"/>
+          <!-- EXECUTION lower-left: BOTTOM→LEFT clockwise -->
+          <path d="M 250,430 A 180,180 0 0,1 70,250 L 148,250 A 102,102 0 0,0 250,352 Z"
+                fill="#4a90d4" stroke="white" stroke-width="5"/>
 
-          <!-- VISION upper-right: 315° to 45° → right upper: 45° to 135° -->
-          <!-- 45°: outer=(377.3,122.7), inner=(320.7,179.3) -->
-          <!-- 135°: cos=−0.7071,sin=0.7071 outer=(122.7,377.3), inner=(179.3,320.7) -->
-          <!-- Actually let's use proper 90° arcs starting from top going clockwise -->
-          <!-- Top = 270° in standard math = (250, 70) outer, (250, 150) inner -->
-          <!-- RIGHT = 0° = (430, 250) outer, (350, 250) inner -->
-          <!-- BOTTOM = 90° = (250, 430) outer, (250, 350) inner -->
-          <!-- LEFT = 180° = (70, 250) outer, (150, 250) inner -->
+          <!-- === TEXT LABELS at diagonal midpoints (radius ~150, 45° angles) === -->
+          <text x="155" y="186" fill="white" font-family="Raleway,sans-serif" font-size="14" font-weight="800" letter-spacing="1.5" text-anchor="middle">SUCCESS</text>
+          <text x="345" y="186" fill="white" font-family="Raleway,sans-serif" font-size="14" font-weight="800" letter-spacing="1.5" text-anchor="middle">VISION</text>
+          <text x="345" y="320" fill="white" font-family="Raleway,sans-serif" font-size="14" font-weight="800" letter-spacing="1.5" text-anchor="middle">STRATEGY</text>
+          <text x="155" y="320" fill="white" font-family="Raleway,sans-serif" font-size="14" font-weight="800" letter-spacing="1.5" text-anchor="middle">EXECUTION</text>
 
-          <!-- Clearing previous wrong paths, using correct ones: -->
-          <!-- SUCCESS: top-left quadrant, 180° to 270° (left to top, going clockwise means 270° to 360°) -->
-          <!-- Let me use compass directions: 0°=top, clockwise -->
-          <!-- 0°(top): (250,70)outer (250,150)inner -->
-          <!-- 90°(right): (430,250)outer (350,250)inner -->
-          <!-- 180°(bottom): (250,430)outer (250,350)inner -->
-          <!-- 270°(left): (70,250)outer (150,250)inner -->
+          <!-- === ICON CIRCLES at cardinal points === -->
 
-          <!-- SUCCESS (upper-left, 270°→360°/0°): left→top clockwise -->
-          <path d="M 70,250 A 180,180 0 0,1 250,70 L 250,150 A 100,100 0 0,0 150,250 Z"
-                fill="#1e3a72" stroke="white" stroke-width="3"/>
+          <!-- TOP (250,70) SUCCESS — bar chart with upward arrow (image 1) -->
+          <circle cx="250" cy="70" r="29" fill="white" filter="drop-shadow(0 2px 8px rgba(0,0,0,0.18))"/>
+          <rect x="238" y="74" width="5" height="6" fill="#1e3a72" rx="1"/>
+          <rect x="245" y="70" width="5" height="10" fill="#1e3a72" rx="1"/>
+          <rect x="252" y="65" width="5" height="15" fill="#1e3a72" rx="1"/>
+          <line x1="236" y1="81" x2="261" y2="81" stroke="#1e3a72" stroke-width="1.8" stroke-linecap="round"/>
+          <line x1="241" y1="76" x2="260" y2="59" stroke="#1e3a72" stroke-width="2" stroke-linecap="round"/>
+          <polyline points="256,58 261,59 260,64" stroke="#1e3a72" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
 
-          <!-- VISION (upper-right, 0°→90°): top→right clockwise -->
-          <path d="M 250,70 A 180,180 0 0,1 430,250 L 350,250 A 100,100 0 0,0 250,150 Z"
-                fill="#4a7ab5" stroke="white" stroke-width="3"/>
+          <!-- RIGHT (430,250) VISION — gear with cycle arrows (image 2) -->
+          <circle cx="430" cy="250" r="29" fill="white" filter="drop-shadow(0 2px 8px rgba(0,0,0,0.18))"/>
+          <!-- gear ring via dasharray -->
+          <circle cx="430" cy="250" r="17" fill="none" stroke="#4a7ab5" stroke-width="7" stroke-dasharray="9 7" stroke-dashoffset="-1"/>
+          <circle cx="430" cy="250" r="13" fill="white"/>
+          <circle cx="430" cy="250" r="9" fill="none" stroke="#4a7ab5" stroke-width="1.8"/>
+          <circle cx="430" cy="250" r="4" fill="none" stroke="#4a7ab5" stroke-width="1.8"/>
+          <!-- cycle arrows -->
+          <path d="M 422,245 A 9,9 0 0,1 438,245" fill="none" stroke="#4a7ab5" stroke-width="2" stroke-linecap="round"/>
+          <polyline points="436,240 438,245 433,247" fill="none" stroke="#4a7ab5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M 438,255 A 9,9 0 0,1 422,255" fill="none" stroke="#4a7ab5" stroke-width="2" stroke-linecap="round"/>
+          <polyline points="424,260 422,255 427,253" fill="none" stroke="#4a7ab5" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
 
-          <!-- STRATEGY (lower-right, 90°→180°): right→bottom clockwise -->
-          <path d="M 430,250 A 180,180 0 0,1 250,430 L 250,350 A 100,100 0 0,0 350,250 Z"
-                fill="#2a8a7a" stroke="white" stroke-width="3"/>
+          <!-- BOTTOM (250,430) STRATEGY — document with pencil (image 3) -->
+          <circle cx="250" cy="430" r="29" fill="white" filter="drop-shadow(0 2px 8px rgba(0,0,0,0.18))"/>
+          <!-- document body with folded corner -->
+          <path d="M 238,418 L 238,443 L 258,443 L 258,424 L 252,418 Z" fill="none" stroke="#2a9d8f" stroke-width="2" stroke-linejoin="round"/>
+          <path d="M 252,418 L 252,424 L 258,424" fill="none" stroke="#2a9d8f" stroke-width="1.8" stroke-linejoin="round"/>
+          <!-- text lines -->
+          <line x1="241" y1="428" x2="255" y2="428" stroke="#2a9d8f" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="241" y1="432" x2="255" y2="432" stroke="#2a9d8f" stroke-width="1.5" stroke-linecap="round"/>
+          <line x1="241" y1="436" x2="249" y2="436" stroke="#2a9d8f" stroke-width="1.5" stroke-linecap="round"/>
+          <!-- pencil overlay -->
+          <path d="M 251,441 L 259,433 L 255,429 L 247,437 Z" fill="none" stroke="#2a9d8f" stroke-width="1.8" stroke-linejoin="round"/>
+          <line x1="247" y1="441" x2="251" y2="441" stroke="#2a9d8f" stroke-width="1.8" stroke-linecap="round"/>
 
-          <!-- EXECUTION (lower-left, 180°→270°): bottom→left clockwise -->
-          <path d="M 250,430 A 180,180 0 0,1 70,250 L 150,250 A 100,100 0 0,0 250,350 Z"
-                fill="#3a6bc4" stroke="white" stroke-width="3"/>
+          <!-- LEFT (70,250) EXECUTION — target / bullseye (image 4) -->
+          <circle cx="70" cy="250" r="29" fill="white" filter="drop-shadow(0 2px 8px rgba(0,0,0,0.18))"/>
+          <!-- concentric rings -->
+          <circle cx="70" cy="250" r="16" fill="none" stroke="#4a90d4" stroke-width="2"/>
+          <circle cx="70" cy="250" r="10" fill="none" stroke="#4a90d4" stroke-width="2"/>
+          <circle cx="70" cy="250" r="4"  fill="#4a90d4"/>
+          <!-- arrow to center -->
+          <line x1="84" y1="236" x2="73" y2="247" stroke="#4a90d4" stroke-width="2.2" stroke-linecap="round"/>
+          <polyline points="79,235 84,236 83,241" fill="none" stroke="#4a90d4" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
 
-          <!-- White label text in each segment (at midpoint ~140px from center) -->
-          <!-- SUCCESS midpoint: 315° from top-clockwise = 225° standard math → (-0.7071,-0.7071)*140+250 = (151,151) -->
-          <text x="165" y="195" fill="white" font-family="Raleway,sans-serif" font-size="13" font-weight="800" letter-spacing="1" text-anchor="middle">SUCCESS</text>
+          <!-- === CENTER CIRCLE — large gear with cycle arrows (image 5) === -->
+          <circle cx="250" cy="250" r="76" fill="white" filter="drop-shadow(0 4px 16px rgba(0,0,0,0.22))"/>
+          <!-- gear teeth via dasharray -->
+          <circle cx="250" cy="250" r="55" fill="none" stroke="#112045" stroke-width="16" stroke-dasharray="23 18" stroke-dashoffset="-2"/>
+          <!-- gear body ring (hides outer arc of teeth) -->
+          <circle cx="250" cy="250" r="47" fill="white"/>
+          <circle cx="250" cy="250" r="38" fill="none" stroke="#112045" stroke-width="2.5"/>
+          <!-- inner hole -->
+          <circle cx="250" cy="250" r="20" fill="none" stroke="#112045" stroke-width="2.5"/>
+          <!-- cycle arrows -->
+          <path d="M 229,237 A 24,24 0 0,1 271,237" fill="none" stroke="#112045" stroke-width="3.5" stroke-linecap="round"/>
+          <polyline points="267,229 271,237 263,241" fill="none" stroke="#112045" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M 271,263 A 24,24 0 0,1 229,263" fill="none" stroke="#112045" stroke-width="3.5" stroke-linecap="round"/>
+          <polyline points="233,271 229,263 237,259" fill="none" stroke="#112045" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
 
-          <!-- VISION midpoint: 45° from top-clockwise = 315° standard math → (0.7071,-0.7071)*140+250 = (349,151) -->
-          <text x="335" y="195" fill="white" font-family="Raleway,sans-serif" font-size="13" font-weight="800" letter-spacing="1" text-anchor="middle">VISION</text>
-
-          <!-- STRATEGY midpoint: 135° from top-clockwise = 225° standard → (0.7071,0.7071)*140+250 = (349,349) -->
-          <text x="335" y="315" fill="white" font-family="Raleway,sans-serif" font-size="13" font-weight="800" letter-spacing="1" text-anchor="middle">STRATEGY</text>
-
-          <!-- EXECUTION midpoint: 225° from top-clockwise = 135° standard → (-0.7071,0.7071)*140+250 = (151,349) -->
-          <text x="165" y="315" fill="white" font-family="Raleway,sans-serif" font-size="13" font-weight="800" letter-spacing="1" text-anchor="middle">EXECUTION</text>
-
-          <!-- Small white icon circles at outer edge midpoints (r=204 from center, i.e. outer radius+24) -->
-          <!-- SUCCESS outer midpoint: 315° from center → (250-127.3, 250-127.3) ≈ (123,123) -->
-          <circle cx="123" cy="123" r="22" fill="white"/>
-          <!-- Bar chart icon for SUCCESS -->
-          <rect x="113" y="130" width="5" height="8" fill="#1e3a72"/>
-          <rect x="120" y="126" width="5" height="12" fill="#1e3a72"/>
-          <rect x="127" y="122" width="5" height="16" fill="#1e3a72"/>
-
-          <!-- VISION outer midpoint: 45° from center → (250+127.3, 250-127.3) ≈ (377,123) -->
-          <circle cx="377" cy="123" r="22" fill="white"/>
-          <!-- Settings/gear icon for VISION -->
-          <circle cx="377" cy="123" r="7" fill="none" stroke="#4a7ab5" stroke-width="2.5"/>
-          <circle cx="377" cy="123" r="3" fill="#4a7ab5"/>
-          <line x1="377" y1="112" x2="377" y2="108" stroke="#4a7ab5" stroke-width="2.5"/>
-          <line x1="377" y1="134" x2="377" y2="138" stroke="#4a7ab5" stroke-width="2.5"/>
-          <line x1="366" y1="123" x2="362" y2="123" stroke="#4a7ab5" stroke-width="2.5"/>
-          <line x1="388" y1="123" x2="392" y2="123" stroke="#4a7ab5" stroke-width="2.5"/>
-
-          <!-- STRATEGY outer midpoint: 135° from center → (250+127.3, 250+127.3) ≈ (377,377) -->
-          <circle cx="377" cy="377" r="22" fill="white"/>
-          <!-- Document icon for STRATEGY -->
-          <rect x="368" y="366" width="16" height="20" rx="2" fill="none" stroke="#2a8a7a" stroke-width="2"/>
-          <line x1="372" y1="372" x2="380" y2="372" stroke="#2a8a7a" stroke-width="1.5"/>
-          <line x1="372" y1="377" x2="380" y2="377" stroke="#2a8a7a" stroke-width="1.5"/>
-          <line x1="372" y1="382" x2="376" y2="382" stroke="#2a8a7a" stroke-width="1.5"/>
-
-          <!-- EXECUTION outer midpoint: 225° from center → (250-127.3, 250+127.3) ≈ (123,377) -->
-          <circle cx="123" cy="377" r="22" fill="white"/>
-          <!-- Target/bullseye icon for EXECUTION -->
-          <circle cx="123" cy="377" r="10" fill="none" stroke="#3a6bc4" stroke-width="2"/>
-          <circle cx="123" cy="377" r="6" fill="none" stroke="#3a6bc4" stroke-width="2"/>
-          <circle cx="123" cy="377" r="2.5" fill="#3a6bc4"/>
-
-          <!-- Center white circle with gear icon -->
-          <circle cx="250" cy="250" r="72" fill="white" filter="drop-shadow(0 4px 12px rgba(0,0,0,0.25))"/>
-          <!-- Gear icon at center -->
-          <circle cx="250" cy="250" r="16" fill="none" stroke="#112045" stroke-width="2.5"/>
-          <circle cx="250" cy="250" r="7" fill="none" stroke="#112045" stroke-width="2"/>
-          <!-- Gear teeth -->
-          <line x1="250" y1="229" x2="250" y2="224" stroke="#112045" stroke-width="3" stroke-linecap="round"/>
-          <line x1="250" y1="271" x2="250" y2="276" stroke="#112045" stroke-width="3" stroke-linecap="round"/>
-          <line x1="229" y1="250" x2="224" y2="250" stroke="#112045" stroke-width="3" stroke-linecap="round"/>
-          <line x1="271" y1="250" x2="276" y2="250" stroke="#112045" stroke-width="3" stroke-linecap="round"/>
-          <line x1="235" y1="235" x2="232" y2="232" stroke="#112045" stroke-width="2.5" stroke-linecap="round"/>
-          <line x1="265" y1="265" x2="268" y2="268" stroke="#112045" stroke-width="2.5" stroke-linecap="round"/>
-          <line x1="235" y1="265" x2="232" y2="268" stroke="#112045" stroke-width="2.5" stroke-linecap="round"/>
-          <line x1="265" y1="235" x2="268" y2="232" stroke="#112045" stroke-width="2.5" stroke-linecap="round"/>
         </svg>
 
         <div class="meth-annotations">
