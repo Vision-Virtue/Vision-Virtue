@@ -764,26 +764,25 @@ body {
 
 /* Downward-pointing chevron connector arrow between steps */
 .step-arrow-down {
-  width: 90px;
+  /* Align with the step badge column (120px wide) */
+  width: 120px;
   display: flex;
   justify-content: center;
   align-items: center;
-  padding: 4px 0 4px 0;
-  /* Use a CSS-only chevron via clip-path */
-  position: relative;
-  margin-left: 15px; /* align with badge column center */
+  padding: 6px 0;
 }
 
 .step-arrow-down::before {
   content: '';
   display: block;
-  width: 48px;
-  height: 28px;
-  background: rgba(26, 47, 94, 0.75);
-  clip-path: polygon(0 0, 100% 0, 50% 100%);
+  width: 52px;
+  height: 30px;
+  background: var(--navy-600);
+  opacity: 0.8;
+  clip-path: polygon(12% 0%, 88% 0%, 100% 50%, 88% 100%, 12% 100%, 0% 50%);
+  /* chevron / downward-pointing shape using clip-path hexagon rotated 90° */
+  clip-path: polygon(0 0, 100% 0, 100% 62%, 50% 100%, 0 62%);
 }
-
-/* Remove old step-connector references */
 
 .step-content {
   padding: 0.75rem 2rem 1.5rem 2rem;
@@ -854,11 +853,21 @@ body {
   overflow: hidden;
 }
 
-/* SVG illustrations are embedded directly in HTML — no CSS pseudo-element placeholders needed */
+/* SVG illustrations are embedded directly in HTML */
 .apart-img-1 { background: linear-gradient(135deg, #1a2f5e 0%, #0d1830 100%); }
 .apart-img-2 { background: linear-gradient(135deg, #112045 0%, #1e3a72 100%); }
 .apart-img-3 { background: linear-gradient(135deg, #0d1830 0%, #2c4f8c 100%); }
 .apart-img-4 { background: linear-gradient(135deg, #1a2f5e 0%, #080f20 100%); }
+
+/* Ensure inline SVGs fill their container and sit behind the overlay */
+.apart-img > svg {
+  display: block;
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%;
+  height: 160px;
+}
+
 .apart-img-overlay {
   position: absolute;
   inset: 0;
@@ -1387,7 +1396,7 @@ body {
 }
 
 .meth-right {
-  background: linear-gradient(135deg, #0d1830 0%, #112045 100%);
+  background: var(--off-white);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1410,7 +1419,7 @@ body {
   transform: translate(-50%, -50%);
 }
 
-/* Annotation labels — white text on dark background */
+/* Annotation labels */
 .meth-annotations {
   position: absolute;
   inset: 0;
@@ -1421,18 +1430,18 @@ body {
   position: absolute;
   font-size: 0.8rem;
   font-weight: 500;
-  color: rgba(255,255,255,0.7);
+  color: var(--navy-700);
   max-width: 115px;
   line-height: 1.4;
   padding: 0.35rem 0;
-  border-left: 2px solid rgba(255,255,255,0.25);
+  border-left: 2px solid var(--accent);
   padding-left: 0.5rem;
 }
 
 .meth-ann-tl { top: 8px; left: 8px; text-align: left; }
-.meth-ann-tr { top: 8px; right: 8px; text-align: right; border-left: none; border-right: 2px solid rgba(255,255,255,0.25); padding-left: 0; padding-right: 0.5rem; }
+.meth-ann-tr { top: 8px; right: 8px; text-align: right; border-left: none; border-right: 2px solid var(--accent); padding-left: 0; padding-right: 0.5rem; }
 .meth-ann-bl { bottom: 8px; left: 8px; text-align: left; }
-.meth-ann-br { bottom: 8px; right: 8px; text-align: right; border-left: none; border-right: 2px solid rgba(255,255,255,0.25); padding-left: 0; padding-right: 0.5rem; }
+.meth-ann-br { bottom: 8px; right: 8px; text-align: right; border-left: none; border-right: 2px solid var(--accent); padding-left: 0; padding-right: 0.5rem; }
 
 /* ============================================================
    THE PILLAR FLOW
