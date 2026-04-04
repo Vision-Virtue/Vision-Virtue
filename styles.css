@@ -1521,7 +1521,11 @@ body {
 }
 
 .meth-right {
-  background: var(--off-white);
+  background-color: var(--off-white);
+  background-image: linear-gradient(to bottom, rgba(244,246,250,0.90) 0%, rgba(244,246,250,0.85) 60%, rgba(244,246,250,0.80) 100%), url('bg_city.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1553,29 +1557,30 @@ body {
 
 .meth-ann {
   position: absolute;
-  font-size: 0.8rem;
-  font-weight: 500;
+  font-size: 0.78rem;
+  font-weight: 600;
   color: var(--navy-700);
-  max-width: 115px;
-  line-height: 1.4;
-  padding: 0.35rem 0;
+  max-width: 110px;
+  line-height: 1.35;
+  padding: 0.3rem 0;
   border-left: 2px solid var(--accent);
   padding-left: 0.5rem;
 }
 
-.meth-ann-tl { top: 8px; left: 8px; text-align: left; }
-.meth-ann-tr { top: 8px; right: 8px; text-align: right; border-left: none; border-right: 2px solid var(--accent); padding-left: 0; padding-right: 0.5rem; }
-.meth-ann-bl { bottom: 8px; left: 8px; text-align: left; }
-.meth-ann-br { bottom: 8px; right: 8px; text-align: right; border-left: none; border-right: 2px solid var(--accent); padding-left: 0; padding-right: 0.5rem; }
+/* Positioned close to the diagonal corners of the donut ring (~22% inward) */
+.meth-ann-tl { top: 18%; left: 2%; text-align: left; }
+.meth-ann-tr { top: 18%; right: 2%; text-align: right; border-left: none; border-right: 2px solid var(--accent); padding-left: 0; padding-right: 0.5rem; }
+.meth-ann-bl { bottom: 18%; left: 2%; text-align: left; }
+.meth-ann-br { bottom: 18%; right: 2%; text-align: right; border-left: none; border-right: 2px solid var(--accent); padding-left: 0; padding-right: 0.5rem; }
 
 /* ============================================================
    THE PILLAR FLOW
    ============================================================ */
 .pillar-section {
   background-color: var(--white);
-  background-image: linear-gradient(to bottom, rgba(255,255,255,0.93) 0%, rgba(255,255,255,0.88) 60%, rgba(255,255,255,0.82) 100%), url('bg_diamond.jpg');
+  background-image: linear-gradient(to bottom, rgba(255,255,255,0.90) 0%, rgba(255,255,255,0.85) 50%, rgba(255,255,255,0.80) 100%), url('bg_arrows.jpg');
   background-size: cover;
-  background-position: center;
+  background-position: center top;
   background-repeat: no-repeat;
   padding: 5rem 2rem 4rem;
 }
