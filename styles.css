@@ -1706,7 +1706,7 @@ body {
 .ripple-section {
   display: grid;
   grid-template-columns: 260px 1fr;
-  background: linear-gradient(160deg, var(--navy-900) 0%, var(--navy-800) 60%, var(--navy-700) 100%);
+  background: linear-gradient(160deg, var(--off-white) 0%, var(--gray-100) 60%, var(--off-white) 100%);
   min-height: 500px;
   position: relative;
   overflow: hidden;
@@ -1718,14 +1718,24 @@ body {
   position: absolute;
   inset: 0;
   background-image:
-    radial-gradient(ellipse 120% 80% at 60% 50%, transparent 18%, rgba(74,144,212,0.10) 18.8%, transparent 19.6%),
-    radial-gradient(ellipse 120% 80% at 60% 50%, transparent 30%, rgba(74,144,212,0.08) 30.8%, transparent 31.6%),
-    radial-gradient(ellipse 120% 80% at 60% 50%, transparent 43%, rgba(74,144,212,0.07) 43.8%, transparent 44.6%),
-    radial-gradient(ellipse 120% 80% at 60% 50%, transparent 57%, rgba(42,157,143,0.06) 57.8%, transparent 58.6%),
-    radial-gradient(ellipse 120% 80% at 60% 50%, transparent 71%, rgba(42,157,143,0.05) 71.8%, transparent 72.6%),
-    radial-gradient(ellipse 120% 80% at 60% 50%, transparent 86%, rgba(30,58,114,0.06) 86.8%, transparent 87.6%);
+    radial-gradient(ellipse 120% 80% at 60% 50%, transparent 18%, rgba(58,107,196,0.09) 18.8%, transparent 19.6%),
+    radial-gradient(ellipse 120% 80% at 60% 50%, transparent 30%, rgba(58,107,196,0.07) 30.8%, transparent 31.6%),
+    radial-gradient(ellipse 120% 80% at 60% 50%, transparent 43%, rgba(58,107,196,0.06) 43.8%, transparent 44.6%),
+    radial-gradient(ellipse 120% 80% at 60% 50%, transparent 57%, rgba(42,138,122,0.05) 57.8%, transparent 58.6%),
+    radial-gradient(ellipse 120% 80% at 60% 50%, transparent 71%, rgba(42,138,122,0.04) 71.8%, transparent 72.6%),
+    radial-gradient(ellipse 120% 80% at 60% 50%, transparent 86%, rgba(30,58,114,0.05) 86.8%, transparent 87.6%);
   pointer-events: none;
   z-index: 0;
+}
+
+/* Override heading colours for light ripple background */
+.ripple-section .section-tag {
+  background: rgba(58,107,196,0.12);
+  color: var(--navy-700);
+  border: 1px solid rgba(58,107,196,0.2);
+}
+.ripple-section .section-title {
+  color: var(--navy-800);
 }
 
 .ripple-left,
@@ -1741,7 +1751,7 @@ body {
   justify-content: center;
   position: relative;
   overflow: hidden;
-  border-right: 1px solid rgba(255,255,255,0.06);
+  border-right: 1px solid rgba(0,0,0,0.08);
 }
 
 .ripple-v-bg {
@@ -1750,7 +1760,7 @@ body {
   font-family: var(--font-head);
   font-size: 10rem;
   font-weight: 800;
-  color: rgba(255,255,255,0.04);
+  color: rgba(0,0,0,0.05);
   line-height: 1;
   pointer-events: none;
 }
@@ -1764,7 +1774,7 @@ body {
 
 .ripple-caption {
   font-size: 0.9rem;
-  color: rgba(255,255,255,0.55);
+  color: var(--gray-600);
   max-width: 560px;
   line-height: 1.7;
   font-style: italic;
@@ -1825,8 +1835,8 @@ body {
 }
 
 .ripple-hub {
-  background: rgba(58, 107, 196, 0.2);
-  border: 2px solid rgba(91, 141, 224, 0.5);
+  background: rgba(58, 107, 196, 0.12);
+  border: 2px solid rgba(58, 107, 196, 0.4);
   border-radius: 8px;
   padding: 1.25rem 1rem;
   text-align: center;
@@ -1840,13 +1850,13 @@ body {
   font-size: 0.75rem;
   font-weight: 800;
   letter-spacing: 0.06em;
-  color: var(--white);
+  color: var(--navy-700);
   margin-bottom: 0.4rem;
 }
 
 .ripple-hub p {
   font-size: 0.68rem;
-  color: rgba(255,255,255,0.55);
+  color: var(--gray-600);
   line-height: 1.4;
 }
 
