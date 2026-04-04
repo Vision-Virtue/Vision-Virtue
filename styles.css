@@ -1038,7 +1038,11 @@ body {
 }
 
 .market-right {
-  background: var(--white);
+  background-color: var(--white);
+  background-image: linear-gradient(to bottom, rgba(255,255,255,0.92) 0%, rgba(255,255,255,0.86) 60%, rgba(255,255,255,0.80) 100%), url('bg_city.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   padding: 4rem 3.5rem;
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -1837,7 +1841,7 @@ body {
    ============================================================ */
 .vi-section {
   background-color: var(--off-white);
-  background-image: linear-gradient(to bottom, rgba(244,246,250,0.93) 0%, rgba(244,246,250,0.88) 60%, rgba(244,246,250,0.82) 100%), url('bg_arrows.jpg');
+  background-image: linear-gradient(to bottom, rgba(244,246,250,0.88) 0%, rgba(244,246,250,0.82) 60%, rgba(244,246,250,0.75) 100%), url('bg_binary.jpg');
   background-size: cover;
   background-position: center;
   background-repeat: no-repeat;
