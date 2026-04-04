@@ -234,6 +234,13 @@
   flex-shrink: 0;
 }
 
+.agent-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center top;
+}
+
 .cfo-avatar  { box-shadow: 0 0 0 3px rgba(58,107,196,0.4); }
 .dof-avatar  { box-shadow: 0 0 0 3px rgba(91,141,224,0.4); }
 .ctrl-avatar { box-shadow: 0 0 0 3px rgba(42,138,122,0.4); }
