@@ -199,6 +199,20 @@ body {
 
 .nav-cta:hover { background: var(--accent-light) !important; }
 
+.nav-agents-link {
+  background: rgba(130,80,200,0.18) !important;
+  color: #c99af0 !important;
+  padding: 0.5rem 1.1rem;
+  border-radius: 3px;
+  border: 1px solid rgba(130,80,200,0.35) !important;
+  font-weight: 600;
+}
+
+.nav-agents-link:hover {
+  background: rgba(130,80,200,0.35) !important;
+  color: var(--white) !important;
+}
+
 .hamburger {
   display: none;
   flex-direction: column;
