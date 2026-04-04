@@ -523,7 +523,7 @@ body {
 }
 
 .what-right {
-  background: var(--off-white);
+  background: linear-gradient(160deg, var(--navy-800) 0%, var(--navy-700) 100%);
   padding: 5rem 4rem;
   display: flex;
   flex-direction: column;
@@ -533,13 +533,13 @@ body {
 
 .what-statement {
   font-size: clamp(1.1rem, 2.5vw, 1.4rem);
-  color: var(--navy-700);
+  color: rgba(255,255,255,0.82);
   line-height: 1.75;
   font-weight: 300;
 }
 
 .what-statement strong {
-  color: var(--navy-900);
+  color: var(--white);
   font-weight: 700;
 }
 
@@ -554,10 +554,10 @@ body {
   align-items: flex-start;
   gap: 1.25rem;
   padding: 1.25rem 1.5rem;
-  background: var(--white);
+  background: rgba(255,255,255,0.08);
   border-radius: 6px;
-  border-left: 3px solid var(--navy-600);
-  box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+  border-left: 3px solid var(--accent-light);
+  box-shadow: 0 2px 12px rgba(0,0,0,0.15);
   transition: transform var(--transition), box-shadow var(--transition);
 }
 
@@ -587,14 +587,14 @@ body {
   font-family: var(--font-head);
   font-size: 0.95rem;
   font-weight: 700;
-  color: var(--navy-800);
+  color: var(--white);
   margin-bottom: 0.25rem;
   letter-spacing: 0.03em;
 }
 
 .pillar p {
   font-size: 0.85rem;
-  color: var(--gray-600);
+  color: rgba(255,255,255,0.65);
   line-height: 1.5;
 }
 
@@ -675,12 +675,16 @@ body {
    ============================================================ */
 .who-section {
   padding: 6rem 2rem 7rem;
-  background-color: var(--white);
-  background-image: linear-gradient(to bottom, rgba(255,255,255,0.93) 0%, rgba(255,255,255,0.88) 60%, rgba(255,255,255,0.82) 100%), url('bg_city.jpg');
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
+  background: linear-gradient(160deg, var(--navy-900) 0%, var(--navy-800) 60%, var(--navy-700) 100%);
 }
+
+/* Adapt heading colours for dark background */
+.who-section .section-tag.dark {
+  background: rgba(255,255,255,0.15);
+  color: var(--white);
+  border: 1px solid rgba(255,255,255,0.2);
+}
+.who-section .section-title.dark { color: var(--white); }
 
 .who-header {
   max-width: 1200px;
@@ -992,7 +996,7 @@ body {
   position: relative;
   overflow: hidden;
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
 }
 
 .market-img-bg {
@@ -1034,7 +1038,7 @@ body {
 .market-left-content {
   position: relative;
   z-index: 2;
-  padding: 3rem;
+  padding: 4rem 3rem;
 }
 
 .market-right {
@@ -1704,6 +1708,30 @@ body {
   grid-template-columns: 260px 1fr;
   background: linear-gradient(160deg, var(--navy-900) 0%, var(--navy-800) 60%, var(--navy-700) 100%);
   min-height: 500px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Water-ripple rings overlay */
+.ripple-section::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    radial-gradient(ellipse 120% 80% at 60% 50%, transparent 18%, rgba(74,144,212,0.10) 18.8%, transparent 19.6%),
+    radial-gradient(ellipse 120% 80% at 60% 50%, transparent 30%, rgba(74,144,212,0.08) 30.8%, transparent 31.6%),
+    radial-gradient(ellipse 120% 80% at 60% 50%, transparent 43%, rgba(74,144,212,0.07) 43.8%, transparent 44.6%),
+    radial-gradient(ellipse 120% 80% at 60% 50%, transparent 57%, rgba(42,157,143,0.06) 57.8%, transparent 58.6%),
+    radial-gradient(ellipse 120% 80% at 60% 50%, transparent 71%, rgba(42,157,143,0.05) 71.8%, transparent 72.6%),
+    radial-gradient(ellipse 120% 80% at 60% 50%, transparent 86%, rgba(30,58,114,0.06) 86.8%, transparent 87.6%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.ripple-left,
+.ripple-right {
+  position: relative;
+  z-index: 1;
 }
 
 .ripple-left {
