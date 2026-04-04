@@ -193,8 +193,11 @@ body {
 .nav-cta {
   background: var(--accent) !important;
   color: var(--white) !important;
-  padding: 0.5rem 1.25rem;
+  padding: 0.4rem 1.25rem;
   border-radius: 3px;
+  display: inline-flex !important;
+  align-items: center;
+  line-height: 1;
 }
 
 .nav-cta:hover { background: var(--accent-light) !important; }
@@ -202,10 +205,13 @@ body {
 .nav-agents-link {
   background: rgba(130,80,200,0.18) !important;
   color: #c99af0 !important;
-  padding: 0.5rem 1.1rem;
+  padding: 0.4rem 1.1rem;
   border-radius: 3px;
   border: 1px solid rgba(130,80,200,0.35) !important;
   font-weight: 600;
+  display: inline-flex !important;
+  align-items: center;
+  line-height: 1;
 }
 
 .nav-agents-link:hover {
