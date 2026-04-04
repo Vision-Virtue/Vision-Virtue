@@ -22,9 +22,12 @@
       <h2 class="gate-title">Restricted Access</h2>
       <p class="gate-sub">This area is for authorized principals only.</p>
       <div class="gate-field">
-        <input type="password" id="accessPin" placeholder="Enter access code" autocomplete="off" />
-        <button id="accessBtn">Enter</button>
+        <input type="password" id="accessPin" placeholder="Access code" autocomplete="off" />
       </div>
+      <div class="gate-field gate-field-key">
+        <input type="password" id="accessApiKey" placeholder="Claude API key (sk-ant-...)" autocomplete="off" />
+      </div>
+      <button id="accessBtn" class="gate-btn-full">Enter</button>
       <p class="gate-error" id="gateError"></p>
     </div>
   </div>
