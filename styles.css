@@ -176,8 +176,7 @@ body {
   list-style: none;
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
-  gap: 1.4rem;
+  gap: 2.5rem;
 }
 
 .nav-links a {
