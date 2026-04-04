@@ -5,32 +5,45 @@
 // ── Access gate ─────────────────────────────────────────────
 const ACCESS_CODE = 'VV2025';   // Change this to your preferred PIN
 
-const accessGate = document.getElementById('accessGate');
-const agentsApp  = document.getElementById('agentsApp');
-const accessPin  = document.getElementById('accessPin');
-const accessBtn  = document.getElementById('accessBtn');
-const gateError  = document.getElementById('gateError');
+const accessGate   = document.getElementById('accessGate');
+const agentsApp    = document.getElementById('agentsApp');
+const accessPin    = document.getElementById('accessPin');
+const accessApiKey = document.getElementById('accessApiKey');
+const accessBtn    = document.getElementById('accessBtn');
+const gateError    = document.getElementById('gateError');
 
 function tryAccess() {
-  if (accessPin.value.trim() === ACCESS_CODE) {
-    accessGate.style.display = 'none';
-    agentsApp.style.display  = 'block';
-    sessionStorage.setItem('vv_auth', '1');
-  } else {
+  const pin = accessPin.value.trim();
+  const key = accessApiKey.value.trim();
+
+  if (pin !== ACCESS_CODE) {
     gateError.textContent = 'Incorrect access code. Try again.';
     accessPin.value = '';
     accessPin.focus();
+    return;
   }
+  if (!key.startsWith('sk-ant-')) {
+    gateError.textContent = 'Please enter a valid Claude API key (starts with sk-ant-).';
+    accessApiKey.focus();
+    return;
+  }
+
+  sessionStorage.setItem('vv_auth', '1');
+  sessionStorage.setItem('vv_key', key);
+  accessGate.style.display = 'none';
+  agentsApp.style.display  = 'block';
 }
 
 // Auto-pass if already authenticated this session
-if (sessionStorage.getItem('vv_auth') === '1') {
+if (sessionStorage.getItem('vv_auth') === '1' && sessionStorage.getItem('vv_key')) {
   accessGate.style.display = 'none';
   agentsApp.style.display  = 'block';
 }
 
 accessBtn.addEventListener('click', tryAccess);
-accessPin.addEventListener('keydown', e => { if (e.key === 'Enter') tryAccess(); });
+[accessPin, accessApiKey].forEach(el =>
+  el.addEventListener('keydown', e => { if (e.key === 'Enter') tryAccess(); })
+);
 
 // ── Agent definitions ────────────────────────────────────────
 const AGENTS = {
@@ -241,8 +254,7 @@ async function sendMessage() {
 
 // ── Claude API call ──────────────────────────────────────────
 async function callClaude(systemPrompt, messages) {
-  // API key: set in window.VV_API_KEY or via meta tag
-  const apiKey = window.VV_API_KEY || '';
+  const apiKey = sessionStorage.getItem('vv_key') || window.VV_API_KEY || '';
 
   if (!apiKey) {
     throw new Error('Claude API key not configured. Set window.VV_API_KEY before using agents.');
