@@ -1578,9 +1578,9 @@ body {
    ============================================================ */
 .pillar-section {
   background-color: var(--white);
-  background-image: linear-gradient(to bottom, rgba(255,255,255,0.90) 0%, rgba(255,255,255,0.85) 50%, rgba(255,255,255,0.80) 100%), url('bg_arrows.jpg');
+  background-image: linear-gradient(to bottom, rgba(255,255,255,0.90) 0%, rgba(255,255,255,0.85) 50%, rgba(255,255,255,0.80) 100%), url('bg_flow.jpg');
   background-size: cover;
-  background-position: center top;
+  background-position: center;
   background-repeat: no-repeat;
   padding: 5rem 2rem 4rem;
 }
