@@ -27,7 +27,49 @@
         <li><a href="#market">Market Focus</a></li>
         <li><a href="#team">Our Team</a></li>
         <li><a href="#contact" class="nav-cta">Get in Touch</a></li>
-        <li><a href="agents.html" class="nav-agents-link">⚡ Finance AI</a></li>
+        <li class="nav-auth-wrap">
+          <button class="nav-auth-btn" id="authMenuBtn" aria-expanded="false">
+            Authorized Personnel <span class="auth-chevron">▾</span>
+          </button>
+          <div class="auth-dropdown" id="authDropdown" aria-hidden="true">
+            <div class="auth-drop-inner">
+              <!-- Finance AI -->
+              <button class="auth-card" id="financeAiCard">
+                <div class="auth-card-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"/>
+                    <path d="M12 6v2m0 8v2M9.5 9.5A2.5 2.5 0 0 1 12 8a2.5 2.5 0 0 1 0 5 2.5 2.5 0 0 0 0 5 2.5 2.5 0 0 0 2.5-1.5"/>
+                  </svg>
+                </div>
+                <span>Finance AI</span>
+              </button>
+              <!-- Agreements -->
+              <button class="auth-card auth-card-locked">
+                <div class="auth-card-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14,2 14,8 20,8"/>
+                    <line x1="8" y1="13" x2="16" y2="13"/>
+                    <line x1="8" y1="17" x2="16" y2="17"/>
+                    <line x1="8" y1="9" x2="10" y2="9"/>
+                  </svg>
+                </div>
+                <span>Agreements</span>
+                <span class="auth-card-soon">Soon</span>
+              </button>
+              <!-- Marketing AI -->
+              <button class="auth-card auth-card-locked">
+                <div class="auth-card-icon">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M22 12h-4l-3 9L9 3l-3 9H2"/>
+                  </svg>
+                </div>
+                <span>Marketing AI</span>
+                <span class="auth-card-soon">Soon</span>
+              </button>
+            </div>
+          </div>
+        </li>
       </ul>
       <button class="hamburger" id="hamburger" aria-label="Open menu">
         <span></span><span></span><span></span>
@@ -42,7 +84,7 @@
       <a href="#market" class="mobile-link">Market Focus</a>
       <a href="#team" class="mobile-link">Our Team</a>
       <a href="#contact" class="mobile-link">Get in Touch</a>
-      <a href="agents.html" class="mobile-link mobile-link-agents">⚡ Finance AI</a>
+      <button class="mobile-link mobile-link-agents" id="mobileAuthBtn">Authorized Personnel</button>
     </div>
   </nav>
 
@@ -1094,6 +1136,26 @@
     </div>
   </footer>
 
+  <!-- AUTHORIZED PERSONNEL GATE -->
+  <div class="ap-overlay" id="apOverlay" aria-hidden="true">
+    <div class="ap-modal">
+      <button class="ap-close" id="apClose" aria-label="Close">&#x2715;</button>
+      <div class="gate-logo" style="justify-content:center;margin-bottom:1.5rem">
+        <span class="logo-v">V</span>
+        <span class="logo-text">VISION &amp; VIRTUE</span>
+      </div>
+      <h2 class="gate-title">Restricted Access</h2>
+      <p class="gate-sub">Authorized personnel only.</p>
+      <div style="display:flex;flex-direction:column;gap:0.75rem;margin-bottom:0.5rem">
+        <input type="password" id="apPin" class="ap-input" placeholder="Access code" autocomplete="off" />
+        <input type="password" id="apKey" class="ap-input" placeholder="Claude API key (sk-ant-...)" autocomplete="off" />
+      </div>
+      <button id="apEnterBtn" class="gate-btn-full ap-enter">Enter</button>
+      <p class="gate-error" id="apError"></p>
+    </div>
+  </div>
+
   <script src="script.js"></script>
+  <script src="auth.js"></script>
 </body>
 </html>
