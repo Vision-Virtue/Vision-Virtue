@@ -48,8 +48,20 @@ document.addEventListener('keydown', (e) => {
 financeAiCard.addEventListener('click', () => {
   authDropdown.classList.remove('open');
   authMenuBtn.setAttribute('aria-expanded', 'false');
+  delete apEnterBtn.dataset.target;
   openGate();
 });
+
+// ── Marketing AI card → open gate then redirect to marketing.html ─
+const marketingAiCard = document.getElementById('marketingAiCard');
+if (marketingAiCard) {
+  marketingAiCard.addEventListener('click', () => {
+    authDropdown.classList.remove('open');
+    authMenuBtn.setAttribute('aria-expanded', 'false');
+    apEnterBtn.dataset.target = 'marketing';
+    openGate();
+  });
+}
 
 // Mobile: tap Authorized Personnel → open gate directly
 if (mobileAuthBtn) {
@@ -69,6 +81,7 @@ function openGate() {
 function closeGate() {
   apOverlay.classList.remove('open');
   apOverlay.setAttribute('aria-hidden', 'true');
+  delete apEnterBtn.dataset.target;
 }
 
 apClose.addEventListener('click', closeGate);
@@ -95,7 +108,8 @@ function tryAuth() {
   sessionStorage.setItem('vv_auth', '1');
   sessionStorage.setItem('vv_key', key);
   closeGate();
-  window.location.href = 'agents.html';
+  const target = apEnterBtn.dataset.target;
+  window.location.href = target === 'marketing' ? 'marketing.html' : 'agents.html';
 }
 
 apEnterBtn.addEventListener('click', tryAuth);

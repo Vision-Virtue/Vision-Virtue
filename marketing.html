@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vision & Virtue — Marketing AI</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@700;800;900&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="marketing.css" />
+</head>
+<body>
+
+  <!-- ─── Layout ──────────────────────────────────────────────────────────── -->
+  <div class="app-layout">
+
+    <!-- ─── Sidebar ───────────────────────────────────────────────────────── -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-mark">V&amp;V</div>
+        <div class="logo-text">
+          <span class="logo-primary">Vision &amp; Virtue</span>
+          <span class="logo-sub">Marketing AI</span>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav">
+        <button class="nav-item active" data-view="pipeline">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2V9M9 21H5a2 2 0 0 1-2-2V9m0 0h18"/>
+          </svg>
+          Content Pipeline
+        </button>
+        <button class="nav-item" data-view="linkedin">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.79M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/>
+          </svg>
+          LinkedIn Page
+        </button>
+        <button class="nav-item" data-view="analytics">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/>
+            <line x1="6" y1="20" x2="6" y2="14"/>
+          </svg>
+          Analytics
+        </button>
+        <button class="nav-item" data-view="settings">
+          <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          Settings
+        </button>
+      </nav>
+
+      <!-- Agent Roster -->
+      <div class="agent-roster">
+        <div class="roster-label">AI Agents</div>
+        <div class="agent-card">
+          <div class="agent-avatar avatar-blue">ER</div>
+          <div class="agent-info">
+            <span class="agent-name">Dr. Ethan Ross</span>
+            <span class="agent-role role-blue">Chief Economist</span>
+          </div>
+        </div>
+        <div class="agent-card">
+          <div class="agent-avatar avatar-purple">SC</div>
+          <div class="agent-info">
+            <span class="agent-name">Sofia Chen</span>
+            <span class="agent-role role-purple">Mgr. Marketing</span>
+          </div>
+        </div>
+        <div class="agent-card">
+          <div class="agent-avatar avatar-teal">DB</div>
+          <div class="agent-info">
+            <span class="agent-name">Daniel Berg</span>
+            <span class="agent-role role-teal">VP Marketing</span>
+          </div>
+        </div>
+        <div class="agent-card">
+          <div class="agent-avatar avatar-gold">R</div>
+          <div class="agent-info">
+            <span class="agent-name">Raphael</span>
+            <span class="agent-role role-gold">Final Approver</span>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- ─── Main Content ───────────────────────────────────────────────────── -->
+    <div class="main-area">
+
+      <!-- Top Header -->
+      <header class="top-header">
+        <div class="header-title" id="header-title">Content Pipeline</div>
+        <div class="header-actions">
+          <div class="linkedin-status" id="linkedin-status">
+            <span class="status-dot dot-checking"></span>
+            <span class="status-text">Checking LinkedIn...</span>
+          </div>
+        </div>
+      </header>
+
+      <!-- Content Area -->
+      <main class="content-area" id="content-area">
+        <!-- Dynamically rendered by JS -->
+        <div class="loading-state">
+          <div class="spinner"></div>
+          <span>Loading...</span>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ─── Toast Container ────────────────────────────────────────────────── -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ─── Modals ─────────────────────────────────────────────────────────── -->
+
+  <!-- New Topic Modal -->
+  <div class="modal-overlay" id="new-topic-modal" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Create New Topic</h3>
+        <button class="modal-close" id="close-topic-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">Enter the economic topic you want to analyze and create LinkedIn content for. Be specific — the more context, the better the output.</p>
+        <div class="form-group">
+          <label for="topic-input">Topic</label>
+          <textarea
+            id="topic-input"
+            class="form-textarea"
+            rows="3"
+            placeholder="e.g. Federal Reserve interest rate decision impact on Israeli tech sector, Q1 2025"
+          ></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancel-topic-btn">Cancel</button>
+        <button class="btn btn-primary" id="create-topic-btn">
+          <span>Create Topic</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Raphael Approval Modal -->
+  <div class="modal-overlay" id="raphael-modal" style="display:none">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 id="raphael-modal-title">Raphael — Final Decision</h3>
+        <button class="modal-close" id="close-raphael-modal">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc" id="raphael-modal-desc">Enter your passcode to confirm your decision.</p>
+        <div class="form-group">
+          <label for="raphael-passcode">Passcode</label>
+          <input type="password" id="raphael-passcode" class="form-input" placeholder="Enter Raphael passcode" />
+        </div>
+        <div class="form-group">
+          <label for="raphael-notes">Notes (optional)</label>
+          <textarea id="raphael-notes" class="form-textarea" rows="2" placeholder="Add any notes for the record..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="cancel-raphael-btn">Cancel</button>
+        <button class="btn btn-primary" id="confirm-raphael-btn">Confirm</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="marketing.js"></script>
+</body>
+</html>
