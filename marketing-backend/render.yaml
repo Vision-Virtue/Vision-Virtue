@@ -13,13 +13,13 @@ services:
       - key: FRONTEND_URL
         value: https://vision-virtue.github.io
       - key: ANTHROPIC_API_KEY
-        sync: false          # you will paste this in the Render dashboard
+        sync: false
       - key: RAPHAEL_PASSCODE
-        sync: false          # set your desired passcode in the Render dashboard
+        sync: false
       - key: SESSION_SECRET
-        generateValue: true  # Render auto-generates a secure random value
+        generateValue: true
       - key: DB_PATH
-        value: /opt/render/project/data/marketing.db
+        value: /tmp/marketing.db
       - key: LINKEDIN_CLIENT_ID
         sync: false
       - key: LINKEDIN_CLIENT_SECRET
@@ -28,7 +28,3 @@ services:
         value: https://vv-marketing-api.onrender.com/api/auth/linkedin/callback
       - key: LINKEDIN_ORGANIZATION_ID
         sync: false
-    disk:
-      name: vv-db
-      mountPath: /opt/render/project/data
-      sizeGB: 1
