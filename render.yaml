@@ -2,7 +2,6 @@ services:
   - type: web
     name: vv-marketing-api
     runtime: node
-    nodeVersion: 20.19.0
     rootDir: marketing-backend
     buildCommand: npm install && npm run build
     startCommand: npm start
