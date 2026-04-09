@@ -334,7 +334,8 @@ function renderStepPanels(item) {
       ${hasReview ? `
         <div class="panel-body">
           <div class="brief-field"><div class="brief-label">Comments</div><div class="brief-value">${item.vp_review.comments}</div></div>
-          ${item.vp_review.edits ? `<div class="brief-field"><div class="brief-label">Suggested Edits</div><div class="brief-value">${item.vp_review.edits}</div></div>` : ''}
+          <div class="brief-field"><div class="brief-label">Scores</div><div class="brief-value">Factual: ${item.vp_review.factual_accuracy_score}/10 · Brand: ${item.vp_review.brand_alignment_score}/10 · Clarity: ${item.vp_review.clarity_score}/10 · Risk: ${item.vp_review.reputational_risk}</div></div>
+          ${item.vp_review.edits ? `<div class="brief-field"><div class="brief-label">Suggested Edits</div><div class="brief-value">${[item.vp_review.edits.hebrew ? '🇮🇱 ' + item.vp_review.edits.hebrew : '', item.vp_review.edits.english ? '🇺🇸 ' + item.vp_review.edits.english : '', item.vp_review.edits.general || ''].filter(Boolean).join('<br><br>')}</div></div>` : ''}
         </div>` : ''}
       ${canReview && hasDraft ? `
         <div class="panel-footer">
