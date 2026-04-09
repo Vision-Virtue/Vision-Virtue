@@ -8,8 +8,6 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 3001
       - key: FRONTEND_URL
         value: https://vision-virtue.github.io
       - key: ANTHROPIC_API_KEY
