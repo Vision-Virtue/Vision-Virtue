@@ -8,10 +8,11 @@ import { ApiError, Approval } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getAIService(): AIService {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+function getAIService(req?: Request): AIService {
+  const apiKey = process.env.ANTHROPIC_API_KEY
+    || (req?.headers?.['x-api-key'] as string | undefined);
   if (!apiKey) {
-    throw new ApiError(500, 'ANTHROPIC_API_KEY is not configured', 'MISSING_CONFIG');
+    throw new ApiError(500, 'ANTHROPIC_API_KEY is not configured on the server', 'MISSING_CONFIG');
   }
   return new AIService(new Anthropic({ apiKey }));
 }
@@ -73,7 +74,7 @@ export class ContentController {
       return;
     }
 
-    const aiService = getAIService();
+    const aiService = getAIService(req);
     const aiResponse = await aiService.runChiefEconomist(item.topic);
 
     if (!aiResponse.economist_brief) {
@@ -143,7 +144,7 @@ export class ContentController {
       return;
     }
 
-    const aiService = getAIService();
+    const aiService = getAIService(req);
     const aiResponse = await aiService.runMarketingManager(item.topic, item.economist_brief);
 
     if (!aiResponse.marketing_draft) {
@@ -218,7 +219,7 @@ export class ContentController {
       return;
     }
 
-    const aiService = getAIService();
+    const aiService = getAIService(req);
     const aiResponse = await aiService.runVpMarketing(
       item.topic,
       item.economist_brief,
