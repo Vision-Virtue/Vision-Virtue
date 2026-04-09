@@ -263,11 +263,13 @@ function renderStepPanels(item) {
         <div class="panel-body">
           <div class="brief-grid">
             <div class="brief-field"><div class="brief-label">Summary</div><div class="brief-value">${item.economist_brief.summary}</div></div>
-            <div class="brief-field"><div class="brief-label">What Happened</div><div class="brief-value">${item.economist_brief.what_happened}</div></div>
-            <div class="brief-field"><div class="brief-label">Why It Matters</div><div class="brief-value">${item.economist_brief.why_it_matters}</div></div>
-            <div class="brief-field"><div class="brief-label">Implications</div><div class="brief-value">${item.economist_brief.implications}</div></div>
-            <div class="brief-field"><div class="brief-label">Risks</div><div class="brief-value">${item.economist_brief.risks}</div></div>
-            <div class="brief-field"><div class="brief-label">Uncertainty</div><div class="brief-value">${item.economist_brief.uncertainty}</div></div>
+            <div class="brief-field"><div class="brief-label">Israel Context</div><div class="brief-value">${item.economist_brief.israel_context}</div></div>
+            <div class="brief-field"><div class="brief-label">US Context</div><div class="brief-value">${item.economist_brief.us_context}</div></div>
+            <div class="brief-field"><div class="brief-label">Global Context</div><div class="brief-value">${item.economist_brief.global_context}</div></div>
+            <div class="brief-field"><div class="brief-label">Geopolitical Implications</div><div class="brief-value">${item.economist_brief.geopolitical_implications}</div></div>
+            <div class="brief-field"><div class="brief-label">Central Bank Stance</div><div class="brief-value">${item.economist_brief.central_bank_stance}</div></div>
+            <div class="brief-field"><div class="brief-label">Risks & Uncertainties</div><div class="brief-value">${(item.economist_brief.risks_and_uncertainties || []).join('<br>')}</div></div>
+            <div class="brief-field"><div class="brief-label">Actionable Insights</div><div class="brief-value">${(item.economist_brief.actionable_insights || []).join('<br>')}</div></div>
           </div>
         </div>` : ''}
       ${canBrief || !hasBrief && item.state === 'IDEA_IDENTIFIED' ? `
