@@ -1,6 +1,9 @@
 {
   "name": "vv-marketing-backend",
   "version": "1.0.0",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "ts-node-dev --respawn src/server.ts",

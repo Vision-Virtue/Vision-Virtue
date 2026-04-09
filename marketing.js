@@ -4,7 +4,7 @@
    ============================================================ */
 
 // ── Configuration ─────────────────────────────────────────────
-const API_BASE = (window.VV_MARKETING_API || 'http://localhost:3001') + '/api';
+const API_BASE = (window.VV_MARKETING_API || localStorage.getItem('vv_marketing_api') || 'https://vv-marketing-api.onrender.com') + '/api';
 
 // ── State ──────────────────────────────────────────────────────
 let currentView = 'pipeline';
@@ -704,10 +704,6 @@ document.addEventListener('keydown', e => {
 
 // ── Init ──────────────────────────────────────────────────────
 (function init() {
-  // Allow API URL override from localStorage
-  const saved = localStorage.getItem('vv_marketing_api');
-  if (saved) window.VV_MARKETING_API = saved;
-
   checkLinkedInStatus();
   navigate('pipeline');
 })();
