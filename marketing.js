@@ -37,14 +37,23 @@ const WORKFLOW_STEPS = [
 
 // ── API helpers ────────────────────────────────────────────────
 async function api(method, path, body) {
+  const apiKey = sessionStorage.getItem('vv_key') || '';
   const opts = {
     method,
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': apiKey,
+    },
   };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(API_BASE + path, opts);
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
+  if (!res.ok) {
+    const errMsg = typeof data.error === 'object'
+      ? (data.error?.message || JSON.stringify(data.error))
+      : (data.error || data.message || `HTTP ${res.status}`);
+    throw new Error(errMsg);
+  }
   return data.data ?? data;
 }
 
