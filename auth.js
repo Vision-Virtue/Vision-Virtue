@@ -105,10 +105,10 @@ function tryAuth() {
     return;
   }
 
+  const target = apEnterBtn.dataset.target;
   sessionStorage.setItem('vv_auth', '1');
   sessionStorage.setItem('vv_key', key);
   closeGate();
-  const target = apEnterBtn.dataset.target;
   window.location.href = target === 'marketing' ? 'marketing.html' : 'agents.html';
 }
 
