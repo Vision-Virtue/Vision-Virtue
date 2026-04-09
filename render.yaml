@@ -2,15 +2,12 @@ services:
   - type: web
     name: vv-marketing-api
     runtime: node
-    nodeVersion: 20.19.0
     rootDir: marketing-backend
     buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 3001
       - key: FRONTEND_URL
         value: https://vision-virtue.github.io
       - key: ANTHROPIC_API_KEY
