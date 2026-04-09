@@ -420,29 +420,85 @@ function renderStepPanels(item) {
 function bindDetailActions(item) {
   const $ = id => document.getElementById(id);
 
-  // Generate brief
+  // ── Full auto-pipeline ────────────────────────────────────
+  async function runFullPipeline(id) {
+    const MAX_REVISIONS = 3;
+    let it = currentItem;
+    let revisions = 0;
+    const area = document.getElementById('content-area');
+
+    const step = (msg) => toast(msg, 'info');
+
+    try {
+      // Step 1 — Economist Brief
+      if (it.state === 'IDEA_IDENTIFIED' || it.state === 'RETURNED_FOR_REVISION') {
+        if (it.state === 'IDEA_IDENTIFIED') {
+          step('Dr. Ethan Ross is analyzing the topic...');
+          it = await POST(`/content/${id}/economist-brief`);
+          currentItem = it;
+          renderDetail(area);
+        }
+      }
+
+      // Steps 2+3 — Draft → VP Review loop
+      while (revisions < MAX_REVISIONS) {
+        if (it.state === 'ECONOMIST_BRIEF_READY' || it.state === 'RETURNED_FOR_REVISION') {
+          step(`Sofia Chen is drafting${revisions > 0 ? ' (revision ' + revisions + ')' : ''}...`);
+          it = await POST(`/content/${id}/marketing-draft`);
+          currentItem = it;
+          renderDetail(area);
+        }
+
+        if (it.state === 'DRAFT_READY') {
+          step('Daniel Berg is reviewing the draft...');
+          it = await POST(`/content/${id}/vp-review`);
+          currentItem = it;
+          renderDetail(area);
+        }
+
+        if (it.state === 'AWAITING_RAPHAEL_APPROVAL') {
+          toast('Pipeline complete — ready for your approval.', 'success');
+          break;
+        }
+
+        if (it.state === 'RETURNED_FOR_REVISION') {
+          revisions++;
+          if (revisions >= MAX_REVISIONS) {
+            toast('VP requested revisions ' + MAX_REVISIONS + ' times. Please review manually.', 'error');
+            break;
+          }
+          step('VP requested revisions. Regenerating draft...');
+          continue;
+        }
+
+        if (it.state === 'REJECTED') {
+          toast('VP rejected this content. Please create a new topic.', 'error');
+          break;
+        }
+        break;
+      }
+    } catch(e) {
+      toast(e.message, 'error');
+    }
+  }
+
+  // Generate brief → triggers full pipeline
   const briefBtn = $('gen-brief-btn');
   if (briefBtn) briefBtn.onclick = async () => {
     setLoading(briefBtn, true);
-    try {
-      currentItem = await POST(`/content/${item.id}/economist-brief`);
-      toast('Economist brief generated.', 'success');
-      renderDetail(document.getElementById('content-area'));
-    } catch(e) { toast(e.message, 'error'); setLoading(briefBtn, false, 'Generate Economist Brief'); }
+    await runFullPipeline(item.id);
+    setLoading(briefBtn, false, 'Generate Economist Brief');
   };
 
-  // Generate draft
+  // Retry pipeline from revision state
   const draftBtn = $('gen-draft-btn');
   if (draftBtn) draftBtn.onclick = async () => {
     setLoading(draftBtn, true);
-    try {
-      currentItem = await POST(`/content/${item.id}/marketing-draft`);
-      toast('Marketing draft created.', 'success');
-      renderDetail(document.getElementById('content-area'));
-    } catch(e) { toast(e.message, 'error'); setLoading(draftBtn, false, 'Generate Marketing Draft'); }
+    await runFullPipeline(item.id);
+    setLoading(draftBtn, false, 'Generate Marketing Draft');
   };
 
-  // VP review
+  // VP review (manual fallback)
   const reviewBtn = $('submit-review-btn');
   if (reviewBtn) reviewBtn.onclick = async () => {
     setLoading(reviewBtn, true);
@@ -453,7 +509,7 @@ function bindDetailActions(item) {
     } catch(e) { toast(e.message, 'error'); setLoading(reviewBtn, false, 'Submit for VP Review'); }
   };
 
-  // Send to Raphael
+  // Send to Raphael (manual fallback)
   const reqBtn = $('request-approval-btn');
   if (reqBtn) reqBtn.onclick = async () => {
     setLoading(reqBtn, true);
