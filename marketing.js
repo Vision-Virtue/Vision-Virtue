@@ -298,13 +298,16 @@ function renderStepPanels(item) {
           <div class="draft-grid">
             <div class="draft-panel">
               <div class="draft-lang">🇮🇱 Hebrew</div>
-              <div class="draft-text" dir="rtl">${item.marketing_draft.hebrew}</div>
+              <div class="draft-text" dir="rtl">${item.marketing_draft.hebrew?.text || ''}</div>
+              <div class="draft-meta">${(item.marketing_draft.hebrew?.hashtags || []).join(' ')}</div>
             </div>
             <div class="draft-panel">
               <div class="draft-lang">🇺🇸 English</div>
-              <div class="draft-text">${item.marketing_draft.english}</div>
+              <div class="draft-text">${item.marketing_draft.english?.text || ''}</div>
+              <div class="draft-meta">${(item.marketing_draft.english?.hashtags || []).join(' ')}</div>
             </div>
           </div>
+          <div class="brief-field" style="margin-top:1rem"><div class="brief-label">Key Message</div><div class="brief-value">${item.marketing_draft.key_message || ''}</div></div>
         </div>` : ''}
       ${canDraft && hasBrief ? `
         <div class="panel-footer">
