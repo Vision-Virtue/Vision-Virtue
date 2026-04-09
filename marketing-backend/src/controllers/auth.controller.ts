@@ -21,7 +21,7 @@ export class AuthController {
     const state = uuidv4();
 
     // Store state in session for CSRF protection
-    (req.session as Record<string, unknown>)['oauth_state'] = state;
+    (req.session as unknown as Record<string, unknown>)['oauth_state'] = state;
 
     const authUrl = linkedInService.getAuthorizationUrl(state);
     res.redirect(authUrl);
@@ -52,7 +52,7 @@ export class AuthController {
     }
 
     // Verify CSRF state
-    const sessionState = (req.session as Record<string, unknown>)['oauth_state'] as
+    const sessionState = (req.session as unknown as Record<string, unknown>)['oauth_state'] as
       | string
       | undefined;
     if (sessionState && state && sessionState !== state) {
@@ -63,7 +63,7 @@ export class AuthController {
     }
 
     // Clear session state
-    delete (req.session as Record<string, unknown>)['oauth_state'];
+    delete (req.session as unknown as Record<string, unknown>)['oauth_state'];
 
     const linkedInService = getLinkedInService();
     const tokenData = await linkedInService.exchangeCodeForToken(code);
