@@ -365,6 +365,16 @@ function renderStepPanels(item) {
           <div class="brief-field"><div class="brief-label">At</div><div class="brief-value">${fmtDate(item.approval.approved_at)}</div></div>
         </div>` : ''}
       ${canApprove ? `
+        <div class="panel-body">
+          <div class="brief-field"><div class="brief-label">Final Review — Hebrew Post</div>
+            <div class="brief-value" dir="rtl" style="white-space:pre-wrap;line-height:1.7">${item.marketing_draft?.hebrew?.text || ''}</div>
+            <div style="margin-top:0.5rem;color:var(--text-muted);font-size:0.8rem">${(item.marketing_draft?.hebrew?.hashtags || []).join(' ')}</div>
+          </div>
+          <div class="brief-field" style="margin-top:1rem"><div class="brief-label">Final Review — English Post</div>
+            <div class="brief-value" style="white-space:pre-wrap;line-height:1.7">${item.marketing_draft?.english?.text || ''}</div>
+            <div style="margin-top:0.5rem;color:var(--text-muted);font-size:0.8rem">${(item.marketing_draft?.english?.hashtags || []).join(' ')}</div>
+          </div>
+        </div>
         <div class="panel-footer" style="gap:0.75rem;display:flex">
           <button class="btn btn-primary" id="approve-btn">Approve & Authorize</button>
           <button class="btn btn-danger" id="reject-btn">Reject</button>
