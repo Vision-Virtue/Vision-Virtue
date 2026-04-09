@@ -9,6 +9,7 @@ import {
   chiefEconomistPrompt,
   marketingManagerPrompt,
   vpMarketingPrompt,
+  vpSelfEditPrompt,
 } from '../agents/prompts';
 
 const MODEL = 'claude-sonnet-4-6';
@@ -122,5 +123,16 @@ export class AIService {
     const raw = await this.callClaude(prompt);
     const parsed = extractJson(raw);
     return validateAIResponse(parsed, 'review');
+  }
+
+  async runVpSelfEdit(
+    topic: string,
+    draft: MarketingDraft,
+    editNotes: { hebrew?: string; english?: string; general?: string },
+  ): Promise<AIResponse> {
+    const prompt = vpSelfEditPrompt(topic, draft, editNotes);
+    const raw = await this.callClaude(prompt);
+    const parsed = extractJson(raw);
+    return validateAIResponse(parsed, 'draft');
   }
 }

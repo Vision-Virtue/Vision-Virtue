@@ -73,6 +73,12 @@ router.post(
   asyncHandler((req, res) => contentController.requestVpReview(req, res)),
 );
 
+// VP self-edit after 3 revision cycles
+router.post(
+  '/content/:id/vp-self-edit',
+  asyncHandler((req, res) => contentController.vpSelfEdit(req, res)),
+);
+
 // Request Raphael approval (after VP approves)
 router.post(
   '/content/:id/request-approval',

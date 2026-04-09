@@ -464,10 +464,14 @@ function bindDetailActions(item) {
         if (it.state === 'RETURNED_FOR_REVISION') {
           revisions++;
           if (revisions >= MAX_REVISIONS) {
-            toast('VP requested revisions ' + MAX_REVISIONS + ' times. Please review manually.', 'error');
+            step('Daniel Berg is rewriting the posts himself after ' + MAX_REVISIONS + ' revision cycles...');
+            it = await POST(`/content/${id}/vp-self-edit`);
+            currentItem = it;
+            renderDetail(area);
+            toast('Daniel Berg has rewritten the posts — ready for your approval.', 'success');
             break;
           }
-          step('VP requested revisions. Regenerating draft...');
+          step('VP requested revisions. Regenerating draft (attempt ' + (revisions + 1) + ')...');
           continue;
         }
 

@@ -290,6 +290,81 @@ export class ContentController {
     res.json({ success: true, data: updatedItem });
   }
 
+  // POST /api/content/:id/vp-self-edit
+  async vpSelfEdit(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+
+    const item = contentRepository.findById(id);
+    if (!item) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: `Content item ${id} not found` } });
+      return;
+    }
+
+    if (item.state !== 'RETURNED_FOR_REVISION') {
+      res.status(400).json({
+        error: {
+          code: 'INVALID_STATE',
+          message: `VP self-edit requires state RETURNED_FOR_REVISION, current: ${item.state}`,
+        },
+      });
+      return;
+    }
+
+    if (!item.marketing_draft || !item.vp_review) {
+      res.status(400).json({
+        error: { code: 'PREREQUISITE_MISSING', message: 'Marketing draft and VP review are required' },
+      });
+      return;
+    }
+
+    const editNotes = {
+      hebrew: item.vp_review.edits?.hebrew,
+      english: item.vp_review.edits?.english,
+      general: item.vp_review.edits?.general,
+    };
+
+    const aiService = getAIService(req);
+    const aiResponse = await aiService.runVpSelfEdit(item.topic, item.marketing_draft, editNotes);
+
+    if (!aiResponse.marketing_draft) {
+      res.status(500).json({ error: { code: 'AI_ERROR', message: 'No marketing draft in VP self-edit response' } });
+      return;
+    }
+
+    let updatedItem = contentRepository.update(id, { marketing_draft: aiResponse.marketing_draft });
+
+    // Transition: RETURNED_FOR_REVISION → DRAFT_READY → UNDER_VP_REVIEW → AWAITING_RAPHAEL_APPROVAL
+    updatedItem = workflowStateMachine.transition(
+      updatedItem,
+      'DRAFT_READY',
+      'Daniel Berg (AI)',
+      { self_edit: true },
+    );
+    updatedItem = workflowStateMachine.transition(
+      updatedItem,
+      'UNDER_VP_REVIEW',
+      'Daniel Berg (AI)',
+      { self_edit: true },
+    );
+    updatedItem = workflowStateMachine.transition(
+      updatedItem,
+      'AWAITING_RAPHAEL_APPROVAL',
+      'Daniel Berg (AI)',
+      { self_edit: true, note: 'VP self-edited after 3 revision cycles' },
+    );
+
+    contentRepository.addAuditEntry({
+      content_id: id,
+      action: 'VP_SELF_EDIT_COMPLETED',
+      actor: 'Daniel Berg (AI)',
+      previous_state: 'RETURNED_FOR_REVISION',
+      new_state: 'AWAITING_RAPHAEL_APPROVAL',
+      details: { self_edit: true, model_version: aiResponse.model_version },
+    });
+
+    res.json({ success: true, data: updatedItem });
+  }
+
   // POST /api/content/:id/request-approval
   async requestApproval(req: Request, res: Response): Promise<void> {
     const { id } = req.params;

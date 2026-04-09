@@ -167,3 +167,54 @@ OUTPUT ONLY valid JSON, no markdown, no code fences:
   "processing_notes": "any notes on the review process"
 }`;
 }
+
+// ─── VP Self-Edit Prompt ──────────────────────────────────────────────────────
+
+export function vpSelfEditPrompt(
+  topic: string,
+  draft: MarketingDraft,
+  editNotes: { hebrew?: string; english?: string; general?: string },
+): string {
+  return `You are Daniel Berg, VP of Marketing at Vision & Virtue. After two rounds of review, the marketing manager has not produced a satisfactory draft. You are now taking over and directly rewriting both posts yourself.
+
+TOPIC: ${topic}
+
+CURRENT HEBREW DRAFT:
+${draft.hebrew?.text || ''}
+
+CURRENT ENGLISH DRAFT:
+${draft.english?.text || ''}
+
+YOUR REQUIRED EDITS:
+Hebrew: ${editNotes.hebrew || 'Improve overall quality and tone'}
+English: ${editNotes.english || 'Improve overall quality and tone'}
+General: ${editNotes.general || 'Ensure brand alignment and executive tone'}
+
+Rewrite both posts directly applying your edits. The final versions must be publication-ready, authoritative, and aligned with Vision & Virtue's brand. Maintain the Hebrew language for the Hebrew post.
+
+Output ONLY valid JSON, no markdown, no code fences:
+{
+  "stage": "draft",
+  "marketing_draft": {
+    "hebrew": {
+      "text": "rewritten Hebrew post",
+      "hashtags": ["#כלכלה", "#שוקההון"],
+      "call_to_action": "Hebrew CTA",
+      "character_count": 0
+    },
+    "english": {
+      "text": "rewritten English post",
+      "hashtags": ["#Economics", "#CFO"],
+      "call_to_action": "English CTA",
+      "character_count": 0
+    },
+    "content_angle": "thought leadership",
+    "target_audience": "CFOs, Founders, Board Members",
+    "key_message": "core message of these posts",
+    "tone": "authoritative and analytical",
+    "generated_at": "${new Date().toISOString()}"
+  },
+  "model_version": "claude-sonnet-4-6",
+  "processing_notes": "VP Daniel Berg direct edit after 2 revision cycles"
+}`;
+}
