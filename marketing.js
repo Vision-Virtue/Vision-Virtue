@@ -45,7 +45,7 @@ async function api(method, path, body) {
   const res = await fetch(API_BASE + path, opts);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || data.message || `HTTP ${res.status}`);
-  return data;
+  return data.data ?? data;
 }
 
 const GET  = (p)    => api('GET', p);
