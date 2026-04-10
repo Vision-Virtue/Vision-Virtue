@@ -64,6 +64,15 @@ const GET  = (p)    => api('GET', p);
 const POST = (p, b) => api('POST', p, b);
 const PUT  = (p, b) => api('PUT', p, b);
 
+// ── HTML escape ────────────────────────────────────────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 // ── Toast ──────────────────────────────────────────────────────
 function toast(msg, type = 'info') {
   const ct = document.getElementById('toast-container');
@@ -290,10 +299,10 @@ function renderAgentCubesHTML(item) {
 
 function renderAgentContentHTML(key, item) {
   const meta = {
-    economist: { initials: 'ER', color: 'blue',   title: 'Dr. Ethan Ross — Economist Brief' },
-    sofia:     { initials: 'SC', color: 'purple', title: 'Sofia Chen — Marketing Draft' },
-    daniel:    { initials: 'DB', color: 'teal',   title: 'Daniel Berg — VP Review' },
-    raphael:   { initials: 'R',  color: 'gold',   title: 'Raphael — Final Approval Gate' },
+    economist: { photo: 'agent_economist.jpg', color: 'blue',   title: 'Dr. Ethan Ross — Economist Brief' },
+    sofia:     { photo: 'agent_sofia.jpg',     color: 'purple', title: 'Sofia Chen — Marketing Draft' },
+    daniel:    { photo: 'agent_daniel.jpg',    color: 'teal',   title: 'Daniel Berg — VP Review' },
+    raphael:   { photo: 'team_raphael.png',    color: 'gold',   title: 'Raphael — Final Approval Gate' },
   }[key];
 
   let body = '';
@@ -359,7 +368,30 @@ function renderAgentContentHTML(key, item) {
   }
 
   else if (key === 'raphael') {
-    const { state, marketing_draft, approval, publish_result } = item;
+    const { state, marketing_draft, approval, publish_result, qa_history } = item;
+    const qaEntries = qa_history || [];
+
+    // Q&A history HTML (shared between approval and post-decision views)
+    const qaHistoryHTML = qaEntries.length === 0 ? '' : `
+      <div class="qa-history">
+        ${qaEntries.map(e => `
+          <div class="qa-exchange">
+            <div class="qa-question-bubble">
+              <div class="qa-q-label">You asked</div>
+              <div class="qa-q-text">${esc(e.question)}</div>
+            </div>
+            <div class="qa-answer-row">
+              <img class="qa-economist-avatar" src="agent_economist.jpg" alt="Dr. Ethan Ross" />
+              <div class="qa-answer-bubble">
+                <div class="qa-a-name">Dr. Ethan Ross</div>
+                <div class="qa-a-text">${esc(e.answer)}</div>
+                <div class="qa-a-time">${fmtDate(e.asked_at)}</div>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>`;
+
     if (state === 'AWAITING_RAPHAEL_APPROVAL' && marketing_draft) {
       const d = marketing_draft;
       body = `
@@ -375,6 +407,22 @@ function renderAgentContentHTML(key, item) {
             <div class="draft-meta">${(d.english?.hashtags || []).join(' ')}</div>
           </div>
         </div>
+
+        <div class="qa-section">
+          <div class="qa-section-header">
+            <img class="qa-section-avatar" src="agent_economist.jpg" alt="Dr. Ethan Ross" />
+            <div>
+              <div class="qa-section-title">Consult Dr. Ethan Ross</div>
+              <div class="qa-section-sub">Ask the Economist anything about these posts before you decide</div>
+            </div>
+          </div>
+          ${qaHistoryHTML}
+          <div class="qa-form">
+            <textarea id="qa-question-input" class="qa-textarea" rows="2" placeholder="e.g. Is the Fed rate claim accurate given last week's data?"></textarea>
+            <button class="btn btn-outline qa-send-btn" id="qa-send-btn">Ask Dr. Ross</button>
+          </div>
+        </div>
+
         <div style="display:flex;gap:0.75rem;padding-top:1.25rem;border-top:1px solid var(--card-border)">
           <button class="btn btn-primary" id="approve-btn">✓ Approve &amp; Authorize Publication</button>
           <button class="btn btn-danger" id="reject-btn">✕ Reject</button>
@@ -386,6 +434,7 @@ function renderAgentContentHTML(key, item) {
         <div class="brief-field"><div class="brief-label">At</div><div class="brief-value">${fmtDate(approval?.approved_at)}</div></div>
         ${approval?.notes ? `<div class="brief-field"><div class="brief-label">Notes</div><div class="brief-value">${approval.notes}</div></div>` : ''}
       </div>
+      ${qaEntries.length > 0 ? `<div class="qa-section qa-section-readonly"><div class="qa-section-header"><img class="qa-section-avatar" src="agent_economist.jpg" alt="Dr. Ethan Ross" /><div><div class="qa-section-title">Economist Q&amp;A</div><div class="qa-section-sub">Questions asked before approval</div></div></div>${qaHistoryHTML}</div>` : ''}
       ${state === 'APPROVED_FOR_PUBLISHING' ? `<div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--card-border)"><button class="btn btn-publish" id="publish-btn">Publish to LinkedIn Now</button></div>` : ''}
       ${state === 'PUBLISHED' && publish_result ? `<div class="brief-field" style="margin-top:1rem"><div class="brief-label">Published At</div><div class="brief-value">${fmtDate(publish_result.published_at)}</div></div>` : ''}`;
     } else if (state === 'REJECTED' && approval) {
@@ -401,7 +450,7 @@ function renderAgentContentHTML(key, item) {
   return `<div class="agent-content-panel">
     <div class="panel-header-bar">
       <div class="panel-header-bar-title">
-        <div class="agent-avatar avatar-${meta.color} sm-avatar">${meta.initials}</div>
+        <img class="sm-avatar-img" src="${meta.photo}" alt="${meta.title}" />
         ${meta.title}
       </div>
       <button class="panel-close-btn" id="close-agent-panel">×</button>
@@ -440,6 +489,44 @@ function bindPanelActions(item) {
     document.querySelectorAll('.agent-cube').forEach(c => c.classList.remove('cube-selected'));
   };
   bindDetailActions(item);
+  bindQAForm(item);
+}
+
+function bindQAForm(item) {
+  const btn   = document.getElementById('qa-send-btn');
+  const input = document.getElementById('qa-question-input');
+  if (!btn || !input) return;
+
+  btn.onclick = async () => {
+    const q = input.value.trim();
+    if (!q) { input.focus(); return; }
+
+    setLoading(btn, true, 'Asking…');
+    input.disabled = true;
+
+    try {
+      const updated = await POST(`/content/${item.id}/ask-economist`, { question: q });
+      currentItem = updated;
+      // Re-render just the Raphael panel with the new Q&A
+      const panelArea = document.getElementById('agent-content-panel-area');
+      if (panelArea) {
+        panelArea.innerHTML = renderAgentContentHTML('raphael', updated);
+        bindPanelActions(updated);
+        // Scroll Q&A history into view
+        const history = panelArea.querySelector('.qa-history');
+        if (history) history.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    } catch (err) {
+      toast(err.message || 'Failed to reach Dr. Ross', 'error');
+      setLoading(btn, false, 'Ask Dr. Ross');
+      input.disabled = false;
+    }
+  };
+
+  // Allow Cmd/Ctrl+Enter to submit
+  input.onkeydown = (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') btn.click();
+  };
 }
 
 async function runFullPipeline(id) {

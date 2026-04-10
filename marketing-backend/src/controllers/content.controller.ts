@@ -4,7 +4,7 @@ import { contentRepository } from '../db/repository';
 import { workflowStateMachine } from '../state-machine/workflow';
 import { AIService } from '../services/ai.service';
 import { LinkedInService } from '../services/linkedin.service';
-import { ApiError, Approval } from '../types';
+import { ApiError, Approval, QAEntry } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -609,6 +609,60 @@ export class ContentController {
   async getAll(_req: Request, res: Response): Promise<void> {
     const items = contentRepository.findAll();
     res.json({ success: true, data: items, count: items.length });
+  }
+
+  // POST /api/content/:id/ask-economist
+  async askEconomist(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+    const { question } = req.body as { question?: string };
+
+    if (!question || typeof question !== 'string' || question.trim().length === 0) {
+      res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: 'question is required and must be a non-empty string' },
+      });
+      return;
+    }
+
+    const item = contentRepository.findById(id);
+    if (!item) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: `Content item ${id} not found` } });
+      return;
+    }
+
+    if (item.state !== 'AWAITING_RAPHAEL_APPROVAL') {
+      res.status(400).json({
+        error: {
+          code: 'INVALID_STATE',
+          message: `Economist Q&A requires state AWAITING_RAPHAEL_APPROVAL, current: ${item.state}`,
+        },
+      });
+      return;
+    }
+
+    if (!item.economist_brief || !item.marketing_draft) {
+      res.status(400).json({
+        error: { code: 'PREREQUISITE_MISSING', message: 'Economist brief and marketing draft are required' },
+      });
+      return;
+    }
+
+    const aiService = getAIService(req);
+    const answer = await aiService.askEconomist(
+      item.topic,
+      item.economist_brief,
+      item.marketing_draft,
+      item.qa_history,
+      question.trim(),
+    );
+
+    const entry: QAEntry = {
+      question: question.trim(),
+      answer,
+      asked_at: new Date().toISOString(),
+    };
+
+    const updatedItem = contentRepository.appendQAEntry(id, entry);
+    res.json({ success: true, data: updatedItem });
   }
 }
 

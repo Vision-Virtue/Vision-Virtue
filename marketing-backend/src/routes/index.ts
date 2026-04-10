@@ -99,6 +99,12 @@ router.post(
   asyncHandler((req, res) => contentController.reject(req, res)),
 );
 
+// Ask the Economist a question (available during Raphael approval review)
+router.post(
+  '/content/:id/ask-economist',
+  asyncHandler((req, res) => contentController.askEconomist(req, res)),
+);
+
 // Publish to LinkedIn
 router.post(
   '/content/:id/publish',

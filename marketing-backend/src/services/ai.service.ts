@@ -3,6 +3,7 @@ import {
   AIResponse,
   EconomistBrief,
   MarketingDraft,
+  QAEntry,
   ApiError,
 } from '../types';
 import {
@@ -10,6 +11,7 @@ import {
   marketingManagerPrompt,
   vpMarketingPrompt,
   vpSelfEditPrompt,
+  economistQAPrompt,
 } from '../agents/prompts';
 
 const MODEL = 'claude-sonnet-4-6';
@@ -123,6 +125,17 @@ export class AIService {
     const raw = await this.callClaude(prompt);
     const parsed = extractJson(raw);
     return validateAIResponse(parsed, 'review');
+  }
+
+  async askEconomist(
+    topic: string,
+    brief: EconomistBrief,
+    draft: MarketingDraft,
+    qaHistory: QAEntry[],
+    question: string,
+  ): Promise<string> {
+    const prompt = economistQAPrompt(topic, brief, draft, qaHistory, question);
+    return (await this.callClaude(prompt)).trim();
   }
 
   async runVpSelfEdit(

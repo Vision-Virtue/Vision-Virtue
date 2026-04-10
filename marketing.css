@@ -1678,3 +1678,145 @@ html, body {
   background: var(--white); border: 1px solid var(--card-border);
   border-radius: var(--radius-lg); padding: 20px 24px; box-shadow: var(--shadow-sm);
 }
+
+/* ── Panel header small avatar (photo) ───────────────────────── */
+.sm-avatar-img {
+  width: 28px; height: 28px; border-radius: 50%;
+  object-fit: cover; object-position: center top;
+  border: 1.5px solid var(--card-border);
+  flex-shrink: 0;
+}
+
+/* ── Economist Q&A section ───────────────────────────────────── */
+.qa-section {
+  background: #f8faff;
+  border: 1px solid #dde6f5;
+  border-radius: var(--radius-lg);
+  padding: 18px 20px 14px;
+  margin-bottom: 1.5rem;
+}
+.qa-section-readonly { margin-top: 1.5rem; margin-bottom: 0; }
+
+.qa-section-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+.qa-section-avatar {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  object-fit: cover; object-position: center top;
+  border: 2px solid #c7d9f5;
+  flex-shrink: 0;
+}
+.qa-section-title {
+  font-size: 13px; font-weight: 700;
+  color: var(--navy-800);
+}
+.qa-section-sub {
+  font-size: 11.5px; color: var(--gray-400);
+  margin-top: 1px;
+}
+
+/* ── Q&A history ─────────────────────────────────────────────── */
+.qa-history {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 14px;
+  max-height: 340px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.qa-history::-webkit-scrollbar { width: 4px; }
+.qa-history::-webkit-scrollbar-thumb { background: #c7d9f5; border-radius: 2px; }
+
+.qa-exchange { display: flex; flex-direction: column; gap: 8px; }
+
+.qa-question-bubble {
+  align-self: flex-end;
+  background: var(--navy-800);
+  color: #fff;
+  border-radius: 12px 12px 3px 12px;
+  padding: 10px 14px;
+  max-width: 85%;
+}
+.qa-q-label {
+  font-size: 10px; font-weight: 600;
+  color: rgba(255,255,255,0.55);
+  text-transform: uppercase; letter-spacing: 0.5px;
+  margin-bottom: 4px;
+}
+.qa-q-text {
+  font-size: 13px; line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.qa-answer-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.qa-economist-avatar {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  object-fit: cover; object-position: center top;
+  border: 1.5px solid #c7d9f5;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.qa-answer-bubble {
+  background: #fff;
+  border: 1px solid #dde6f5;
+  border-radius: 3px 12px 12px 12px;
+  padding: 10px 14px;
+  flex: 1;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+.qa-a-name {
+  font-size: 11px; font-weight: 700;
+  color: #3a6bc4;
+  margin-bottom: 5px;
+}
+.qa-a-text {
+  font-size: 13px; line-height: 1.65;
+  color: var(--navy-800);
+  white-space: pre-wrap;
+}
+.qa-a-time {
+  font-size: 10.5px; color: var(--gray-400);
+  margin-top: 6px;
+}
+
+/* ── Q&A form ────────────────────────────────────────────────── */
+.qa-form {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid #dde6f5;
+}
+.qa-textarea {
+  flex: 1;
+  background: #fff;
+  border: 1px solid #c7d9f5;
+  border-radius: var(--radius-md);
+  padding: 9px 12px;
+  font-size: 13px; font-family: var(--font-sans);
+  color: var(--navy-800);
+  resize: none;
+  line-height: 1.5;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.qa-textarea:focus {
+  outline: none;
+  border-color: #3a6bc4;
+  box-shadow: 0 0 0 3px rgba(58,107,196,0.1);
+}
+.qa-textarea::placeholder { color: var(--gray-400); }
+.qa-send-btn {
+  flex-shrink: 0;
+  white-space: nowrap;
+  align-self: flex-end;
+}

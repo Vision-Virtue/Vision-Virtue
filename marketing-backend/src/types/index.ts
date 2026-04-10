@@ -72,6 +72,14 @@ export interface VpReview {
   reviewed_at: string;
 }
 
+// ─── Economist Q&A ────────────────────────────────────────────────────────────
+
+export interface QAEntry {
+  question: string;
+  answer: string;
+  asked_at: string;
+}
+
 // ─── Approval ─────────────────────────────────────────────────────────────────
 
 export interface Approval {
@@ -115,6 +123,7 @@ export interface ContentItem {
   metadata: ContentMetadata;
   publish_result: PublishResult | null;
   revision_history: RevisionEntry[];
+  qa_history: QAEntry[];
   created_at: string;
   updated_at: string;
 }
