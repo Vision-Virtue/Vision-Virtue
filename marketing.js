@@ -260,10 +260,10 @@ function renderPipelineStatusBarHTML(item) {
 
 function renderAgentCubesHTML(item) {
   const agents = [
-    { key: 'economist', initials: 'ER', name: 'Dr. Ethan Ross', role: 'Chief Economist',  color: 'blue'   },
-    { key: 'sofia',     initials: 'SC', name: 'Sofia Chen',     role: 'Mgr. Marketing',   color: 'purple' },
-    { key: 'daniel',    initials: 'DB', name: 'Daniel Berg',    role: 'VP Marketing',     color: 'teal'   },
-    { key: 'raphael',   initials: 'R',  name: 'Raphael',        role: 'Final Approver',   color: 'gold'   },
+    { key: 'economist', photo: 'agent_economist.jpg', name: 'Dr. Ethan Ross', role: 'Chief Economist',  color: 'blue'   },
+    { key: 'sofia',     photo: 'agent_sofia.jpg',     name: 'Sofia Chen',     role: 'Mgr. Marketing',   color: 'purple' },
+    { key: 'daniel',    photo: 'agent_daniel.jpg',    name: 'Daniel Berg',    role: 'VP Marketing',     color: 'teal'   },
+    { key: 'raphael',   photo: 'team_raphael.png',    name: 'Raphael',        role: 'Final Approver',   color: 'gold'   },
   ];
   const statusCssMap  = { done: 'cube-done', active: 'cube-active', green: 'cube-green', locked: 'cube-locked' };
   const statusLblMap  = { done: 'Complete', active: 'Working…', green: 'Awaiting you', idle: 'Pending', locked: '' };
@@ -276,7 +276,7 @@ function renderAgentCubesHTML(item) {
     html += `
       <div class="agent-cube ${statusCssMap[status] || ''} ${sel ? 'cube-selected' : ''}" id="cube-${a.key}" data-agent="${a.key}">
         <div class="cube-avatar-wrap">
-          <div class="cube-avatar-img avatar-${a.color}">${a.initials}</div>
+          <img class="cube-avatar-img" src="${a.photo}" alt="${a.name}" style="object-fit:cover;object-position:center top" />
           ${(status === 'done' || status === 'green') ? '<div class="cube-check-badge">✓</div>' : ''}
         </div>
         <div class="cube-name">${a.name}</div>
