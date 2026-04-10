@@ -199,11 +199,11 @@ export class ContentController {
       return;
     }
 
-    if (item.state !== 'DRAFT_READY') {
+    if (item.state !== 'DRAFT_READY' && item.state !== 'UNDER_VP_REVIEW') {
       res.status(400).json({
         error: {
           code: 'INVALID_STATE',
-          message: `VP review requires state DRAFT_READY, current: ${item.state}`,
+          message: `VP review requires state DRAFT_READY (or UNDER_VP_REVIEW for recovery), current: ${item.state}`,
         },
       });
       return;
@@ -233,16 +233,18 @@ export class ContentController {
 
     let updatedItem = contentRepository.update(id, { vp_review: aiResponse.vp_review });
 
-    // Transition to UNDER_VP_REVIEW first
-    updatedItem = workflowStateMachine.transition(
-      updatedItem,
-      'UNDER_VP_REVIEW',
-      'Daniel Berg (AI)',
-      { decision: aiResponse.vp_review.decision },
-    );
+    // Transition to UNDER_VP_REVIEW only if not already there (recovery mode skips this)
+    if (item.state === 'DRAFT_READY') {
+      updatedItem = workflowStateMachine.transition(
+        updatedItem,
+        'UNDER_VP_REVIEW',
+        'Daniel Berg (AI)',
+        { decision: aiResponse.vp_review.decision },
+      );
+    }
 
-    // Then apply VP decision
-    const vpDecision = aiResponse.vp_review.decision;
+    // Apply VP decision — normalize to uppercase and default unexpected values to REVISE
+    const vpDecision = (aiResponse.vp_review.decision || '').toString().toUpperCase().trim();
     if (vpDecision === 'APPROVED') {
       updatedItem = workflowStateMachine.transition(
         updatedItem,
@@ -254,17 +256,18 @@ export class ContentController {
           clarity: aiResponse.vp_review.clarity_score,
         }},
       );
-    } else if (vpDecision === 'REVISE') {
-      updatedItem = workflowStateMachine.transition(
-        updatedItem,
-        'RETURNED_FOR_REVISION',
-        'Daniel Berg (AI)',
-        { comments: aiResponse.vp_review.comments },
-      );
     } else if (vpDecision === 'REJECT') {
       updatedItem = workflowStateMachine.transition(
         updatedItem,
         'REJECTED',
+        'Daniel Berg (AI)',
+        { comments: aiResponse.vp_review.comments },
+      );
+    } else {
+      // REVISE or any unexpected value — always send for revision rather than getting stuck
+      updatedItem = workflowStateMachine.transition(
+        updatedItem,
+        'RETURNED_FOR_REVISION',
         'Daniel Berg (AI)',
         { comments: aiResponse.vp_review.comments },
       );

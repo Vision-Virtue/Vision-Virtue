@@ -555,8 +555,8 @@ async function runFullPipeline(id) {
         it = await POST(`/content/${id}/marketing-draft`);
         selectedAgent = 'sofia';
       }
-      if (it.state === 'DRAFT_READY') {
-        activating('daniel', 'Daniel Berg is reviewing the draft…');
+      if (it.state === 'DRAFT_READY' || it.state === 'UNDER_VP_REVIEW') {
+        activating('daniel', it.state === 'UNDER_VP_REVIEW' ? 'Resuming VP review…' : 'Daniel Berg is reviewing the draft…');
         it = await POST(`/content/${id}/vp-review`);
         selectedAgent = it.state === 'AWAITING_RAPHAEL_APPROVAL' ? 'raphael' : 'daniel';
       }
@@ -606,7 +606,7 @@ async function renderDetail(area) {
   }
 
   const showStart  = item.state === 'IDEA_IDENTIFIED' && !pipelineRunning;
-  const showResume = item.state === 'RETURNED_FOR_REVISION' && !pipelineRunning;
+  const showResume = ['RETURNED_FOR_REVISION', 'DRAFT_READY', 'UNDER_VP_REVIEW'].includes(item.state) && !pipelineRunning;
 
   area.innerHTML = `
     <div class="detail-header-row">
