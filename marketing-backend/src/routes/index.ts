@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { contentController } from '../controllers/content.controller';
 import { linkedInController } from '../controllers/linkedin.controller';
 import { authController } from '../controllers/auth.controller';
+import { chatController } from '../controllers/chat.controller';
 import { requireRaphael } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -121,6 +122,13 @@ router.post(
 router.post(
   '/content/:id/publish',
   asyncHandler((req, res) => contentController.publish(req, res)),
+);
+
+// ─── Direct Agent Chat ────────────────────────────────────────────────────────
+
+router.post(
+  '/chat/:agent',
+  asyncHandler((req, res) => chatController.directChat(req, res)),
 );
 
 // ─── LinkedIn Routes ──────────────────────────────────────────────────────────

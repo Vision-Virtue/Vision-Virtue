@@ -4,6 +4,7 @@ const express_1 = require("express");
 const content_controller_1 = require("../controllers/content.controller");
 const linkedin_controller_1 = require("../controllers/linkedin.controller");
 const auth_controller_1 = require("../controllers/auth.controller");
+const chat_controller_1 = require("../controllers/chat.controller");
 const auth_middleware_1 = require("../middleware/auth.middleware");
 const router = (0, express_1.Router)();
 // ─── Helper: wrap async route handlers to forward errors ─────────────────────
@@ -55,6 +56,8 @@ router.post('/content/:id/return-to-vp', asyncHandler((req, res) => content_cont
 router.post('/content/:id/vp-correct', asyncHandler((req, res) => content_controller_1.contentController.vpCorrect(req, res)));
 // Publish to LinkedIn
 router.post('/content/:id/publish', asyncHandler((req, res) => content_controller_1.contentController.publish(req, res)));
+// ─── Direct Agent Chat ────────────────────────────────────────────────────────
+router.post('/chat/:agent', asyncHandler((req, res) => chat_controller_1.chatController.directChat(req, res)));
 // ─── LinkedIn Routes ──────────────────────────────────────────────────────────
 // Get organization profile (cached or live)
 router.get('/linkedin/profile', asyncHandler((req, res) => linkedin_controller_1.linkedInController.getProfile(req, res)));

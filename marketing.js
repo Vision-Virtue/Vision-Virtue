@@ -16,6 +16,16 @@ let pipelineRunning = false;
 let currentPipelineStep = null;
 let raphaelAnnotations = [];
 let annAbortCtrl = null;
+let currentChatAgent = null;
+const chatHistories = { economist: [], sofia: [], daniel: [], raphael: [] };
+
+// ── Agent chat config ──────────────────────────────────────────
+const CHAT_AGENTS = {
+  economist: { name: 'Dr. Ethan Ross', role: 'Chief Economist',  photo: 'agent_economist.jpg', color: 'blue'   },
+  sofia:     { name: 'Sofia Chen',     role: 'Mgr. Marketing',   photo: 'agent_sofia.jpg',     color: 'purple' },
+  daniel:    { name: 'Daniel Berg',    role: 'VP Marketing',      photo: 'agent_daniel.jpg',    color: 'teal'   },
+  raphael:   { name: 'Raphael',        role: 'Partner',           photo: 'team_raphael.png',    color: 'gold'   },
+};
 
 // ── Workflow state config ──────────────────────────────────────
 const STATES = {
@@ -137,20 +147,27 @@ function navigate(view, item) {
   currentView = view;
   currentItem = item || null;
   if (view === 'detail') selectedAgent = null;
-  document.querySelectorAll('.nav-item').forEach(n => {
+  // Nav items highlight (pipeline/linkedin/analytics/settings)
+  document.querySelectorAll('.nav-item[data-view]').forEach(n => {
     n.classList.toggle('active', n.dataset.view === view);
+  });
+  // Agent card highlight
+  document.querySelectorAll('.agent-card[data-agent]').forEach(c => {
+    c.classList.toggle('active', view === 'chat' && c.dataset.agent === currentChatAgent);
   });
   const titles = { pipeline: 'Content Pipeline', linkedin: 'LinkedIn Page', analytics: 'Analytics', settings: 'Settings' };
   document.getElementById('header-title').textContent =
     view === 'detail' ? (item?.topic?.substring(0, 60) || 'Content Detail') :
+    view === 'chat'   ? (CHAT_AGENTS[currentChatAgent]?.name || 'Agent Chat') :
     titles[view] || view;
   renderView();
 }
 
 function renderView() {
   const area = document.getElementById('content-area');
-  if (currentView === 'pipeline')  renderPipeline(area);
+  if (currentView === 'pipeline')    renderPipeline(area);
   else if (currentView === 'detail') renderDetail(area);
+  else if (currentView === 'chat')   renderAgentChat(area);
   else if (currentView === 'linkedin') renderLinkedIn(area);
   else if (currentView === 'analytics') renderAnalytics(area);
   else if (currentView === 'settings')  renderSettings(area);
@@ -944,6 +961,119 @@ function renderAuditList(history) {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// AGENT CHAT VIEW
+// ═══════════════════════════════════════════════════════════════
+
+function renderChatMessages(agentKey, history) {
+  const agent = CHAT_AGENTS[agentKey];
+  if (!history.length) {
+    return `<div class="chat-empty">
+      <img class="chat-empty-avatar" src="${agent.photo}" alt="${agent.name}" />
+      <div class="chat-empty-name">${agent.name}</div>
+      <div class="chat-empty-hint">Ask ${agent.name.split(' ')[0]} anything — economic analysis, content ideas, brand strategy, or anything else.</div>
+    </div>`;
+  }
+  return history.map(h => {
+    if (h.role === 'user') {
+      return `<div class="chat-msg chat-msg-user">
+        <div class="chat-bubble chat-bubble-user">${esc(h.content)}</div>
+      </div>`;
+    }
+    return `<div class="chat-msg chat-msg-agent">
+      <img class="chat-agent-avatar" src="${agent.photo}" alt="${agent.name}" />
+      <div class="chat-bubble chat-bubble-agent">${esc(h.content)}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderAgentChat(area) {
+  const agentKey = currentChatAgent;
+  const agent = CHAT_AGENTS[agentKey];
+  const history = chatHistories[agentKey] || [];
+
+  area.innerHTML = `
+    <div class="agent-chat-layout">
+      <div class="agent-chat-topbar">
+        <img class="chat-topbar-avatar" src="${agent.photo}" alt="${agent.name}" />
+        <div class="chat-topbar-info">
+          <div class="chat-topbar-name">${agent.name}</div>
+          <div class="chat-topbar-role">${agent.role}</div>
+        </div>
+        <div class="chat-topbar-actions">
+          ${history.length > 0 ? `<button class="btn btn-secondary btn-sm" id="clear-chat-btn">Clear</button>` : ''}
+        </div>
+      </div>
+      <div class="agent-chat-messages" id="chat-messages">
+        ${renderChatMessages(agentKey, history)}
+      </div>
+      <div class="agent-chat-input-area">
+        <textarea id="chat-input" class="chat-input-textarea" rows="2"
+          placeholder="Message ${agent.name.split(' ')[0]}…"></textarea>
+        <button class="btn btn-primary" id="chat-send-btn">Send</button>
+      </div>
+    </div>`;
+
+  // Scroll to bottom
+  const msgs = document.getElementById('chat-messages');
+  if (msgs) msgs.scrollTop = msgs.scrollHeight;
+
+  // Bind events
+  const sendBtn = document.getElementById('chat-send-btn');
+  const input   = document.getElementById('chat-input');
+  const clearBtn = document.getElementById('clear-chat-btn');
+
+  if (sendBtn) sendBtn.onclick = () => sendChatMessage(agentKey);
+  if (input)   input.onkeydown = (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') sendChatMessage(agentKey);
+  };
+  if (clearBtn) clearBtn.onclick = () => {
+    chatHistories[agentKey] = [];
+    renderView();
+  };
+}
+
+async function sendChatMessage(agentKey) {
+  const input  = document.getElementById('chat-input');
+  const sendBtn = document.getElementById('chat-send-btn');
+  const message = input?.value.trim();
+  if (!message) { input?.focus(); return; }
+
+  const history = chatHistories[agentKey];
+
+  // Optimistic: show user message immediately
+  history.push({ role: 'user', content: message });
+  input.value = '';
+  setLoading(sendBtn, true);
+
+  const msgs = document.getElementById('chat-messages');
+  if (msgs) {
+    msgs.innerHTML = renderChatMessages(agentKey, history) +
+      `<div class="chat-typing" id="chat-typing">
+        <img class="chat-agent-avatar" src="${CHAT_AGENTS[agentKey].photo}" alt="" />
+        <div class="chat-typing-dots"><span></span><span></span><span></span></div>
+      </div>`;
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  try {
+    const result = await POST(`/chat/${agentKey}`, {
+      message,
+      history: history.slice(0, -1), // history without the just-added user message
+    });
+    history.push({ role: 'assistant', content: result.reply });
+  } catch(e) {
+    history.pop(); // roll back optimistic user message
+    toast(e.message || 'Could not reach agent', 'error');
+  } finally {
+    setLoading(sendBtn, false, 'Send');
+    if (msgs) {
+      msgs.innerHTML = renderChatMessages(agentKey, history);
+      msgs.scrollTop = msgs.scrollHeight;
+    }
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
 // LINKEDIN VIEW
 // ═══════════════════════════════════════════════════════════════
 async function renderLinkedIn(area) {
@@ -1162,6 +1292,14 @@ document.querySelectorAll('.modal-overlay').forEach(overlay => {
 // ── Sidebar navigation ─────────────────────────────────────────
 document.querySelectorAll('.nav-item[data-view]').forEach(btn => {
   btn.addEventListener('click', () => navigate(btn.dataset.view));
+});
+
+// ── Sidebar agent cards ────────────────────────────────────────
+document.querySelectorAll('.agent-card[data-agent]').forEach(card => {
+  card.addEventListener('click', () => {
+    currentChatAgent = card.dataset.agent;
+    navigate('chat');
+  });
 });
 
 // ── Keyboard: Esc closes modals ───────────────────────────────
