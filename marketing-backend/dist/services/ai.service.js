@@ -106,5 +106,26 @@ class AIService {
         const parsed = extractJson(raw);
         return validateAIResponse(parsed, 'draft');
     }
+    async directAgentChat(agentKey, message, history) {
+        const systemPrompt = prompts_1.AGENT_SYSTEM_PROMPTS[agentKey];
+        if (!systemPrompt) {
+            throw new types_1.ApiError(400, `Unknown agent: ${agentKey}`, 'INVALID_AGENT');
+        }
+        const messages = [
+            ...history.map(h => ({ role: h.role, content: h.content })),
+            { role: 'user', content: message },
+        ];
+        const response = await this.client.messages.create({
+            model: MODEL,
+            max_tokens: 1024,
+            system: systemPrompt,
+            messages,
+        });
+        const content = response.content[0];
+        if (content.type !== 'text') {
+            throw new types_1.ApiError(500, 'Unexpected response type from Claude', 'AI_UNEXPECTED_RESPONSE');
+        }
+        return content.text.trim();
+    }
 }
 exports.AIService = AIService;

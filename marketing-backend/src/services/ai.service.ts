@@ -14,6 +14,7 @@ import {
   vpSelfEditPrompt,
   economistQAPrompt,
   vpCorrectAnnotationsPrompt,
+  AGENT_SYSTEM_PROMPTS,
 } from '../agents/prompts';
 
 const MODEL = 'claude-sonnet-4-6';
@@ -160,5 +161,31 @@ export class AIService {
     const raw = await this.callClaude(prompt);
     const parsed = extractJson(raw);
     return validateAIResponse(parsed, 'draft');
+  }
+
+  async directAgentChat(
+    agentKey: string,
+    message: string,
+    history: Array<{ role: 'user' | 'assistant'; content: string }>,
+  ): Promise<string> {
+    const systemPrompt = AGENT_SYSTEM_PROMPTS[agentKey];
+    if (!systemPrompt) {
+      throw new ApiError(400, `Unknown agent: ${agentKey}`, 'INVALID_AGENT');
+    }
+    const messages = [
+      ...history.map(h => ({ role: h.role, content: h.content })),
+      { role: 'user' as const, content: message },
+    ];
+    const response = await this.client.messages.create({
+      model: MODEL,
+      max_tokens: 1024,
+      system: systemPrompt,
+      messages,
+    });
+    const content = response.content[0];
+    if (content.type !== 'text') {
+      throw new ApiError(500, 'Unexpected response type from Claude', 'AI_UNEXPECTED_RESPONSE');
+    }
+    return content.text.trim();
   }
 }
