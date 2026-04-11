@@ -354,7 +354,7 @@ function extractXml(text, tag) {
 // ─── Excel Model — direct download of static template ────────
 document.getElementById('downloadXlsBtn').addEventListener('click', () => {
   const a = document.createElement('a');
-  a.href = 'VisionVirtue_FM_Template.xlsx';
+  a.href = 'VisionVirtue_FM_Template_v2.xlsx';
   a.download = 'VisionVirtue FM Template.xlsx';
   document.body.appendChild(a);
   a.click();
