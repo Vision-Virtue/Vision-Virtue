@@ -362,16 +362,19 @@ document.getElementById('downloadXlsBtn').addEventListener('click', () => {
 });
 
 
-// ─── PowerPoint Template Generator ───────────────────────────
-document.getElementById('downloadPptBtn').addEventListener('click', generatePptTemplate);
+// ─── PowerPoint Template — direct download of static file ────
+document.getElementById('downloadPptBtn').addEventListener('click', () => {
+  const a = document.createElement('a');
+  a.href = 'VisionVirtue_PPT_Template.pptx';
+  a.download = 'VisionVirtue Business & Financial Model.pptx';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+});
 
-function generatePptTemplate() {
-  if (typeof PptxGenJS === 'undefined') {
-    alert('PowerPoint library is still loading — please try again in a moment.');
-    return;
-  }
 
-  const pptx = new PptxGenJS();
+function generatePptTemplate_UNUSED() {
+  const pptx = {};
   pptx.layout = 'LAYOUT_WIDE'; // 13.33" × 7.5"
 
   // Brand colors
