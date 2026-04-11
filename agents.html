@@ -152,8 +152,99 @@
       </div>
     </section>
 
+    <!-- FINANCIAL TEMPLATES -->
+    <section class="fin-templates-section">
+      <div class="fin-templates-container">
+
+        <div class="fin-section-header">
+          <span class="fin-section-eyebrow">Resources</span>
+          <h2 class="fin-section-title">Financial Templates</h2>
+          <p class="fin-section-sub">Vision &amp; Virtue branded templates for client presentations and financial modeling. Download and customise for each engagement.</p>
+        </div>
+
+        <div class="fin-templates-grid">
+
+          <!-- PowerPoint card -->
+          <div class="fin-template-card">
+            <div class="fin-template-icon fin-icon-ppt">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+                <path d="M9 10h2a1.5 1.5 0 0 0 0-3H9v6"/>
+              </svg>
+            </div>
+            <div class="fin-template-body">
+              <h3 class="fin-template-name">Business &amp; Financial Model Presentation</h3>
+              <p class="fin-template-desc">V&amp;V-branded PowerPoint template for client business plans and financial model presentations. Includes executive summary, financial highlights, revenue model, cost structure, EBITDA bridge, and appendix layouts.</p>
+              <div class="fin-template-tags">
+                <span class="fin-tag">PowerPoint · .pptx</span>
+                <span class="fin-tag">10 slide layouts</span>
+              </div>
+            </div>
+            <button class="fin-download-btn" id="downloadPptBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download Template
+            </button>
+          </div>
+
+          <!-- Excel card -->
+          <div class="fin-template-card">
+            <div class="fin-template-icon fin-icon-xls">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/>
+                <line x1="10" y1="9" x2="14" y2="9"/>
+              </svg>
+            </div>
+            <div class="fin-template-body">
+              <h3 class="fin-template-name">Integrated Financial Model — P&amp;L &amp; Dashboard</h3>
+              <p class="fin-template-desc">Multi-sheet financial model with linked formulas. Includes P&amp;L, Dashboard &amp; KPIs, Revenues, COGS (quantity-linked to Revenues), Qualitative Assumptions, and Headcount sheets — all cross-referenced.</p>
+              <div class="fin-template-tags">
+                <span class="fin-tag">Excel · .xlsx</span>
+                <span class="fin-tag">6 sheets</span>
+                <span class="fin-tag">Formulas included</span>
+              </div>
+            </div>
+            <button class="fin-download-btn" id="downloadXlsBtn">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              Download Model
+            </button>
+          </div>
+
+        </div>
+
+        <!-- Customer Files Drop Zone -->
+        <div class="fin-upload-section">
+          <div class="fin-upload-header">
+            <h3 class="fin-upload-title">Customer Files</h3>
+            <p class="fin-upload-sub">Drop client documents here. The financial team will use these files to build tailored presentations and financial models using the templates above.</p>
+          </div>
+
+          <div class="fin-dropzone" id="finDropzone">
+            <svg class="fin-drop-cloud" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/>
+              <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+            </svg>
+            <p class="fin-drop-primary">Drag &amp; drop files here</p>
+            <p class="fin-drop-types">PDF &nbsp;·&nbsp; Word (.doc/.docx) &nbsp;·&nbsp; PowerPoint (.ppt/.pptx) &nbsp;·&nbsp; Excel (.xls/.xlsx)</p>
+            <button class="fin-browse-btn" id="finBrowseBtn">Browse Files</button>
+            <input type="file" id="finFileInput"
+              accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx"
+              multiple style="display:none" />
+          </div>
+
+          <div class="fin-file-list" id="finFileList"></div>
+        </div>
+
+      </div>
+    </section>
+
   </div><!-- /agents-app -->
 
+  <!-- SheetJS for Excel generation -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <!-- PptxGenJS for PowerPoint generation -->
+  <script src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
   <script src="agents.js"></script>
 </body>
 </html>
