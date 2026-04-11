@@ -4,7 +4,7 @@ import { contentRepository } from '../db/repository';
 import { workflowStateMachine } from '../state-machine/workflow';
 import { AIService } from '../services/ai.service';
 import { LinkedInService } from '../services/linkedin.service';
-import { ApiError, Approval, QAEntry } from '../types';
+import { ApiError, Approval, QAEntry, RaphaelAnnotation } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -632,11 +632,11 @@ export class ContentController {
       return;
     }
 
-    if (item.state !== 'AWAITING_RAPHAEL_APPROVAL') {
+    if (item.state !== 'AWAITING_RAPHAEL_APPROVAL' && item.state !== 'RETURNED_TO_VP_FOR_CORRECTIONS') {
       res.status(400).json({
         error: {
           code: 'INVALID_STATE',
-          message: `Economist Q&A requires state AWAITING_RAPHAEL_APPROVAL, current: ${item.state}`,
+          message: `Economist Q&A requires state AWAITING_RAPHAEL_APPROVAL or RETURNED_TO_VP_FOR_CORRECTIONS, current: ${item.state}`,
         },
       });
       return;
@@ -665,6 +665,131 @@ export class ContentController {
     };
 
     const updatedItem = contentRepository.appendQAEntry(id, entry);
+    res.json({ success: true, data: updatedItem });
+  }
+
+  // POST /api/content/:id/return-to-vp (Raphael sends annotated posts back to Daniel)
+  async returnToVp(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+    const { annotations } = req.body as { annotations?: RaphaelAnnotation[] };
+
+    const item = contentRepository.findById(id);
+    if (!item) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: `Content item ${id} not found` } });
+      return;
+    }
+
+    if (item.state !== 'AWAITING_RAPHAEL_APPROVAL') {
+      res.status(400).json({
+        error: {
+          code: 'INVALID_STATE',
+          message: `Return to VP requires state AWAITING_RAPHAEL_APPROVAL, current: ${item.state}`,
+        },
+      });
+      return;
+    }
+
+    if (!annotations || !Array.isArray(annotations) || annotations.length === 0) {
+      res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: 'At least one annotation is required to return to VP' },
+      });
+      return;
+    }
+
+    // Save annotations into metadata
+    const metadata = { ...item.metadata, raphael_annotations: annotations };
+    let updatedItem = contentRepository.update(id, { metadata });
+
+    updatedItem = workflowStateMachine.transition(
+      updatedItem,
+      'RETURNED_TO_VP_FOR_CORRECTIONS',
+      'Raphael',
+      { annotation_count: annotations.length },
+    );
+
+    contentRepository.addAuditEntry({
+      content_id: id,
+      action: 'RETURNED_TO_VP_FOR_CORRECTIONS',
+      actor: 'Raphael',
+      previous_state: 'AWAITING_RAPHAEL_APPROVAL',
+      new_state: 'RETURNED_TO_VP_FOR_CORRECTIONS',
+      details: { annotation_count: annotations.length },
+    });
+
+    res.json({ success: true, data: updatedItem });
+  }
+
+  // POST /api/content/:id/vp-correct (Daniel fixes Raphael's annotations via AI)
+  async vpCorrect(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+
+    const item = contentRepository.findById(id);
+    if (!item) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: `Content item ${id} not found` } });
+      return;
+    }
+
+    if (item.state !== 'RETURNED_TO_VP_FOR_CORRECTIONS') {
+      res.status(400).json({
+        error: {
+          code: 'INVALID_STATE',
+          message: `VP correct requires state RETURNED_TO_VP_FOR_CORRECTIONS, current: ${item.state}`,
+        },
+      });
+      return;
+    }
+
+    if (!item.marketing_draft) {
+      res.status(400).json({
+        error: { code: 'PREREQUISITE_MISSING', message: 'Marketing draft is required' },
+      });
+      return;
+    }
+
+    const annotations = item.metadata.raphael_annotations || [];
+    if (annotations.length === 0) {
+      res.status(400).json({
+        error: { code: 'PREREQUISITE_MISSING', message: 'No annotations found to correct' },
+      });
+      return;
+    }
+
+    const aiService = getAIService(req);
+    const aiResponse = await aiService.runVpCorrectAnnotations(
+      item.topic,
+      item.marketing_draft,
+      annotations,
+    );
+
+    if (!aiResponse.marketing_draft) {
+      res.status(500).json({ error: { code: 'AI_ERROR', message: 'No marketing draft in VP correction response' } });
+      return;
+    }
+
+    // Save corrected draft, clear annotations
+    const metadata = { ...item.metadata, raphael_annotations: [] };
+    let updatedItem = contentRepository.update(id, {
+      marketing_draft: aiResponse.marketing_draft,
+      metadata,
+    });
+
+    // Transition back to Raphael's review
+    updatedItem = workflowStateMachine.transition(
+      updatedItem,
+      'AWAITING_RAPHAEL_APPROVAL',
+      'Daniel Berg (AI)',
+      { corrections_applied: annotations.length },
+    );
+
+    contentRepository.addAuditEntry({
+      content_id: id,
+      action: 'VP_CORRECTIONS_APPLIED',
+      actor: 'Daniel Berg (AI)',
+      previous_state: 'RETURNED_TO_VP_FOR_CORRECTIONS',
+      new_state: 'AWAITING_RAPHAEL_APPROVAL',
+      details: { corrections_applied: annotations.length, model_version: aiResponse.model_version },
+    });
+
     res.json({ success: true, data: updatedItem });
   }
 }

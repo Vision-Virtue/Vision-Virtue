@@ -1820,3 +1820,223 @@ html, body {
   white-space: nowrap;
   align-self: flex-end;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   ANNOTATION SYSTEM
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+/* New workflow state badge */
+.state-RETURNED_TO_VP_FOR_CORRECTIONS { background: #fef9c3; color: #78350f; border: 1px solid #fde68a; }
+
+/* Warning button (for "Mark Yellow" / "Send Back to VP") */
+.btn-warning {
+  background: #f59e0b;
+  color: #fff;
+  border-color: #f59e0b;
+}
+.btn-warning:hover { background: #d97706; border-color: #d97706; }
+.btn-warning:disabled { opacity: 0.45; }
+
+/* Annotatable post area */
+.annotatable-post {
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+  border-radius: var(--radius-sm);
+  transition: box-shadow 0.2s;
+}
+.annotatable-post:hover {
+  box-shadow: 0 0 0 2px rgba(245,158,11,0.18);
+}
+
+/* Annotation hint */
+.annotation-hint {
+  font-size: 12px;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px dashed #fcd34d;
+  border-radius: var(--radius-sm);
+  padding: 7px 12px;
+  margin-bottom: 14px;
+}
+
+/* Yellow highlight mark */
+mark.raphael-mark {
+  background: #fef08a;
+  color: inherit;
+  border-radius: 2px;
+  position: relative;
+  cursor: default;
+  padding: 0 1px;
+}
+
+/* Tooltip hidden by default, shown on hover */
+.raphael-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1e293b;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 7px 10px;
+  border-radius: 6px;
+  white-space: normal;
+  max-width: 240px;
+  min-width: 140px;
+  z-index: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  pointer-events: auto;
+}
+
+/* Arrow */
+.raphael-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #1e293b;
+}
+
+mark.raphael-mark:hover .raphael-tooltip { display: block; }
+
+.ann-remove-btn {
+  display: block;
+  margin-top: 5px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.35);
+  color: #fca5a5;
+  border-radius: 3px;
+  font-size: 11px;
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: background 0.15s;
+  font-family: var(--font-sans);
+}
+.ann-remove-btn:hover { background: rgba(255,255,255,0.12); color: #fff; }
+
+/* Annotation toolbar (floating pill, fixed) */
+.ann-toolbar {
+  position: fixed;
+  z-index: 600;
+  display: flex;
+  align-items: center;
+  background: #1e293b;
+  border-radius: 20px;
+  padding: 4px 6px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  animation: slideUp 0.15s ease;
+}
+.ann-toolbar-btn {
+  background: #f59e0b;
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  transition: background 0.15s;
+}
+.ann-toolbar-btn:hover { background: #d97706; }
+
+/* Annotation comment popup (fixed center) */
+.ann-popup {
+  position: fixed;
+  z-index: 700;
+  width: 370px;
+  max-width: calc(100vw - 32px);
+  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-lg);
+  animation: slideUp 0.18s ease;
+}
+.ann-popup-inner {
+  background: #fff;
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius-lg);
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.ann-popup-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--navy-800);
+}
+.ann-comment-textarea {
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-sm);
+  font-size: 13px;
+  font-family: var(--font-sans);
+  color: var(--navy-800);
+  line-height: 1.5;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.ann-comment-textarea:focus {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 3px rgba(245,158,11,0.12);
+}
+.ann-popup-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ── VP read-only annotation marks ──────────────────────────────── */
+mark.vp-ann-mark {
+  background: #fef08a;
+  color: inherit;
+  border-radius: 2px;
+  position: relative;
+  cursor: default;
+  padding: 0 1px;
+}
+.vp-ann-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #78350f;
+  color: #fff;
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 7px 10px;
+  border-radius: 6px;
+  white-space: normal;
+  max-width: 240px;
+  min-width: 120px;
+  z-index: 500;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+}
+.vp-ann-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #78350f;
+}
+mark.vp-ann-mark:hover .vp-ann-tooltip { display: block; }
+
+/* ── VP corrections notice banner ───────────────────────────────── */
+.ann-review-notice {
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  border-radius: var(--radius-md);
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #78350f;
+  margin-bottom: 1.25rem;
+  line-height: 1.55;
+}

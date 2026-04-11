@@ -6,6 +6,7 @@ export type WorkflowState =
   | 'DRAFT_READY'
   | 'UNDER_VP_REVIEW'
   | 'AWAITING_RAPHAEL_APPROVAL'
+  | 'RETURNED_TO_VP_FOR_CORRECTIONS'
   | 'APPROVED_FOR_PUBLISHING'
   | 'PUBLISHED'
   | 'RETURNED_FOR_REVISION'
@@ -89,6 +90,15 @@ export interface Approval {
   approved_at: string;
 }
 
+// ─── Raphael Annotation ───────────────────────────────────────────────────────
+
+export interface RaphaelAnnotation {
+  id: string;
+  lang: 'hebrew' | 'english';
+  selectedText: string;
+  comment: string;
+}
+
 // ─── Content Metadata ─────────────────────────────────────────────────────────
 
 export interface ContentMetadata {
@@ -97,6 +107,7 @@ export interface ContentMetadata {
   revision_count: number;
   time_to_approval?: number;
   tags?: string[];
+  raphael_annotations?: RaphaelAnnotation[];
 }
 
 // ─── Publish Result ───────────────────────────────────────────────────────────

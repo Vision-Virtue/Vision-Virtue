@@ -1,4 +1,4 @@
-import { EconomistBrief, MarketingDraft, QAEntry } from '../types';
+import { EconomistBrief, MarketingDraft, QAEntry, RaphaelAnnotation } from '../types';
 
 // ─── Chief Economist Prompt ───────────────────────────────────────────────────
 
@@ -216,6 +216,70 @@ Output ONLY valid JSON, no markdown, no code fences:
   },
   "model_version": "claude-sonnet-4-6",
   "processing_notes": "VP Daniel Berg direct edit after 2 revision cycles"
+}`;
+}
+
+// ─── VP Correct Annotations Prompt ───────────────────────────────────────────
+
+export function vpCorrectAnnotationsPrompt(
+  topic: string,
+  draft: MarketingDraft,
+  annotations: RaphaelAnnotation[],
+): string {
+  const hebrewAnns = annotations.filter(a => a.lang === 'hebrew');
+  const englishAnns = annotations.filter(a => a.lang === 'english');
+
+  const fmt = (anns: RaphaelAnnotation[]) =>
+    anns.length > 0
+      ? anns.map(a => `  - Marked text: "${a.selectedText}" → Required correction: "${a.comment}"`).join('\n')
+      : '  (none)';
+
+  return `You are Daniel Berg, VP Marketing at Vision & Virtue. Raphael, the firm's Partner and final approver, has reviewed the LinkedIn posts and marked specific sections that require corrections. Your job is to fix ONLY the marked sections as directed by Raphael, while keeping the rest of the posts intact.
+
+TOPIC: ${topic}
+
+CURRENT HEBREW POST:
+${draft.hebrew?.text || ''}
+
+CURRENT ENGLISH POST:
+${draft.english?.text || ''}
+
+RAPHAEL'S ANNOTATIONS — HEBREW POST:
+${fmt(hebrewAnns)}
+
+RAPHAEL'S ANNOTATIONS — ENGLISH POST:
+${fmt(englishAnns)}
+
+INSTRUCTIONS:
+- Apply ONLY the corrections Raphael has marked. Do not rewrite or improve other sections.
+- Preserve the structure, tone, and length of both posts.
+- Maintain the Hebrew language in the Hebrew post.
+- The corrected posts must be publication-ready.
+
+Output ONLY valid JSON, no markdown, no code fences:
+{
+  "stage": "draft",
+  "marketing_draft": {
+    "hebrew": {
+      "text": "corrected Hebrew post",
+      "hashtags": ${JSON.stringify(draft.hebrew?.hashtags || [])},
+      "call_to_action": ${JSON.stringify(draft.hebrew?.call_to_action || '')},
+      "character_count": 0
+    },
+    "english": {
+      "text": "corrected English post",
+      "hashtags": ${JSON.stringify(draft.english?.hashtags || [])},
+      "call_to_action": ${JSON.stringify(draft.english?.call_to_action || '')},
+      "character_count": 0
+    },
+    "content_angle": ${JSON.stringify(draft.content_angle || 'thought leadership')},
+    "target_audience": ${JSON.stringify(draft.target_audience || 'CFOs, Founders, Board Members')},
+    "key_message": ${JSON.stringify(draft.key_message || '')},
+    "tone": ${JSON.stringify(draft.tone || 'authoritative and analytical')},
+    "generated_at": "${new Date().toISOString()}"
+  },
+  "model_version": "claude-sonnet-4-6",
+  "processing_notes": "VP Daniel Berg corrected annotations per Raphael's review"
 }`;
 }
 

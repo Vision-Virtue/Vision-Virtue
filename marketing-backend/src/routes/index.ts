@@ -105,6 +105,18 @@ router.post(
   asyncHandler((req, res) => contentController.askEconomist(req, res)),
 );
 
+// Raphael returns annotated posts to VP for corrections
+router.post(
+  '/content/:id/return-to-vp',
+  asyncHandler((req, res) => contentController.returnToVp(req, res)),
+);
+
+// VP applies AI corrections and sends back to Raphael
+router.post(
+  '/content/:id/vp-correct',
+  asyncHandler((req, res) => contentController.vpCorrect(req, res)),
+);
+
 // Publish to LinkedIn
 router.post(
   '/content/:id/publish',

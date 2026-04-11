@@ -49,6 +49,10 @@ router.post('/content/:id/approve', auth_middleware_1.requireRaphael, asyncHandl
 router.post('/content/:id/reject', auth_middleware_1.requireRaphael, asyncHandler((req, res) => content_controller_1.contentController.reject(req, res)));
 // Ask the Economist a question (available during Raphael approval review)
 router.post('/content/:id/ask-economist', asyncHandler((req, res) => content_controller_1.contentController.askEconomist(req, res)));
+// Raphael returns annotated posts to VP for corrections
+router.post('/content/:id/return-to-vp', asyncHandler((req, res) => content_controller_1.contentController.returnToVp(req, res)));
+// VP applies AI corrections and sends back to Raphael
+router.post('/content/:id/vp-correct', asyncHandler((req, res) => content_controller_1.contentController.vpCorrect(req, res)));
 // Publish to LinkedIn
 router.post('/content/:id/publish', asyncHandler((req, res) => content_controller_1.contentController.publish(req, res)));
 // ─── LinkedIn Routes ──────────────────────────────────────────────────────────

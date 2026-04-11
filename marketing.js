@@ -14,6 +14,8 @@ let raphaelAction = null; // 'approve' | 'reject'
 let selectedAgent = null; // 'economist' | 'sofia' | 'daniel' | 'raphael'
 let pipelineRunning = false;
 let currentPipelineStep = null;
+let raphaelAnnotations = [];
+let annAbortCtrl = null;
 
 // ── Workflow state config ──────────────────────────────────────
 const STATES = {
@@ -21,8 +23,9 @@ const STATES = {
   ECONOMIST_BRIEF_READY:    { label: 'Brief Ready',     color: 'blue' },
   DRAFT_READY:              { label: 'Draft Ready',     color: 'indigo' },
   UNDER_VP_REVIEW:          { label: 'VP Review',       color: 'yellow' },
-  AWAITING_RAPHAEL_APPROVAL:{ label: 'Awaiting Raphael',color: 'orange' },
-  APPROVED_FOR_PUBLISHING:  { label: 'Approved',        color: 'green' },
+  AWAITING_RAPHAEL_APPROVAL:          { label: 'Awaiting Raphael', color: 'orange' },
+  RETURNED_TO_VP_FOR_CORRECTIONS:     { label: 'VP Corrections',   color: 'yellow' },
+  APPROVED_FOR_PUBLISHING:            { label: 'Approved',         color: 'green' },
   PUBLISHED:                { label: 'Published',       color: 'teal' },
   RETURNED_FOR_REVISION:    { label: 'Revision',        color: 'amber' },
   REJECTED:                 { label: 'Rejected',        color: 'red' },
@@ -123,6 +126,14 @@ async function checkLinkedInStatus() {
 
 // ── View router ────────────────────────────────────────────────
 function navigate(view, item) {
+  if (view !== 'detail') {
+    raphaelAnnotations = [];
+    if (annAbortCtrl) { annAbortCtrl.abort(); annAbortCtrl = null; }
+    const toolbar = document.getElementById('ann-toolbar');
+    const popup   = document.getElementById('ann-popup');
+    if (toolbar) toolbar.style.display = 'none';
+    if (popup)   popup.style.display   = 'none';
+  }
   currentView = view;
   currentItem = item || null;
   if (view === 'detail') selectedAgent = null;
@@ -223,6 +234,7 @@ function agentCubeStatus(key, item) {
       return (state === 'ECONOMIST_BRIEF_READY' || state === 'RETURNED_FOR_REVISION') ? 'active' : 'idle';
     case 'daniel':
       if (!marketing_draft) return 'locked';
+      if (state === 'RETURNED_TO_VP_FOR_CORRECTIONS') return 'active';
       if (vp_review && state !== 'RETURNED_FOR_REVISION') return 'done';
       return state === 'DRAFT_READY' ? 'active' : 'idle';
     case 'raphael':
@@ -241,16 +253,16 @@ function renderPipelineStatusBarHTML(item) {
   const stageDone = key => {
     if (key === 'economist') return !!economist_brief;
     if (key === 'sofia')     return !!marketing_draft;
-    if (key === 'daniel')    return !!vp_review && state !== 'RETURNED_FOR_REVISION';
+    if (key === 'daniel')    return !!vp_review && state !== 'RETURNED_FOR_REVISION' && state !== 'RETURNED_TO_VP_FOR_CORRECTIONS';
     if (key === 'raphael')   return isGreen;
     return false;
   };
 
   const stages = [
-    { key: 'economist', label: 'Economist' },
-    { key: 'sofia',     label: 'Sofia' },
-    { key: 'daniel',    label: 'Daniel' },
-    { key: 'raphael',   label: 'Raphael' },
+    { key: 'economist', label: 'Chief Economist' },
+    { key: 'sofia',     label: 'Mgr. Marketing' },
+    { key: 'daniel',    label: 'VP Marketing' },
+    { key: 'raphael',   label: 'Partner' },
   ];
 
   let html = '<div class="pipeline-status-bar">';
@@ -295,6 +307,80 @@ function renderAgentCubesHTML(item) {
     if (i < agents.length - 1) html += '<div class="agent-cube-arrow">→</div>';
   });
   return html;
+}
+
+// ── Annotation helpers ─────────────────────────────────────────
+function applyAnnotationsToHTML(rawText, annotations, lang) {
+  let html = esc(rawText);
+  annotations.filter(a => a.lang === lang).forEach(a => {
+    const escapedSelected = esc(a.selectedText);
+    if (!escapedSelected || !html.includes(escapedSelected)) return;
+    const tooltip = `<span class="raphael-tooltip">${esc(a.comment)}<button class="ann-remove-btn" data-ann-id="${esc(a.id)}">×</button></span>`;
+    const mark = `<mark class="raphael-mark" data-ann-id="${esc(a.id)}">${escapedSelected}${tooltip}</mark>`;
+    html = html.replace(escapedSelected, mark);
+  });
+  return html;
+}
+
+function buildAnnotatedHTMLForVP(rawText, annotations, lang) {
+  let html = esc(rawText);
+  annotations.filter(a => a.lang === lang).forEach(a => {
+    const escapedSelected = esc(a.selectedText);
+    if (!escapedSelected || !html.includes(escapedSelected)) return;
+    const tooltip = `<span class="vp-ann-tooltip">${esc(a.comment)}</span>`;
+    const mark = `<mark class="vp-ann-mark">${escapedSelected}${tooltip}</mark>`;
+    html = html.replace(escapedSelected, mark);
+  });
+  return html;
+}
+
+function renderQAHistoryHTML(qaEntries) {
+  if (!qaEntries || qaEntries.length === 0) return '';
+  return `<div class="qa-history">
+    ${qaEntries.map(e => `
+      <div class="qa-exchange">
+        <div class="qa-question-bubble">
+          <div class="qa-q-label">You asked</div>
+          <div class="qa-q-text">${esc(e.question)}</div>
+        </div>
+        <div class="qa-answer-row">
+          <img class="qa-economist-avatar" src="agent_economist.jpg" alt="Dr. Ethan Ross" />
+          <div class="qa-answer-bubble">
+            <div class="qa-a-name">Dr. Ethan Ross</div>
+            <div class="qa-a-text">${esc(e.answer)}</div>
+            <div class="qa-a-time">${fmtDate(e.asked_at)}</div>
+          </div>
+        </div>
+      </div>`).join('')}
+  </div>`;
+}
+
+function updatePostAnnotations(item) {
+  const d = item.marketing_draft;
+  if (!d) return;
+  const hebrewEl = document.getElementById('raphael-post-hebrew');
+  const englishEl = document.getElementById('raphael-post-english');
+  if (hebrewEl) hebrewEl.innerHTML = applyAnnotationsToHTML(d.hebrew?.text || '', raphaelAnnotations, 'hebrew');
+  if (englishEl) englishEl.innerHTML = applyAnnotationsToHTML(d.english?.text || '', raphaelAnnotations, 'english');
+  const sendBtn = document.getElementById('return-to-vp-btn');
+  if (sendBtn) {
+    const count = raphaelAnnotations.length;
+    sendBtn.disabled = count === 0;
+    sendBtn.textContent = count > 0
+      ? `\u21A9 Send Back to VP (${count} correction${count !== 1 ? 's' : ''})`
+      : '\u21A9 Send Back to VP';
+  }
+  const hint = document.getElementById('ann-hint');
+  if (hint) hint.style.display = raphaelAnnotations.length === 0 ? 'block' : 'none';
+  // Re-bind remove buttons on updated DOM
+  document.querySelectorAll('.ann-remove-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = btn.dataset.annId;
+      raphaelAnnotations = raphaelAnnotations.filter(a => a.id !== id);
+      updatePostAnnotations(item);
+    });
+  });
 }
 
 function renderAgentContentHTML(key, item) {
@@ -348,7 +434,32 @@ function renderAgentContentHTML(key, item) {
   }
 
   else if (key === 'daniel') {
-    if (!item.vp_review) {
+    if (item.state === 'RETURNED_TO_VP_FOR_CORRECTIONS') {
+      const d = item.marketing_draft;
+      const annotations = item.metadata?.raphael_annotations || [];
+      const hebrewAnns = annotations.filter(a => a.lang === 'hebrew');
+      const englishAnns = annotations.filter(a => a.lang === 'english');
+      body = `
+        <div class="ann-review-notice">
+          <strong>Raphael has sent back ${annotations.length} correction${annotations.length !== 1 ? 's' : ''} for your review.</strong>
+          Highlighted sections show what needs to be fixed. Click the button below to apply all corrections via AI and send back to Raphael.
+        </div>
+        <div class="draft-grid" style="margin-bottom:1.5rem">
+          <div class="draft-panel">
+            <div class="draft-lang">🇮🇱 Hebrew Post — Raphael's Corrections</div>
+            <div class="draft-text" dir="rtl" style="white-space:pre-wrap">${buildAnnotatedHTMLForVP(d?.hebrew?.text || '', hebrewAnns, 'hebrew')}</div>
+            <div class="draft-meta">${(d?.hebrew?.hashtags || []).join(' ')}</div>
+          </div>
+          <div class="draft-panel">
+            <div class="draft-lang">🇺🇸 English Post — Raphael's Corrections</div>
+            <div class="draft-text" style="white-space:pre-wrap">${buildAnnotatedHTMLForVP(d?.english?.text || '', englishAnns, 'english')}</div>
+            <div class="draft-meta">${(d?.english?.hashtags || []).join(' ')}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:0.75rem;padding-top:1.25rem;border-top:1px solid var(--card-border)">
+          <button class="btn btn-primary" id="vp-correct-btn">Fix Corrections &amp; Send Back to Raphael</button>
+        </div>`;
+    } else if (!item.vp_review) {
       body = `<div class="empty-state" style="padding:24px 0"><p>VP review will appear here after a draft is ready.</p></div>`;
     } else {
       const r = item.vp_review;
@@ -371,39 +482,22 @@ function renderAgentContentHTML(key, item) {
     const { state, marketing_draft, approval, publish_result, qa_history } = item;
     const qaEntries = qa_history || [];
 
-    // Q&A history HTML (shared between approval and post-decision views)
-    const qaHistoryHTML = qaEntries.length === 0 ? '' : `
-      <div class="qa-history">
-        ${qaEntries.map(e => `
-          <div class="qa-exchange">
-            <div class="qa-question-bubble">
-              <div class="qa-q-label">You asked</div>
-              <div class="qa-q-text">${esc(e.question)}</div>
-            </div>
-            <div class="qa-answer-row">
-              <img class="qa-economist-avatar" src="agent_economist.jpg" alt="Dr. Ethan Ross" />
-              <div class="qa-answer-bubble">
-                <div class="qa-a-name">Dr. Ethan Ross</div>
-                <div class="qa-a-text">${esc(e.answer)}</div>
-                <div class="qa-a-time">${fmtDate(e.asked_at)}</div>
-              </div>
-            </div>
-          </div>
-        `).join('')}
-      </div>`;
-
     if (state === 'AWAITING_RAPHAEL_APPROVAL' && marketing_draft) {
       const d = marketing_draft;
+      const annCount = raphaelAnnotations.length;
       body = `
+        <p class="annotation-hint" id="ann-hint" style="display:${annCount > 0 ? 'none' : 'block'}">
+          Select text in either post below to mark corrections, then click "Send Back to VP".
+        </p>
         <div class="draft-grid" style="margin-bottom:1.5rem">
           <div class="draft-panel">
             <div class="draft-lang">🇮🇱 Hebrew Post — Final Review</div>
-            <div class="draft-text" dir="rtl" style="white-space:pre-wrap">${d.hebrew?.text || ''}</div>
+            <div id="raphael-post-hebrew" class="draft-text annotatable-post" dir="rtl" style="white-space:pre-wrap" data-lang="hebrew">${applyAnnotationsToHTML(d.hebrew?.text || '', raphaelAnnotations, 'hebrew')}</div>
             <div class="draft-meta">${(d.hebrew?.hashtags || []).join(' ')}</div>
           </div>
           <div class="draft-panel">
             <div class="draft-lang">🇺🇸 English Post — Final Review</div>
-            <div class="draft-text" style="white-space:pre-wrap">${d.english?.text || ''}</div>
+            <div id="raphael-post-english" class="draft-text annotatable-post" style="white-space:pre-wrap" data-lang="english">${applyAnnotationsToHTML(d.english?.text || '', raphaelAnnotations, 'english')}</div>
             <div class="draft-meta">${(d.english?.hashtags || []).join(' ')}</div>
           </div>
         </div>
@@ -416,16 +510,19 @@ function renderAgentContentHTML(key, item) {
               <div class="qa-section-sub">Ask the Economist anything about these posts before you decide</div>
             </div>
           </div>
-          ${qaHistoryHTML}
+          <div id="qa-history-container">${renderQAHistoryHTML(qaEntries)}</div>
           <div class="qa-form">
             <textarea id="qa-question-input" class="qa-textarea" rows="2" placeholder="e.g. Is the Fed rate claim accurate given last week's data?"></textarea>
             <button class="btn btn-outline qa-send-btn" id="qa-send-btn">Ask Dr. Ross</button>
           </div>
         </div>
 
-        <div style="display:flex;gap:0.75rem;padding-top:1.25rem;border-top:1px solid var(--card-border)">
+        <div style="display:flex;gap:0.75rem;padding-top:1.25rem;border-top:1px solid var(--card-border);flex-wrap:wrap;align-items:center">
           <button class="btn btn-primary" id="approve-btn">✓ Approve &amp; Authorize Publication</button>
           <button class="btn btn-danger" id="reject-btn">✕ Reject</button>
+          <button class="btn btn-warning" id="return-to-vp-btn" style="margin-left:auto" ${annCount === 0 ? 'disabled' : ''}>
+            ↩ Send Back to VP${annCount > 0 ? ` (${annCount} correction${annCount !== 1 ? 's' : ''})` : ''}
+          </button>
         </div>`;
     } else if (state === 'APPROVED_FOR_PUBLISHING' || state === 'PUBLISHED') {
       body = `<div class="brief-grid">
@@ -434,7 +531,7 @@ function renderAgentContentHTML(key, item) {
         <div class="brief-field"><div class="brief-label">At</div><div class="brief-value">${fmtDate(approval?.approved_at)}</div></div>
         ${approval?.notes ? `<div class="brief-field"><div class="brief-label">Notes</div><div class="brief-value">${approval.notes}</div></div>` : ''}
       </div>
-      ${qaEntries.length > 0 ? `<div class="qa-section qa-section-readonly"><div class="qa-section-header"><img class="qa-section-avatar" src="agent_economist.jpg" alt="Dr. Ethan Ross" /><div><div class="qa-section-title">Economist Q&amp;A</div><div class="qa-section-sub">Questions asked before approval</div></div></div>${qaHistoryHTML}</div>` : ''}
+      ${qaEntries.length > 0 ? `<div class="qa-section qa-section-readonly"><div class="qa-section-header"><img class="qa-section-avatar" src="agent_economist.jpg" alt="Dr. Ethan Ross" /><div><div class="qa-section-title">Economist Q&amp;A</div><div class="qa-section-sub">Questions asked before approval</div></div></div>${renderQAHistoryHTML(qaEntries)}</div>` : ''}
       ${state === 'APPROVED_FOR_PUBLISHING' ? `<div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--card-border)"><button class="btn btn-publish" id="publish-btn">Publish to LinkedIn Now</button></div>` : ''}
       ${state === 'PUBLISHED' && publish_result ? `<div class="brief-field" style="margin-top:1rem"><div class="brief-label">Published At</div><div class="brief-value">${fmtDate(publish_result.published_at)}</div></div>` : ''}`;
     } else if (state === 'REJECTED' && approval) {
@@ -468,6 +565,9 @@ function bindCubeClicks(item) {
       if (selectedAgent === key) {
         selectedAgent = null;
         el.classList.remove('cube-selected');
+        if (annAbortCtrl) { annAbortCtrl.abort(); annAbortCtrl = null; }
+        document.getElementById('ann-toolbar').style.display = 'none';
+        document.getElementById('ann-popup').style.display   = 'none';
         panelArea.innerHTML = '';
       } else {
         document.querySelectorAll('.agent-cube').forEach(c => c.classList.remove('cube-selected'));
@@ -484,12 +584,27 @@ function bindPanelActions(item) {
   const closeBtn = document.getElementById('close-agent-panel');
   if (closeBtn) closeBtn.onclick = () => {
     selectedAgent = null;
+    if (annAbortCtrl) { annAbortCtrl.abort(); annAbortCtrl = null; }
+    // Hide annotation UI
+    const toolbar = document.getElementById('ann-toolbar');
+    const popup   = document.getElementById('ann-popup');
+    if (toolbar) toolbar.style.display = 'none';
+    if (popup)   popup.style.display   = 'none';
     const area = document.getElementById('agent-content-panel-area');
     if (area) area.innerHTML = '';
     document.querySelectorAll('.agent-cube').forEach(c => c.classList.remove('cube-selected'));
   };
   bindDetailActions(item);
   bindQAForm(item);
+  if (selectedAgent === 'raphael' && item.state === 'AWAITING_RAPHAEL_APPROVAL') {
+    bindAnnotationSystem(item);
+    bindReturnToVp(item);
+    // Re-bind any existing annotation remove buttons (from raphaelAnnotations array)
+    updatePostAnnotations(item);
+  }
+  if (selectedAgent === 'daniel' && item.state === 'RETURNED_TO_VP_FOR_CORRECTIONS') {
+    bindVpCorrect(item);
+  }
 }
 
 function bindQAForm(item) {
@@ -507,15 +622,16 @@ function bindQAForm(item) {
     try {
       const updated = await POST(`/content/${item.id}/ask-economist`, { question: q });
       currentItem = updated;
-      // Re-render just the Raphael panel with the new Q&A
-      const panelArea = document.getElementById('agent-content-panel-area');
-      if (panelArea) {
-        panelArea.innerHTML = renderAgentContentHTML('raphael', updated);
-        bindPanelActions(updated);
-        // Scroll Q&A history into view
-        const history = panelArea.querySelector('.qa-history');
-        if (history) history.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      // Only refresh the Q&A history container — preserves annotation DOM
+      const historyContainer = document.getElementById('qa-history-container');
+      if (historyContainer) {
+        historyContainer.innerHTML = renderQAHistoryHTML(updated.qa_history || []);
+        const qaHistory = historyContainer.querySelector('.qa-history');
+        if (qaHistory) qaHistory.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
       }
+      input.value = '';
+      setLoading(btn, false, 'Ask Dr. Ross');
+      input.disabled = false;
     } catch (err) {
       toast(err.message || 'Failed to reach Dr. Ross', 'error');
       setLoading(btn, false, 'Ask Dr. Ross');
@@ -526,6 +642,132 @@ function bindQAForm(item) {
   // Allow Cmd/Ctrl+Enter to submit
   input.onkeydown = (e) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') btn.click();
+  };
+}
+
+function bindAnnotationSystem(item) {
+  // Abort any previous annotation listeners
+  if (annAbortCtrl) annAbortCtrl.abort();
+  annAbortCtrl = new AbortController();
+  const signal = annAbortCtrl.signal;
+
+  const toolbar = document.getElementById('ann-toolbar');
+  const toolbarBtn = document.getElementById('ann-toolbar-btn');
+  const popup = document.getElementById('ann-popup');
+  const commentInput = document.getElementById('ann-comment-input');
+  const confirmBtn = document.getElementById('ann-confirm-btn');
+  const cancelBtn = document.getElementById('ann-cancel-btn');
+
+  let pendingText = null;
+  let pendingLang = null;
+
+  function hideToolbar() { toolbar.style.display = 'none'; pendingText = null; pendingLang = null; }
+  function hidePopup()   { popup.style.display = 'none'; }
+
+  document.addEventListener('mouseup', (e) => {
+    if (popup.contains(e.target) || toolbar.contains(e.target)) return;
+    const sel = window.getSelection();
+    const text = sel ? sel.toString().trim() : '';
+    if (!text) { hideToolbar(); return; }
+
+    // Walk up from selection anchor to find annotatable-post container
+    let postEl = null;
+    let node = sel.anchorNode;
+    while (node && node !== document.body) {
+      if (node.classList && node.classList.contains('annotatable-post')) { postEl = node; break; }
+      node = node.parentNode;
+    }
+    if (!postEl) { hideToolbar(); return; }
+
+    pendingText = text;
+    pendingLang = postEl.dataset.lang;
+
+    const range = sel.getRangeAt(0);
+    const rect  = range.getBoundingClientRect();
+    toolbar.style.display = 'flex';
+    toolbar.style.left = (rect.left + rect.width / 2 - 80) + 'px';
+    toolbar.style.top  = (rect.top + window.scrollY - 48) + 'px';
+  }, { signal });
+
+  if (toolbarBtn) {
+    toolbarBtn.addEventListener('click', () => {
+      if (!pendingText) return;
+      toolbar.style.display = 'none';
+      commentInput.value = '';
+      popup.style.left = (window.innerWidth  / 2 - 185) + 'px';
+      popup.style.top  = (window.innerHeight / 2 - 85)  + 'px';
+      popup.style.display = 'block';
+      setTimeout(() => commentInput.focus(), 30);
+    }, { signal });
+  }
+
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', () => {
+      const comment = commentInput.value.trim();
+      if (!comment || !pendingText) { commentInput.focus(); return; }
+      const annotation = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        lang: pendingLang,
+        selectedText: pendingText,
+        comment,
+      };
+      raphaelAnnotations.push(annotation);
+      pendingText = null;
+      pendingLang = null;
+      hidePopup();
+      window.getSelection()?.removeAllRanges();
+      updatePostAnnotations(item);
+    }, { signal });
+  }
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', () => { hidePopup(); hideToolbar(); }, { signal });
+  }
+
+  // Esc key dismisses toolbar/popup
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { hidePopup(); hideToolbar(); }
+  }, { signal });
+}
+
+function bindReturnToVp(item) {
+  const btn = document.getElementById('return-to-vp-btn');
+  if (!btn) return;
+  btn.onclick = async () => {
+    if (raphaelAnnotations.length === 0) { toast('Mark at least one correction first.', 'error'); return; }
+    const count = raphaelAnnotations.length;
+    setLoading(btn, true);
+    try {
+      currentItem = await POST(`/content/${item.id}/return-to-vp`, { annotations: raphaelAnnotations });
+      raphaelAnnotations = [];
+      if (annAbortCtrl) { annAbortCtrl.abort(); annAbortCtrl = null; }
+      document.getElementById('ann-toolbar').style.display = 'none';
+      document.getElementById('ann-popup').style.display   = 'none';
+      toast(`Sent back to VP with ${count} correction${count !== 1 ? 's' : ''}.`, 'success');
+      selectedAgent = 'daniel';
+      renderDetail(document.getElementById('content-area'));
+    } catch(e) {
+      toast(e.message, 'error');
+      setLoading(btn, false, '\u21A9 Send Back to VP');
+    }
+  };
+}
+
+function bindVpCorrect(item) {
+  const btn = document.getElementById('vp-correct-btn');
+  if (!btn) return;
+  btn.onclick = async () => {
+    setLoading(btn, true, 'Applying corrections…');
+    try {
+      currentItem = await POST(`/content/${item.id}/vp-correct`);
+      raphaelAnnotations = [];
+      toast('Daniel has applied all corrections — ready for your review.', 'success');
+      selectedAgent = 'raphael';
+      renderDetail(document.getElementById('content-area'));
+    } catch(e) {
+      toast(e.message, 'error');
+      setLoading(btn, false, 'Fix Corrections & Send Back to Raphael');
+    }
   };
 }
 
@@ -600,7 +842,7 @@ async function renderDetail(area) {
   if (!selectedAgent) {
     const { state } = item;
     if (['AWAITING_RAPHAEL_APPROVAL', 'APPROVED_FOR_PUBLISHING', 'PUBLISHED'].includes(state)) selectedAgent = 'raphael';
-    else if (state === 'RETURNED_FOR_REVISION' || state === 'REJECTED') selectedAgent = 'daniel';
+    else if (state === 'RETURNED_FOR_REVISION' || state === 'REJECTED' || state === 'RETURNED_TO_VP_FOR_CORRECTIONS') selectedAgent = 'daniel';
     else if (state === 'DRAFT_READY' || state === 'UNDER_VP_REVIEW') selectedAgent = 'sofia';
     else if (state === 'ECONOMIST_BRIEF_READY') selectedAgent = 'economist';
   }

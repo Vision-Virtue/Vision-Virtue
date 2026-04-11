@@ -4,6 +4,7 @@ import {
   EconomistBrief,
   MarketingDraft,
   QAEntry,
+  RaphaelAnnotation,
   ApiError,
 } from '../types';
 import {
@@ -12,6 +13,7 @@ import {
   vpMarketingPrompt,
   vpSelfEditPrompt,
   economistQAPrompt,
+  vpCorrectAnnotationsPrompt,
 } from '../agents/prompts';
 
 const MODEL = 'claude-sonnet-4-6';
@@ -136,6 +138,17 @@ export class AIService {
   ): Promise<string> {
     const prompt = economistQAPrompt(topic, brief, draft, qaHistory, question);
     return (await this.callClaude(prompt)).trim();
+  }
+
+  async runVpCorrectAnnotations(
+    topic: string,
+    draft: MarketingDraft,
+    annotations: RaphaelAnnotation[],
+  ): Promise<AIResponse> {
+    const prompt = vpCorrectAnnotationsPrompt(topic, draft, annotations);
+    const raw = await this.callClaude(prompt);
+    const parsed = extractJson(raw);
+    return validateAIResponse(parsed, 'draft');
   }
 
   async runVpSelfEdit(

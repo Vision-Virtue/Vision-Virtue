@@ -94,6 +94,12 @@ class AIService {
         const prompt = (0, prompts_1.economistQAPrompt)(topic, brief, draft, qaHistory, question);
         return (await this.callClaude(prompt)).trim();
     }
+    async runVpCorrectAnnotations(topic, draft, annotations) {
+        const prompt = (0, prompts_1.vpCorrectAnnotationsPrompt)(topic, draft, annotations);
+        const raw = await this.callClaude(prompt);
+        const parsed = extractJson(raw);
+        return validateAIResponse(parsed, 'draft');
+    }
     async runVpSelfEdit(topic, draft, editNotes) {
         const prompt = (0, prompts_1.vpSelfEditPrompt)(topic, draft, editNotes);
         const raw = await this.callClaude(prompt);
