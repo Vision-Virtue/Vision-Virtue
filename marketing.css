@@ -302,6 +302,28 @@ html, body {
   gap: 12px;
 }
 
+/* Main Site button */
+.main-site-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 13px;
+  border-radius: 20px;
+  background: var(--navy-800);
+  color: var(--white);
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+  letter-spacing: 0.01em;
+  transition: background var(--transition), box-shadow var(--transition);
+  white-space: nowrap;
+}
+.main-site-btn:hover {
+  background: var(--navy-700);
+  box-shadow: 0 2px 8px rgba(8,15,32,0.18);
+}
+.main-site-btn svg { opacity: 0.75; flex-shrink: 0; }
+
 /* LinkedIn Status Badge */
 .linkedin-status {
   display: flex;
