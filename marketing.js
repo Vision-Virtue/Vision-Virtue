@@ -130,7 +130,7 @@ async function checkLinkedInStatus() {
       el.innerHTML = `<span class="status-dot dot-disconnected"></span><span class="status-text">LinkedIn Disconnected</span>`;
     }
   } catch {
-    el.innerHTML = `<span class="status-dot dot-disconnected"></span><span class="status-text">Backend Offline</span>`;
+    el.innerHTML = `<span class="status-dot dot-checking"></span><span class="status-text">Backend Starting…</span>`;
   }
 }
 
@@ -176,6 +176,9 @@ function renderView() {
 // ═══════════════════════════════════════════════════════════════
 // PIPELINE VIEW
 // ═══════════════════════════════════════════════════════════════
+
+let _pipelineWakeTimer = null;
+
 async function renderPipeline(area) {
   area.innerHTML = `
     <div class="view-header">
@@ -186,18 +189,72 @@ async function renderPipeline(area) {
       <button class="btn btn-primary" id="new-topic-btn">+ New Topic</button>
     </div>
     <div id="pipeline-list" class="pipeline-list">
-      <div class="loading-state"><div class="spinner"></div><span>Loading…</span></div>
+      <div class="loading-state"><div class="spinner"></div><span>Connecting…</span></div>
     </div>`;
 
   document.getElementById('new-topic-btn').onclick = openNewTopicModal;
+  loadPipelineWithWakeUp();
+}
+
+async function loadPipelineWithWakeUp() {
+  if (_pipelineWakeTimer) { clearInterval(_pipelineWakeTimer); _pipelineWakeTimer = null; }
+  const listEl = () => document.getElementById('pipeline-list');
 
   try {
     contentItems = await GET('/content');
-    renderPipelineList();
+    if (listEl()) renderPipelineList();
   } catch (e) {
-    document.getElementById('pipeline-list').innerHTML =
-      `<div class="empty-state"><p class="error-text">Could not reach backend: ${e.message}</p>
-       <p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.5rem">Make sure the backend is running on port 3001.</p></div>`;
+    // Likely a Render cold-start — auto-retry with countdown
+    let secsLeft = 30;
+    const isNetworkError = e.message === 'Failed to fetch' || e.message.includes('NetworkError') || e.message.includes('fetch');
+
+    function showWakeState() {
+      const el = listEl();
+      if (!el) return;
+      if (isNetworkError) {
+        el.innerHTML = `
+          <div class="wake-up-state">
+            <div class="wake-up-icon">
+              <div class="spinner"></div>
+            </div>
+            <div class="wake-up-title">Backend is starting up…</div>
+            <div class="wake-up-desc">The server was idle and is waking up. This takes about 30 seconds.</div>
+            <div class="wake-up-countdown" id="wake-countdown">Retrying in ${secsLeft}s</div>
+            <button class="btn btn-secondary btn-sm" id="retry-now-btn" style="margin-top:10px">Retry Now</button>
+          </div>`;
+        document.getElementById('retry-now-btn')?.addEventListener('click', () => {
+          clearInterval(_pipelineWakeTimer); _pipelineWakeTimer = null;
+          if (listEl()) listEl().innerHTML = `<div class="loading-state"><div class="spinner"></div><span>Connecting…</span></div>`;
+          loadPipelineWithWakeUp();
+        });
+      } else {
+        el.innerHTML = `
+          <div class="wake-up-state">
+            <div class="wake-up-title wake-up-error">Backend error</div>
+            <div class="wake-up-desc">${esc(e.message)}</div>
+            <button class="btn btn-secondary btn-sm" id="retry-now-btn" style="margin-top:12px">Retry</button>
+          </div>`;
+        document.getElementById('retry-now-btn')?.addEventListener('click', () => {
+          clearInterval(_pipelineWakeTimer); _pipelineWakeTimer = null;
+          if (listEl()) listEl().innerHTML = `<div class="loading-state"><div class="spinner"></div><span>Connecting…</span></div>`;
+          loadPipelineWithWakeUp();
+        });
+        return; // don't start auto-retry for non-network errors
+      }
+    }
+
+    showWakeState();
+
+    _pipelineWakeTimer = setInterval(async () => {
+      secsLeft--;
+      const cd = document.getElementById('wake-countdown');
+      if (cd) cd.textContent = `Retrying in ${secsLeft}s`;
+      if (secsLeft <= 0) {
+        clearInterval(_pipelineWakeTimer); _pipelineWakeTimer = null;
+        if (listEl()) listEl().innerHTML = `<div class="loading-state"><div class="spinner"></div><span>Connecting…</span></div>`;
+        loadPipelineWithWakeUp();
+      }
+    }, 1000);
   }
 }
 
