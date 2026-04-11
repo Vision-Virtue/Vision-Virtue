@@ -1536,6 +1536,38 @@ html, body {
 .pipeline-meta  { font-size: 11px; color: var(--gray-400); }
 .error-text { color: #dc2626; font-size: 13px; }
 
+/* ── Backend wake-up / cold-start state ──────────────────────── */
+.wake-up-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 56px 24px;
+  text-align: center;
+}
+.wake-up-icon { margin-bottom: 16px; }
+.wake-up-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--navy-800);
+  margin-bottom: 6px;
+}
+.wake-up-error { color: #dc2626; }
+.wake-up-desc {
+  font-size: 13px;
+  color: var(--gray-400);
+  max-width: 320px;
+  line-height: 1.55;
+  margin-bottom: 4px;
+}
+.wake-up-countdown {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
 .audit-section { margin-top: 8px; }
 .audit-list { display: flex; flex-direction: column; }
 .audit-entry { padding: 10px 0; border-bottom: 1px solid var(--gray-100); }
