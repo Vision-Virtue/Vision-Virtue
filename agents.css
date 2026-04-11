@@ -544,13 +544,328 @@
   padding: 0.6rem 0.9rem;
 }
 
+/* ---------- Financial Templates Section ---------- */
+.fin-templates-section {
+  background: var(--navy-900);
+  padding: 5rem 2rem 6rem;
+}
+
+.fin-templates-container {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.fin-section-header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.fin-section-eyebrow {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent-light);
+  background: rgba(91,141,224,0.12);
+  border: 1px solid rgba(91,141,224,0.25);
+  padding: 0.25rem 0.8rem;
+  border-radius: 20px;
+  margin-bottom: 1rem;
+}
+
+.fin-section-title {
+  font-family: var(--font-head);
+  font-size: clamp(1.8rem, 3.5vw, 2.6rem);
+  font-weight: 800;
+  color: var(--white);
+  letter-spacing: -0.01em;
+  margin-bottom: 0.75rem;
+}
+
+.fin-section-sub {
+  font-size: 0.92rem;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.7;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+/* Template cards grid */
+.fin-templates-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+  margin-bottom: 3rem;
+}
+
+.fin-template-card {
+  background: var(--navy-800);
+  border: 1px solid rgba(91,141,224,0.18);
+  border-radius: 12px;
+  padding: 2rem 1.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.fin-template-card:hover {
+  border-color: rgba(91,141,224,0.45);
+  box-shadow: 0 8px 32px rgba(58,107,196,0.18);
+}
+
+.fin-template-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.fin-template-icon svg {
+  width: 26px;
+  height: 26px;
+}
+
+.fin-icon-ppt {
+  background: rgba(200,80,60,0.15);
+  border: 1px solid rgba(200,80,60,0.25);
+  color: #e07060;
+}
+
+.fin-icon-xls {
+  background: rgba(40,160,80,0.15);
+  border: 1px solid rgba(40,160,80,0.25);
+  color: #50c878;
+}
+
+.fin-template-name {
+  font-family: var(--font-head);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--white);
+  line-height: 1.35;
+  margin-bottom: 0.4rem;
+}
+
+.fin-template-desc {
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.5);
+  line-height: 1.65;
+}
+
+.fin-template-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.fin-tag {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--accent-light);
+  background: rgba(91,141,224,0.1);
+  border: 1px solid rgba(91,141,224,0.2);
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+}
+
+.fin-download-btn {
+  margin-top: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 1.25rem;
+  background: var(--accent);
+  color: var(--white);
+  border: none;
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+  align-self: flex-start;
+}
+
+.fin-download-btn:hover {
+  background: var(--accent-light);
+  transform: translateY(-1px);
+}
+
+.fin-download-btn:active {
+  transform: translateY(0);
+}
+
+/* Customer Files drop zone */
+.fin-upload-section {
+  background: var(--navy-800);
+  border: 1px solid rgba(91,141,224,0.18);
+  border-radius: 14px;
+  padding: 2.5rem 2rem;
+}
+
+.fin-upload-header {
+  margin-bottom: 1.5rem;
+}
+
+.fin-upload-title {
+  font-family: var(--font-head);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--white);
+  margin-bottom: 0.4rem;
+}
+
+.fin-upload-sub {
+  font-size: 0.83rem;
+  color: rgba(255,255,255,0.45);
+  line-height: 1.65;
+  max-width: 600px;
+}
+
+.fin-dropzone {
+  border: 2px dashed rgba(91,141,224,0.35);
+  border-radius: 10px;
+  padding: 3rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  background: rgba(58,107,196,0.04);
+}
+
+.fin-dropzone:hover,
+.fin-dropzone.drag-over {
+  border-color: var(--accent-light);
+  background: rgba(58,107,196,0.09);
+}
+
+.fin-drop-cloud {
+  width: 44px;
+  height: 44px;
+  color: var(--accent-light);
+  margin: 0 auto 1rem;
+  display: block;
+  opacity: 0.7;
+}
+
+.fin-drop-primary {
+  font-family: var(--font-head);
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--white);
+  margin-bottom: 0.4rem;
+}
+
+.fin-drop-types {
+  font-size: 0.78rem;
+  color: rgba(255,255,255,0.38);
+  margin-bottom: 1.25rem;
+  letter-spacing: 0.02em;
+}
+
+.fin-browse-btn {
+  padding: 0.55rem 1.4rem;
+  background: transparent;
+  border: 1px solid rgba(91,141,224,0.45);
+  color: var(--accent-light);
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, color 0.2s;
+}
+
+.fin-browse-btn:hover {
+  background: rgba(91,141,224,0.12);
+  border-color: var(--accent-light);
+  color: var(--white);
+}
+
+/* Uploaded file list */
+.fin-file-list {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.fin-file-item {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(91,141,224,0.15);
+  border-radius: 8px;
+  padding: 0.7rem 1rem;
+}
+
+.fin-file-ext {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  flex-shrink: 0;
+  min-width: 40px;
+  text-align: center;
+}
+
+.fin-file-ext.ext-pdf  { background: rgba(220,60,60,0.2);  color: #f47070; border: 1px solid rgba(220,60,60,0.3); }
+.fin-file-ext.ext-doc  { background: rgba(50,100,220,0.2); color: #6e9ef5; border: 1px solid rgba(50,100,220,0.3); }
+.fin-file-ext.ext-ppt  { background: rgba(220,100,50,0.2); color: #f5936e; border: 1px solid rgba(220,100,50,0.3); }
+.fin-file-ext.ext-xls  { background: rgba(40,160,80,0.2);  color: #50c878; border: 1px solid rgba(40,160,80,0.3); }
+
+.fin-file-name {
+  font-size: 0.85rem;
+  color: var(--white);
+  font-weight: 500;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fin-file-size {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.35);
+  flex-shrink: 0;
+}
+
+.fin-file-remove {
+  background: transparent;
+  border: none;
+  color: rgba(255,255,255,0.3);
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0.1rem 0.3rem;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+.fin-file-remove:hover {
+  color: #f47070;
+  background: rgba(220,60,60,0.1);
+}
+
 /* ---------- Responsive ---------- */
 @media (max-width: 640px) {
   .agent-grid { grid-template-columns: 1fr 1fr; }
   .chat-messages { max-height: 380px; }
+  .fin-templates-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 480px) {
   .agent-grid { grid-template-columns: 1fr; }
   .gate-card { padding: 2rem 1.5rem; }
+  .fin-dropzone { padding: 2rem 1rem; }
 }

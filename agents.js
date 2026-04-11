@@ -348,3 +348,493 @@ function extractXml(text, tag) {
   const match = text.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`));
   return match ? match[1].trim() : '';
 }
+
+// ── Financial Templates ──────────────────────────────────────
+
+// ─── Excel Model Generator ───────────────────────────────────
+document.getElementById('downloadXlsBtn').addEventListener('click', generateExcelModel);
+
+function generateExcelModel() {
+  if (typeof XLSX === 'undefined') {
+    alert('Excel library is still loading — please try again in a moment.');
+    return;
+  }
+
+  const wb = XLSX.utils.book_new();
+
+  // Shared style helpers (XLSX write uses a custom cell approach)
+  const YEARS = ['FY 2023A', 'FY 2024A', 'FY 2025E', 'FY 2026E', 'FY 2027E'];
+  const YR_COLS = ['C','D','E','F','G'];
+
+  // ── Helper: create a styled cell object ─────────────────────
+  function hdr(v) { return { v, t: 's' }; }
+  function num(v) { return { v: v ?? 0, t: 'n', z: '#,##0' }; }
+  function pct(v) { return { v: v ?? 0, t: 'n', z: '0.0%' }; }
+  function fml(f) { return { f, t: 'n', z: '#,##0' }; }
+  function pctFml(f) { return { f, t: 'n', z: '0.0%' }; }
+
+  // ── Sheet 1: P&L ─────────────────────────────────────────────
+  const plData = [
+    // Row 1 header
+    ['Vision & Virtue', '', 'FY 2023A', 'FY 2024A', 'FY 2025E', 'FY 2026E', 'FY 2027E'],
+    ['Profit & Loss Statement', '', '(USD thousands)', '', '', '', ''],
+    ['', '', '', '', '', '', ''],
+
+    // Revenues
+    ['REVENUES', '', '', '', '', '', ''],
+    ['  Total Revenues', '', "='Revenues'!C18", "='Revenues'!D18", "='Revenues'!E18", "='Revenues'!F18", "='Revenues'!G18"],
+    ['', '', '', '', '', '', ''],
+
+    // COGS
+    ['COST OF REVENUES', '', '', '', '', '', ''],
+    ["  Total COGS", '', "='COGS'!C14", "='COGS'!D14", "='COGS'!E14", "='COGS'!F14", "='COGS'!G14"],
+    ['', '', '', '', '', '', ''],
+
+    // Gross Profit
+    ['GROSS PROFIT', '', '=C5-C8', '=D5-D8', '=E5-E8', '=F5-F8', '=G5-G8'],
+    ['  Gross Margin %', '', '=IFERROR(C10/C5,0)', '=IFERROR(D10/D5,0)', '=IFERROR(E10/E5,0)', '=IFERROR(F10/F5,0)', '=IFERROR(G10/G5,0)'],
+    ['', '', '', '', '', '', ''],
+
+    // OPEX
+    ['OPERATING EXPENSES (OPEX)', '', '', '', '', '', ''],
+    ['  R&D', '', "='Headcount'!C12", "='Headcount'!D12", "='Headcount'!E12", "='Headcount'!F12", "='Headcount'!G12"],
+    ['  S&M', '', "='Headcount'!C18", "='Headcount'!D18", "='Headcount'!E18", "='Headcount'!F18", "='Headcount'!G18"],
+    ['  G&A', '', "='Headcount'!C24", "='Headcount'!D24", "='Headcount'!E24", "='Headcount'!F24", "='Headcount'!G24"],
+    ['  Total OPEX', '', '=C14+C15+C16', '=D14+D15+D16', '=E14+E15+E16', '=F14+F15+F16', '=G14+G15+G16'],
+    ['  OPEX % from Revenues', '', '=IFERROR(C17/C5,0)', '=IFERROR(D17/D5,0)', '=IFERROR(E17/E5,0)', '=IFERROR(F17/F5,0)', '=IFERROR(G17/G5,0)'],
+    ['', '', '', '', '', '', ''],
+
+    // EBITDA
+    ['ADJUSTED EBITDA', '', '=C10-C17', '=D10-D17', '=E10-E17', '=F10-F17', '=G10-G17'],
+    ['  EBITDA % from Revenues', '', '=IFERROR(C20/C5,0)', '=IFERROR(D20/D5,0)', '=IFERROR(E20/E5,0)', '=IFERROR(F20/F5,0)', '=IFERROR(G20/G5,0)'],
+  ];
+
+  // Convert formula strings to formula cells
+  function buildSheet(rawRows) {
+    const ws = {};
+    let maxC = 0;
+    rawRows.forEach((row, r) => {
+      row.forEach((cell, c) => {
+        if (cell === '' || cell === null || cell === undefined) return;
+        const addr = XLSX.utils.encode_cell({ r, c });
+        if (typeof cell === 'string' && cell.startsWith('=')) {
+          ws[addr] = { f: cell.slice(1), t: 'n' };
+        } else {
+          ws[addr] = { v: cell, t: typeof cell === 'number' ? 'n' : 's' };
+        }
+        if (c > maxC) maxC = c;
+      });
+    });
+    ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rawRows.length - 1, c: maxC } });
+    ws['!cols'] = [{ wch: 32 }, { wch: 4 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 14 }];
+    return ws;
+  }
+
+  XLSX.utils.book_append_sheet(wb, buildSheet(plData), 'P&L');
+
+  // ── Sheet 2: Dashboard & KPIs ─────────────────────────────
+  const dashData = [
+    ['Vision & Virtue — Dashboard & KPIs', '', '', '', '', '', ''],
+    ['Key Performance Indicators', '', 'FY 2023A', 'FY 2024A', 'FY 2025E', 'FY 2026E', 'FY 2027E'],
+    ['', '', '', '', '', '', ''],
+    ['GROWTH', '', '', '', '', '', ''],
+    ['  Revenue ($k)', '', "='P&L'!C5", "='P&L'!D5", "='P&L'!E5", "='P&L'!F5", "='P&L'!G5"],
+    ['  YoY Revenue Growth', '', '', "=IFERROR((D5-C5)/C5,0)", "=IFERROR((E5-D5)/D5,0)", "=IFERROR((F5-E5)/E5,0)", "=IFERROR((G5-F5)/F5,0)"],
+    ['', '', '', '', '', '', ''],
+    ['PROFITABILITY', '', '', '', '', '', ''],
+    ['  Gross Profit ($k)', '', "='P&L'!C10", "='P&L'!D10", "='P&L'!E10", "='P&L'!F10", "='P&L'!G10"],
+    ['  Gross Margin %', '', "='P&L'!C11", "='P&L'!D11", "='P&L'!E11", "='P&L'!F11", "='P&L'!G11"],
+    ['  Adjusted EBITDA ($k)', '', "='P&L'!C20", "='P&L'!D20", "='P&L'!E20", "='P&L'!F20", "='P&L'!G20"],
+    ['  EBITDA Margin %', '', "='P&L'!C21", "='P&L'!D21", "='P&L'!E21", "='P&L'!F21", "='P&L'!G21"],
+    ['', '', '', '', '', '', ''],
+    ['COST STRUCTURE', '', '', '', '', '', ''],
+    ['  Total OPEX ($k)', '', "='P&L'!C17", "='P&L'!D17", "='P&L'!E17", "='P&L'!F17", "='P&L'!G17"],
+    ['  OPEX % Revenue', '', "='P&L'!C18", "='P&L'!D18", "='P&L'!E18", "='P&L'!F18", "='P&L'!G18"],
+    ['  R&D ($k)', '', "='P&L'!C14", "='P&L'!D14", "='P&L'!E14", "='P&L'!F14", "='P&L'!G14"],
+    ['  S&M ($k)', '', "='P&L'!C15", "='P&L'!D15", "='P&L'!E15", "='P&L'!F15", "='P&L'!G15"],
+    ['  G&A ($k)', '', "='P&L'!C16", "='P&L'!D16", "='P&L'!E16", "='P&L'!F16", "='P&L'!G16"],
+  ];
+  XLSX.utils.book_append_sheet(wb, buildSheet(dashData), 'Dashboard & KPIs');
+
+  // ── Sheet 3: Revenues ─────────────────────────────────────
+  const revData = [
+    ['Vision & Virtue — Revenues', '', '', '', '', '', ''],
+    ['Revenue Build', '', 'FY 2023A', 'FY 2024A', 'FY 2025E', 'FY 2026E', 'FY 2027E'],
+    ['', '', '', '', '', '', ''],
+    ['PRODUCT / SERVICE LINE 1', '', '', '', '', '', ''],
+    ['  Unit Price ($)', '', 100, 105, 110, 115, 120],
+    ['  Units Sold', '', 500, 600, 720, 864, 1037],
+    ['  Revenue ($k)', '', '=C5*C6/1000', '=D5*D6/1000', '=E5*E6/1000', '=F5*F6/1000', '=G5*G6/1000'],
+    ['', '', '', '', '', '', ''],
+    ['PRODUCT / SERVICE LINE 2', '', '', '', '', '', ''],
+    ['  Unit Price ($)', '', 250, 260, 270, 280, 295],
+    ['  Units Sold', '', 120, 150, 185, 225, 270],
+    ['  Revenue ($k)', '', '=C10*C11/1000', '=D10*D11/1000', '=E10*E11/1000', '=F10*F11/1000', '=G10*G11/1000'],
+    ['', '', '', '', '', '', ''],
+    ['PROFESSIONAL SERVICES', '', '', '', '', '', ''],
+    ['  Avg. Project Value ($k)', '', 30, 35, 40, 45, 50],
+    ['  Number of Projects', '', 8, 10, 13, 16, 20],
+    ['  Revenue ($k)', '', '=C15*C16', '=D15*D16', '=E15*E16', '=F15*F16', '=G15*G16'],
+    ['', '', '', '', '', '', ''],
+    ['TOTAL REVENUES ($k)', '', '=C7+C12+C17', '=D7+D12+D17', '=E7+E12+E17', '=F7+F12+F17', '=G7+G12+G17'],
+  ];
+  XLSX.utils.book_append_sheet(wb, buildSheet(revData), 'Revenues');
+
+  // ── Sheet 4: COGS (linked to Revenues quantities) ─────────
+  const cogsData = [
+    ['Vision & Virtue — Cost of Revenues (COGS)', '', '', '', '', '', ''],
+    ['COGS Build — linked to Revenues unit quantities', '', 'FY 2023A', 'FY 2024A', 'FY 2025E', 'FY 2026E', 'FY 2027E'],
+    ['', '', '', '', '', '', ''],
+    ['PRODUCT / SERVICE LINE 1', '', '', '', '', '', ''],
+    ['  Units Sold (linked)', '', "='Revenues'!C6", "='Revenues'!D6", "='Revenues'!E6", "='Revenues'!F6", "='Revenues'!G6"],
+    ['  Unit Cost ($)', '', 40, 41, 42, 43, 44],
+    ['  COGS ($k)', '', '=C5*C6/1000', '=D5*D6/1000', '=E5*E6/1000', '=F5*F6/1000', '=G5*G6/1000'],
+    ['', '', '', '', '', '', ''],
+    ['PRODUCT / SERVICE LINE 2', '', '', '', '', '', ''],
+    ['  Units Sold (linked)', '', "='Revenues'!C11", "='Revenues'!D11", "='Revenues'!E11", "='Revenues'!F11", "='Revenues'!G11"],
+    ['  Unit Cost ($)', '', 80, 82, 84, 86, 88],
+    ['  COGS ($k)', '', '=C10*C11/1000', '=D10*D11/1000', '=E10*E11/1000', '=F10*F11/1000', '=G10*G11/1000'],
+    ['', '', '', '', '', '', ''],
+    ['TOTAL COGS ($k)', '', '=C7+C12', '=D7+D12', '=E7+E12', '=F7+F12', '=G7+G12'],
+  ];
+  XLSX.utils.book_append_sheet(wb, buildSheet(cogsData), 'COGS');
+
+  // ── Sheet 5: Qualitative Assumptions ─────────────────────
+  const assumData = [
+    ['Vision & Virtue — Qualitative Assumptions', '', '', '', '', '', ''],
+    ['Strategic & Market Assumptions', '', 'FY 2023A', 'FY 2024A', 'FY 2025E', 'FY 2026E', 'FY 2027E'],
+    ['', '', '', '', '', '', ''],
+    ['MARKET & GROWTH', '', '', '', '', '', ''],
+    ['  Revenue Growth Rate (%)', '', '', "=IFERROR(('P&L'!D5-'P&L'!C5)/'P&L'!C5,0)", "=IFERROR(('P&L'!E5-'P&L'!D5)/'P&L'!D5,0)", "=IFERROR(('P&L'!F5-'P&L'!E5)/'P&L'!E5,0)", "=IFERROR(('P&L'!G5-'P&L'!F5)/'P&L'!F5,0)"],
+    ['  Market Expansion Strategy', '', 'Domestic', 'Domestic', 'EMEA entry', 'EMEA scale', 'APAC entry'],
+    ['  Primary Sales Channel', '', 'Direct', 'Direct', 'Direct + Partner', 'Partner-led', 'Partner-led'],
+    ['', '', '', '', '', '', ''],
+    ['PRICING', '', '', '', '', '', ''],
+    ['  Avg. Price Increase YoY (%)', '', '', 0.05, 0.05, 0.04, 0.05],
+    ['  Pricing Strategy', '', 'Value-based', 'Value-based', 'Value-based', 'Volume tiers', 'Volume tiers'],
+    ['', '', '', '', '', '', ''],
+    ['HEADCOUNT & OPERATIONS', '', '', '', '', '', ''],
+    ['  Total FTE', '', "='Headcount'!C28", "='Headcount'!D28", "='Headcount'!E28", "='Headcount'!F28", "='Headcount'!G28"],
+    ['  Remote / Hybrid Policy', '', 'Hybrid', 'Hybrid', 'Remote-first', 'Remote-first', 'Remote-first'],
+    ['', '', '', '', '', '', ''],
+    ['KEY RISKS', '', '', '', '', '', ''],
+    ['  Risk 1', '', '', '', 'Customer concentration', '', ''],
+    ['  Risk 2', '', '', '', 'FX exposure on EMEA revenue', '', ''],
+    ['  Risk 3', '', '', '', 'Talent acquisition in R&D', '', ''],
+    ['', '', '', '', '', '', ''],
+    ['KEY OPPORTUNITIES', '', '', '', '', '', ''],
+    ['  Opportunity 1', '', '', '', 'Platform expansion to adjacent verticals', '', ''],
+    ['  Opportunity 2', '', '', '', 'Strategic partnership / OEM', '', ''],
+  ];
+  XLSX.utils.book_append_sheet(wb, buildSheet(assumData), 'Qualitative Assumptions');
+
+  // ── Sheet 6: Headcount ────────────────────────────────────
+  const hcData = [
+    ['Vision & Virtue — Headcount & Personnel Costs', '', '', '', '', '', ''],
+    ['Departmental headcount and salary costs ($k)', '', 'FY 2023A', 'FY 2024A', 'FY 2025E', 'FY 2026E', 'FY 2027E'],
+    ['', '', '', '', '', '', ''],
+    ['R&D', '', '', '', '', '', ''],
+    ['  Headcount', '', 4, 6, 8, 10, 13],
+    ['  Avg. Cost per Head ($k)', '', 120, 125, 130, 132, 135],
+    ['  Employer Taxes & Benefits (% of salary)', '', 0.2, 0.2, 0.2, 0.2, 0.2],
+    ['  Other R&D Opex ($k)', '', 50, 60, 80, 100, 120],
+    ['  Capitalized R&D (% of R&D spend)', '', 0, 0, 0.1, 0.15, 0.15],
+    ['  Total R&D Cost ($k)', '', '=C5*C6*(1+C7)+C8', '=D5*D6*(1+D7)+D8', '=E5*E6*(1+E7)+E8', '=F5*F6*(1+F7)+F8', '=G5*G6*(1+G7)+G8'],
+    ['  Capitalized Amount ($k)', '', '=C10*C9', '=D10*D9', '=E10*E9', '=F10*F9', '=G10*G9'],
+    ['  R&D to P&L ($k)', '', '=C10-C11', '=D10-D11', '=E10-E11', '=F10-F11', '=G10-G11'],
+    ['', '', '', '', '', '', ''],
+    ['S&M', '', '', '', '', '', ''],
+    ['  Headcount', '', 3, 4, 6, 8, 10],
+    ['  Avg. Cost per Head ($k)', '', 110, 115, 118, 120, 122],
+    ['  Employer Taxes & Benefits (% of salary)', '', 0.2, 0.2, 0.2, 0.2, 0.2],
+    ['  Other S&M Opex ($k)', '', 80, 100, 130, 160, 190],
+    ['  Total S&M Cost ($k)', '', '=C14*C15*(1+C16)+C17', '=D14*D15*(1+D16)+D17', '=E14*E15*(1+E16)+E17', '=F14*F15*(1+F16)+F17', '=G14*G15*(1+G16)+G17'],
+    ['', '', '', '', '', '', ''],
+    ['G&A', '', '', '', '', '', ''],
+    ['  Headcount', '', 2, 3, 3, 4, 4],
+    ['  Avg. Cost per Head ($k)', '', 100, 105, 108, 110, 112],
+    ['  Employer Taxes & Benefits (% of salary)', '', 0.2, 0.2, 0.2, 0.2, 0.2],
+    ['  Other G&A Opex ($k)', '', 40, 50, 55, 60, 65],
+    ['  Total G&A Cost ($k)', '', '=C21*C22*(1+C23)+C24', '=D21*D22*(1+D23)+D24', '=E21*E22*(1+E23)+E24', '=F21*F22*(1+F23)+F24', '=G21*G22*(1+G23)+G24'],
+    ['', '', '', '', '', '', ''],
+    ['TOTAL HEADCOUNT', '', '=C5+C14+C21', '=D5+D14+D21', '=E5+E14+E21', '=F5+F14+F21', '=G5+G14+G21'],
+  ];
+  XLSX.utils.book_append_sheet(wb, buildSheet(hcData), 'Headcount');
+
+  XLSX.writeFile(wb, 'VisionVirtue_Financial_Model.xlsx');
+}
+
+// ─── PowerPoint Template Generator ───────────────────────────
+document.getElementById('downloadPptBtn').addEventListener('click', generatePptTemplate);
+
+function generatePptTemplate() {
+  if (typeof PptxGenJS === 'undefined') {
+    alert('PowerPoint library is still loading — please try again in a moment.');
+    return;
+  }
+
+  const pptx = new PptxGenJS();
+  pptx.layout = 'LAYOUT_WIDE'; // 13.33" × 7.5"
+
+  // Brand colors
+  const NAVY   = '080F20';
+  const NAVY2  = '0D1830';
+  const BLUE   = '3A6BC4';
+  const LBLUE  = '5B8DE0';
+  const WHITE  = 'FFFFFF';
+  const GRAY   = '8895B0';
+  const LGRAY  = 'E8ECF4';
+
+  // ── Helpers ─────────────────────────────────────────────────
+  function addBg(slide, color) {
+    slide.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: '100%', h: '100%', fill: { color } });
+  }
+
+  function addAccentBar(slide) {
+    slide.addShape(pptx.ShapeType.rect, { x: 0, y: 6.85, w: '100%', h: 0.65, fill: { color: BLUE } });
+  }
+
+  function addSlideNumber(slide, num) {
+    slide.addText(String(num), {
+      x: 12.7, y: 6.9, w: 0.5, h: 0.4,
+      fontSize: 8, color: WHITE, align: 'right', fontFace: 'Calibri'
+    });
+  }
+
+  function addLogo(slide) {
+    slide.addText('V&V', {
+      x: 0.35, y: 6.9, w: 0.8, h: 0.4,
+      fontSize: 9, bold: true, color: WHITE, fontFace: 'Calibri'
+    });
+    slide.addText('VISION & VIRTUE', {
+      x: 1.0, y: 6.95, w: 2.2, h: 0.3,
+      fontSize: 7, color: 'C0CCDC', fontFace: 'Calibri', charSpacing: 2
+    });
+  }
+
+  // ── Slide 1: Title ──────────────────────────────────────────
+  const s1 = pptx.addSlide();
+  addBg(s1, NAVY);
+  s1.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.06, h: 7.5, fill: { color: BLUE } });
+  s1.addShape(pptx.ShapeType.rect, { x: 0, y: 3.5, w: '100%', h: 0.4, fill: { color: NAVY2 } });
+  s1.addText('VISION & VIRTUE', { x: 0.5, y: 0.7, w: 12, h: 0.5, fontSize: 10, bold: true, color: LBLUE, fontFace: 'Calibri', charSpacing: 4 });
+  s1.addText('[Company Name]\nBusiness & Financial Model', { x: 0.5, y: 1.5, w: 10, h: 2.0, fontSize: 36, bold: true, color: WHITE, fontFace: 'Calibri', lineSpacingMultiple: 1.1 });
+  s1.addShape(pptx.ShapeType.rect, { x: 0.5, y: 3.7, w: 1.2, h: 0.04, fill: { color: BLUE } });
+  s1.addText('[Month Year]  |  Confidential', { x: 0.5, y: 3.9, w: 8, h: 0.4, fontSize: 11, color: GRAY, fontFace: 'Calibri' });
+  addLogo(s1);
+
+  // ── Slide 2: Disclaimer ─────────────────────────────────────
+  const s2 = pptx.addSlide();
+  addBg(s2, NAVY2);
+  addAccentBar(s2);
+  s2.addText('IMPORTANT NOTICE', { x: 0.6, y: 0.6, w: 12, h: 0.4, fontSize: 9, bold: true, color: LBLUE, fontFace: 'Calibri', charSpacing: 3 });
+  s2.addText('Confidentiality & Forward-Looking Statements', { x: 0.6, y: 1.1, w: 12, h: 0.6, fontSize: 20, bold: true, color: WHITE, fontFace: 'Calibri' });
+  s2.addText(
+    'This presentation has been prepared by Vision & Virtue for informational purposes only. It contains forward-looking statements based on current expectations and assumptions. Actual results may differ materially from those expressed or implied.\n\nThis document is confidential and may not be reproduced, distributed, or disclosed to any third party without prior written consent.',
+    { x: 0.6, y: 2.0, w: 12, h: 3.5, fontSize: 10.5, color: 'B0BCCE', fontFace: 'Calibri', lineSpacingMultiple: 1.5 }
+  );
+  addLogo(s2); addSlideNumber(s2, 2);
+
+  // ── Slide 3: Agenda ─────────────────────────────────────────
+  const s3 = pptx.addSlide();
+  addBg(s3, NAVY);
+  addAccentBar(s3);
+  s3.addText('AGENDA', { x: 0.6, y: 0.5, w: 12, h: 0.4, fontSize: 9, bold: true, color: LBLUE, fontFace: 'Calibri', charSpacing: 3 });
+  s3.addText('Today\'s Agenda', { x: 0.6, y: 1.0, w: 12, h: 0.6, fontSize: 22, bold: true, color: WHITE, fontFace: 'Calibri' });
+  const agendaItems = ['01  Company Overview & Mission', '02  Market Opportunity', '03  Product / Service Overview', '04  Revenue Model & Pricing', '05  Financial Highlights', '06  P&L Summary & EBITDA Bridge', '07  Use of Funds', '08  Team & Advisors'];
+  agendaItems.forEach((item, i) => {
+    s3.addShape(pptx.ShapeType.rect, { x: 0.6, y: 1.85 + i * 0.6, w: 0.04, h: 0.34, fill: { color: BLUE } });
+    s3.addText(item, { x: 0.85, y: 1.85 + i * 0.6, w: 11.5, h: 0.38, fontSize: 11.5, color: 'D0D8E8', fontFace: 'Calibri' });
+  });
+  addLogo(s3); addSlideNumber(s3, 3);
+
+  // ── Slide 4: Company Overview ───────────────────────────────
+  const s4 = pptx.addSlide();
+  addBg(s4, NAVY2);
+  addAccentBar(s4);
+  s4.addText('COMPANY OVERVIEW', { x: 0.6, y: 0.5, w: 12, h: 0.4, fontSize: 9, bold: true, color: LBLUE, fontFace: 'Calibri', charSpacing: 3 });
+  s4.addText('[Company Name] at a Glance', { x: 0.6, y: 1.0, w: 12, h: 0.6, fontSize: 22, bold: true, color: WHITE, fontFace: 'Calibri' });
+  [['Founded', '[Year]'], ['HQ', '[Location]'], ['Stage', '[Seed / Series A / Growth]'], ['Team', '[X] FTEs'], ['Sector', '[Industry]'], ['Revenue', '$[X]k ARR']].forEach(([k, v], i) => {
+    const x = i < 3 ? 0.6 : 6.7;
+    const y = 2.0 + (i % 3) * 1.1;
+    s4.addShape(pptx.ShapeType.rect, { x, y, w: 5.6, h: 0.9, fill: { color: '0A1428' }, line: { color: BLUE, width: 0.5 } });
+    s4.addText(k.toUpperCase(), { x: x + 0.2, y: y + 0.08, w: 5.2, h: 0.28, fontSize: 7, bold: true, color: LBLUE, fontFace: 'Calibri', charSpacing: 2 });
+    s4.addText(v, { x: x + 0.2, y: y + 0.38, w: 5.2, h: 0.4, fontSize: 13, bold: true, color: WHITE, fontFace: 'Calibri' });
+  });
+  addLogo(s4); addSlideNumber(s4, 4);
+
+  // ── Slide 5: Financial Highlights ──────────────────────────
+  const s5 = pptx.addSlide();
+  addBg(s5, NAVY);
+  addAccentBar(s5);
+  s5.addText('FINANCIAL HIGHLIGHTS', { x: 0.6, y: 0.5, w: 12, h: 0.4, fontSize: 9, bold: true, color: LBLUE, fontFace: 'Calibri', charSpacing: 3 });
+  s5.addText('Key Metrics — FY 2025E', { x: 0.6, y: 1.0, w: 12, h: 0.6, fontSize: 22, bold: true, color: WHITE, fontFace: 'Calibri' });
+  [['Total Revenue', '$[X]k', '+[X]% YoY'], ['Gross Margin', '[X]%', 'vs [X]% prior year'], ['Adj. EBITDA', '$[X]k / [X]%', 'margin'], ['Total OPEX', '$[X]k', '[X]% of revenue']].forEach(([label, value, sub], i) => {
+    const x = 0.5 + i * 3.2;
+    s5.addShape(pptx.ShapeType.rect, { x, y: 2.0, w: 3.0, h: 3.5, fill: { color: '0A1428' }, line: { color: BLUE, width: 0.5 }, rounding: '0.08' });
+    s5.addShape(pptx.ShapeType.rect, { x, y: 2.0, w: 3.0, h: 0.06, fill: { color: BLUE } });
+    s5.addText(label, { x, y: 2.2, w: 3.0, h: 0.4, fontSize: 8.5, bold: true, color: LBLUE, fontFace: 'Calibri', align: 'center', charSpacing: 1.5 });
+    s5.addText(value, { x, y: 2.85, w: 3.0, h: 0.85, fontSize: 22, bold: true, color: WHITE, fontFace: 'Calibri', align: 'center' });
+    s5.addText(sub, { x, y: 3.8, w: 3.0, h: 0.4, fontSize: 9, color: GRAY, fontFace: 'Calibri', align: 'center' });
+  });
+  addLogo(s5); addSlideNumber(s5, 5);
+
+  // ── Slide 6: P&L Summary ────────────────────────────────────
+  const s6 = pptx.addSlide();
+  addBg(s6, NAVY2);
+  addAccentBar(s6);
+  s6.addText('P&L SUMMARY', { x: 0.6, y: 0.5, w: 12, h: 0.4, fontSize: 9, bold: true, color: LBLUE, fontFace: 'Calibri', charSpacing: 3 });
+  s6.addText('Profit & Loss — 5-Year Summary ($k)', { x: 0.6, y: 1.0, w: 12, h: 0.6, fontSize: 22, bold: true, color: WHITE, fontFace: 'Calibri' });
+  const plHeaders = [['', 'FY23A', 'FY24A', 'FY25E', 'FY26E', 'FY27E']];
+  const plRows = [
+    ['Total Revenues', '[X]', '[X]', '[X]', '[X]', '[X]'],
+    ['Total COGS', '[X]', '[X]', '[X]', '[X]', '[X]'],
+    ['Gross Profit', '[X]', '[X]', '[X]', '[X]', '[X]'],
+    ['Gross Margin %', '[X]%', '[X]%', '[X]%', '[X]%', '[X]%'],
+    ['Total OPEX', '[X]', '[X]', '[X]', '[X]', '[X]'],
+    ['OPEX % Revenue', '[X]%', '[X]%', '[X]%', '[X]%', '[X]%'],
+    ['Adj. EBITDA', '[X]', '[X]', '[X]', '[X]', '[X]'],
+    ['EBITDA Margin %', '[X]%', '[X]%', '[X]%', '[X]%', '[X]%'],
+  ];
+  const tableRows = [...plHeaders, ...plRows].map((row, ri) => row.map((cell, ci) => ({
+    text: cell,
+    options: {
+      bold: ri === 0 || ci === 0,
+      color: ri === 0 ? WHITE : (ci === 0 ? 'C0CCDC' : 'D8E0F0'),
+      fill: ri === 0 ? { color: BLUE } : (ri % 2 === 0 ? { color: '0A1428' } : { color: NAVY }),
+      align: ci === 0 ? 'left' : 'center',
+      fontSize: ri === 0 ? 9 : 9.5,
+    }
+  })));
+  s6.addTable(tableRows, { x: 0.5, y: 1.8, w: 12.5, rowH: 0.46, fontFace: 'Calibri', border: { type: 'solid', color: NAVY2, pt: 0.5 } });
+  addLogo(s6); addSlideNumber(s6, 6);
+
+  // ── Slide 7: Revenue Breakdown ──────────────────────────────
+  const s7 = pptx.addSlide();
+  addBg(s7, NAVY);
+  addAccentBar(s7);
+  s7.addText('REVENUE MODEL', { x: 0.6, y: 0.5, w: 12, h: 0.4, fontSize: 9, bold: true, color: LBLUE, fontFace: 'Calibri', charSpacing: 3 });
+  s7.addText('Revenue Breakdown by Stream', { x: 0.6, y: 1.0, w: 12, h: 0.6, fontSize: 22, bold: true, color: WHITE, fontFace: 'Calibri' });
+  s7.addText('[ Insert revenue waterfall / pie chart from Excel model ]', { x: 0.6, y: 2.1, w: 12.2, h: 3.8, fontSize: 13, color: GRAY, fontFace: 'Calibri', align: 'center', valign: 'middle', fill: { color: '060D1A' }, line: { color: BLUE, width: 0.5 }, italic: true });
+  addLogo(s7); addSlideNumber(s7, 7);
+
+  // ── Slide 8: EBITDA Bridge ──────────────────────────────────
+  const s8 = pptx.addSlide();
+  addBg(s8, NAVY2);
+  addAccentBar(s8);
+  s8.addText('EBITDA BRIDGE', { x: 0.6, y: 0.5, w: 12, h: 0.4, fontSize: 9, bold: true, color: LBLUE, fontFace: 'Calibri', charSpacing: 3 });
+  s8.addText('Revenue → Adj. EBITDA Waterfall', { x: 0.6, y: 1.0, w: 12, h: 0.6, fontSize: 22, bold: true, color: WHITE, fontFace: 'Calibri' });
+  [['Revenue', '+$[X]k', BLUE], ['(−) COGS', '−$[X]k', '8A3030'], ['= Gross Profit', '$[X]k', '2A6644'], ['(−) R&D', '−$[X]k', '8A3030'], ['(−) S&M', '−$[X]k', '8A3030'], ['(−) G&A', '−$[X]k', '8A3030'], ['= EBITDA', '$[X]k', '2A6644']].forEach(([label, val, color], i) => {
+    s8.addShape(pptx.ShapeType.rect, { x: 0.45 + i * 1.8, y: 2.5, w: 1.65, h: 2.2, fill: { color }, rounding: '0.05' });
+    s8.addText(label, { x: 0.3 + i * 1.8, y: 4.82, w: 1.95, h: 0.4, fontSize: 8, color: 'B0BCCE', fontFace: 'Calibri', align: 'center' });
+    s8.addText(val, { x: 0.3 + i * 1.8, y: 2.65, w: 1.95, h: 0.5, fontSize: 10, bold: true, color: WHITE, fontFace: 'Calibri', align: 'center' });
+  });
+  addLogo(s8); addSlideNumber(s8, 8);
+
+  // ── Slide 9: Use of Funds ────────────────────────────────────
+  const s9 = pptx.addSlide();
+  addBg(s9, NAVY);
+  addAccentBar(s9);
+  s9.addText('USE OF FUNDS', { x: 0.6, y: 0.5, w: 12, h: 0.4, fontSize: 9, bold: true, color: LBLUE, fontFace: 'Calibri', charSpacing: 3 });
+  s9.addText('Allocation of Raise Proceeds', { x: 0.6, y: 1.0, w: 12, h: 0.6, fontSize: 22, bold: true, color: WHITE, fontFace: 'Calibri' });
+  [['R&D & Product', '[X]%', '40%'], ['Sales & Marketing', '[X]%', '25%'], ['G&A & Operations', '[X]%', '15%'], ['Working Capital', '[X]%', '20%']].forEach(([area, alloc, bar], i) => {
+    const y = 2.1 + i * 1.05;
+    s9.addText(area, { x: 0.6, y, w: 3.5, h: 0.45, fontSize: 11, color: 'D0D8E8', fontFace: 'Calibri', valign: 'middle' });
+    s9.addShape(pptx.ShapeType.rect, { x: 4.2, y: y + 0.08, w: 7.0, h: 0.3, fill: { color: '0A1428' } });
+    s9.addShape(pptx.ShapeType.rect, { x: 4.2, y: y + 0.08, w: parseFloat(bar) / 100 * 7.0, h: 0.3, fill: { color: BLUE } });
+    s9.addText(alloc, { x: 11.3, y, w: 1.1, h: 0.45, fontSize: 11, bold: true, color: WHITE, fontFace: 'Calibri', align: 'right', valign: 'middle' });
+  });
+  addLogo(s9); addSlideNumber(s9, 9);
+
+  // ── Slide 10: Appendix / Q&A ─────────────────────────────────
+  const s10 = pptx.addSlide();
+  addBg(s10, NAVY);
+  s10.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 0.06, h: 7.5, fill: { color: BLUE } });
+  s10.addText('APPENDIX', { x: 0.5, y: 0.7, w: 12, h: 0.5, fontSize: 10, bold: true, color: LBLUE, fontFace: 'Calibri', charSpacing: 4 });
+  s10.addText('Questions & Appendix', { x: 0.5, y: 1.5, w: 10, h: 1.2, fontSize: 36, bold: true, color: WHITE, fontFace: 'Calibri' });
+  s10.addShape(pptx.ShapeType.rect, { x: 0.5, y: 2.85, w: 1.2, h: 0.04, fill: { color: BLUE } });
+  s10.addText('For further information contact Vision & Virtue', { x: 0.5, y: 3.1, w: 10, h: 0.4, fontSize: 11, color: GRAY, fontFace: 'Calibri' });
+  s10.addText('Confidential — Do Not Distribute', { x: 0.5, y: 3.6, w: 10, h: 0.4, fontSize: 9, color: GRAY, italic: true, fontFace: 'Calibri' });
+  addLogo(s10);
+
+  pptx.writeFile({ fileName: 'VisionVirtue_Presentation_Template.pptx' });
+}
+
+// ── File Drop Zone ────────────────────────────────────────────
+const dropzone    = document.getElementById('finDropzone');
+const browseBtn   = document.getElementById('finBrowseBtn');
+const fileInput   = document.getElementById('finFileInput');
+const fileList    = document.getElementById('finFileList');
+
+let uploadedFiles = [];
+
+browseBtn.addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
+dropzone.addEventListener('click', () => fileInput.click());
+
+fileInput.addEventListener('change', () => {
+  addFiles(Array.from(fileInput.files));
+  fileInput.value = '';
+});
+
+dropzone.addEventListener('dragover', (e) => {
+  e.preventDefault();
+  dropzone.classList.add('drag-over');
+});
+
+dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
+
+dropzone.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropzone.classList.remove('drag-over');
+  addFiles(Array.from(e.dataTransfer.files).filter(isAccepted));
+});
+
+function isAccepted(file) {
+  return /\.(pdf|doc|docx|ppt|pptx|xls|xlsx)$/i.test(file.name);
+}
+
+function fileExtClass(name) {
+  const ext = name.split('.').pop().toLowerCase();
+  if (ext === 'pdf') return ['PDF', 'ext-pdf'];
+  if (['doc','docx'].includes(ext)) return ['DOC', 'ext-doc'];
+  if (['ppt','pptx'].includes(ext)) return ['PPT', 'ext-ppt'];
+  if (['xls','xlsx'].includes(ext)) return ['XLS', 'ext-xls'];
+  return [ext.toUpperCase(), 'ext-pdf'];
+}
+
+function fmtSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function addFiles(files) {
+  files.forEach(file => {
+    if (!isAccepted(file)) return;
+    if (uploadedFiles.some(f => f.name === file.name && f.size === file.size)) return; // dedupe
+    uploadedFiles.push(file);
+  });
+  renderFileList();
+}
+
+function renderFileList() {
+  fileList.innerHTML = '';
+  uploadedFiles.forEach((file, idx) => {
+    const [label, cls] = fileExtClass(file.name);
+    const item = document.createElement('div');
+    item.className = 'fin-file-item';
+    item.innerHTML = `
+      <span class="fin-file-ext ${cls}">${label}</span>
+      <span class="fin-file-name" title="${file.name}">${file.name}</span>
+      <span class="fin-file-size">${fmtSize(file.size)}</span>
+      <button class="fin-file-remove" data-idx="${idx}" title="Remove">&#x2715;</button>
+    `;
+    fileList.appendChild(item);
+  });
+  fileList.querySelectorAll('.fin-file-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      uploadedFiles.splice(Number(btn.dataset.idx), 1);
+      renderFileList();
+    });
+  });
+}
