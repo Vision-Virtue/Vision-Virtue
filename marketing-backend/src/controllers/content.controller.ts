@@ -4,7 +4,7 @@ import { contentRepository } from '../db/repository';
 import { workflowStateMachine } from '../state-machine/workflow';
 import { AIService } from '../services/ai.service';
 import { LinkedInService } from '../services/linkedin.service';
-import { ApiError, Approval } from '../types';
+import { ApiError, Approval, QAEntry, RaphaelAnnotation } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -199,11 +199,11 @@ export class ContentController {
       return;
     }
 
-    if (item.state !== 'DRAFT_READY') {
+    if (item.state !== 'DRAFT_READY' && item.state !== 'UNDER_VP_REVIEW') {
       res.status(400).json({
         error: {
           code: 'INVALID_STATE',
-          message: `VP review requires state DRAFT_READY, current: ${item.state}`,
+          message: `VP review requires state DRAFT_READY (or UNDER_VP_REVIEW for recovery), current: ${item.state}`,
         },
       });
       return;
@@ -233,16 +233,18 @@ export class ContentController {
 
     let updatedItem = contentRepository.update(id, { vp_review: aiResponse.vp_review });
 
-    // Transition to UNDER_VP_REVIEW first
-    updatedItem = workflowStateMachine.transition(
-      updatedItem,
-      'UNDER_VP_REVIEW',
-      'Daniel Berg (AI)',
-      { decision: aiResponse.vp_review.decision },
-    );
+    // Transition to UNDER_VP_REVIEW only if not already there (recovery mode skips this)
+    if (item.state === 'DRAFT_READY') {
+      updatedItem = workflowStateMachine.transition(
+        updatedItem,
+        'UNDER_VP_REVIEW',
+        'Daniel Berg (AI)',
+        { decision: aiResponse.vp_review.decision },
+      );
+    }
 
-    // Then apply VP decision
-    const vpDecision = aiResponse.vp_review.decision;
+    // Apply VP decision — normalize to uppercase and default unexpected values to REVISE
+    const vpDecision = (aiResponse.vp_review.decision || '').toString().toUpperCase().trim();
     if (vpDecision === 'APPROVED') {
       updatedItem = workflowStateMachine.transition(
         updatedItem,
@@ -254,17 +256,18 @@ export class ContentController {
           clarity: aiResponse.vp_review.clarity_score,
         }},
       );
-    } else if (vpDecision === 'REVISE') {
-      updatedItem = workflowStateMachine.transition(
-        updatedItem,
-        'RETURNED_FOR_REVISION',
-        'Daniel Berg (AI)',
-        { comments: aiResponse.vp_review.comments },
-      );
     } else if (vpDecision === 'REJECT') {
       updatedItem = workflowStateMachine.transition(
         updatedItem,
         'REJECTED',
+        'Daniel Berg (AI)',
+        { comments: aiResponse.vp_review.comments },
+      );
+    } else {
+      // REVISE or any unexpected value — always send for revision rather than getting stuck
+      updatedItem = workflowStateMachine.transition(
+        updatedItem,
+        'RETURNED_FOR_REVISION',
         'Daniel Berg (AI)',
         { comments: aiResponse.vp_review.comments },
       );
@@ -285,6 +288,81 @@ export class ContentController {
         },
         reputational_risk: aiResponse.vp_review.reputational_risk,
       },
+    });
+
+    res.json({ success: true, data: updatedItem });
+  }
+
+  // POST /api/content/:id/vp-self-edit
+  async vpSelfEdit(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+
+    const item = contentRepository.findById(id);
+    if (!item) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: `Content item ${id} not found` } });
+      return;
+    }
+
+    if (item.state !== 'RETURNED_FOR_REVISION') {
+      res.status(400).json({
+        error: {
+          code: 'INVALID_STATE',
+          message: `VP self-edit requires state RETURNED_FOR_REVISION, current: ${item.state}`,
+        },
+      });
+      return;
+    }
+
+    if (!item.marketing_draft || !item.vp_review) {
+      res.status(400).json({
+        error: { code: 'PREREQUISITE_MISSING', message: 'Marketing draft and VP review are required' },
+      });
+      return;
+    }
+
+    const editNotes = {
+      hebrew: item.vp_review.edits?.hebrew,
+      english: item.vp_review.edits?.english,
+      general: item.vp_review.edits?.general,
+    };
+
+    const aiService = getAIService(req);
+    const aiResponse = await aiService.runVpSelfEdit(item.topic, item.marketing_draft, editNotes);
+
+    if (!aiResponse.marketing_draft) {
+      res.status(500).json({ error: { code: 'AI_ERROR', message: 'No marketing draft in VP self-edit response' } });
+      return;
+    }
+
+    let updatedItem = contentRepository.update(id, { marketing_draft: aiResponse.marketing_draft });
+
+    // Transition: RETURNED_FOR_REVISION → DRAFT_READY → UNDER_VP_REVIEW → AWAITING_RAPHAEL_APPROVAL
+    updatedItem = workflowStateMachine.transition(
+      updatedItem,
+      'DRAFT_READY',
+      'Daniel Berg (AI)',
+      { self_edit: true },
+    );
+    updatedItem = workflowStateMachine.transition(
+      updatedItem,
+      'UNDER_VP_REVIEW',
+      'Daniel Berg (AI)',
+      { self_edit: true },
+    );
+    updatedItem = workflowStateMachine.transition(
+      updatedItem,
+      'AWAITING_RAPHAEL_APPROVAL',
+      'Daniel Berg (AI)',
+      { self_edit: true, note: 'VP self-edited after 3 revision cycles' },
+    );
+
+    contentRepository.addAuditEntry({
+      content_id: id,
+      action: 'VP_SELF_EDIT_COMPLETED',
+      actor: 'Daniel Berg (AI)',
+      previous_state: 'RETURNED_FOR_REVISION',
+      new_state: 'AWAITING_RAPHAEL_APPROVAL',
+      details: { self_edit: true, model_version: aiResponse.model_version },
     });
 
     res.json({ success: true, data: updatedItem });
@@ -534,6 +612,185 @@ export class ContentController {
   async getAll(_req: Request, res: Response): Promise<void> {
     const items = contentRepository.findAll();
     res.json({ success: true, data: items, count: items.length });
+  }
+
+  // POST /api/content/:id/ask-economist
+  async askEconomist(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+    const { question } = req.body as { question?: string };
+
+    if (!question || typeof question !== 'string' || question.trim().length === 0) {
+      res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: 'question is required and must be a non-empty string' },
+      });
+      return;
+    }
+
+    const item = contentRepository.findById(id);
+    if (!item) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: `Content item ${id} not found` } });
+      return;
+    }
+
+    if (item.state !== 'AWAITING_RAPHAEL_APPROVAL' && item.state !== 'RETURNED_TO_VP_FOR_CORRECTIONS') {
+      res.status(400).json({
+        error: {
+          code: 'INVALID_STATE',
+          message: `Economist Q&A requires state AWAITING_RAPHAEL_APPROVAL or RETURNED_TO_VP_FOR_CORRECTIONS, current: ${item.state}`,
+        },
+      });
+      return;
+    }
+
+    if (!item.economist_brief || !item.marketing_draft) {
+      res.status(400).json({
+        error: { code: 'PREREQUISITE_MISSING', message: 'Economist brief and marketing draft are required' },
+      });
+      return;
+    }
+
+    const aiService = getAIService(req);
+    const answer = await aiService.askEconomist(
+      item.topic,
+      item.economist_brief,
+      item.marketing_draft,
+      item.qa_history,
+      question.trim(),
+    );
+
+    const entry: QAEntry = {
+      question: question.trim(),
+      answer,
+      asked_at: new Date().toISOString(),
+    };
+
+    const updatedItem = contentRepository.appendQAEntry(id, entry);
+    res.json({ success: true, data: updatedItem });
+  }
+
+  // POST /api/content/:id/return-to-vp (Raphael sends annotated posts back to Daniel)
+  async returnToVp(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+    const { annotations } = req.body as { annotations?: RaphaelAnnotation[] };
+
+    const item = contentRepository.findById(id);
+    if (!item) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: `Content item ${id} not found` } });
+      return;
+    }
+
+    if (item.state !== 'AWAITING_RAPHAEL_APPROVAL') {
+      res.status(400).json({
+        error: {
+          code: 'INVALID_STATE',
+          message: `Return to VP requires state AWAITING_RAPHAEL_APPROVAL, current: ${item.state}`,
+        },
+      });
+      return;
+    }
+
+    if (!annotations || !Array.isArray(annotations) || annotations.length === 0) {
+      res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: 'At least one annotation is required to return to VP' },
+      });
+      return;
+    }
+
+    // Save annotations into metadata
+    const metadata = { ...item.metadata, raphael_annotations: annotations };
+    let updatedItem = contentRepository.update(id, { metadata });
+
+    updatedItem = workflowStateMachine.transition(
+      updatedItem,
+      'RETURNED_TO_VP_FOR_CORRECTIONS',
+      'Raphael',
+      { annotation_count: annotations.length },
+    );
+
+    contentRepository.addAuditEntry({
+      content_id: id,
+      action: 'RETURNED_TO_VP_FOR_CORRECTIONS',
+      actor: 'Raphael',
+      previous_state: 'AWAITING_RAPHAEL_APPROVAL',
+      new_state: 'RETURNED_TO_VP_FOR_CORRECTIONS',
+      details: { annotation_count: annotations.length },
+    });
+
+    res.json({ success: true, data: updatedItem });
+  }
+
+  // POST /api/content/:id/vp-correct (Daniel fixes Raphael's annotations via AI)
+  async vpCorrect(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+
+    const item = contentRepository.findById(id);
+    if (!item) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: `Content item ${id} not found` } });
+      return;
+    }
+
+    if (item.state !== 'RETURNED_TO_VP_FOR_CORRECTIONS') {
+      res.status(400).json({
+        error: {
+          code: 'INVALID_STATE',
+          message: `VP correct requires state RETURNED_TO_VP_FOR_CORRECTIONS, current: ${item.state}`,
+        },
+      });
+      return;
+    }
+
+    if (!item.marketing_draft) {
+      res.status(400).json({
+        error: { code: 'PREREQUISITE_MISSING', message: 'Marketing draft is required' },
+      });
+      return;
+    }
+
+    const annotations = item.metadata.raphael_annotations || [];
+    if (annotations.length === 0) {
+      res.status(400).json({
+        error: { code: 'PREREQUISITE_MISSING', message: 'No annotations found to correct' },
+      });
+      return;
+    }
+
+    const aiService = getAIService(req);
+    const aiResponse = await aiService.runVpCorrectAnnotations(
+      item.topic,
+      item.marketing_draft,
+      annotations,
+    );
+
+    if (!aiResponse.marketing_draft) {
+      res.status(500).json({ error: { code: 'AI_ERROR', message: 'No marketing draft in VP correction response' } });
+      return;
+    }
+
+    // Save corrected draft, clear annotations
+    const metadata = { ...item.metadata, raphael_annotations: [] };
+    let updatedItem = contentRepository.update(id, {
+      marketing_draft: aiResponse.marketing_draft,
+      metadata,
+    });
+
+    // Transition back to Raphael's review
+    updatedItem = workflowStateMachine.transition(
+      updatedItem,
+      'AWAITING_RAPHAEL_APPROVAL',
+      'Daniel Berg (AI)',
+      { corrections_applied: annotations.length },
+    );
+
+    contentRepository.addAuditEntry({
+      content_id: id,
+      action: 'VP_CORRECTIONS_APPLIED',
+      actor: 'Daniel Berg (AI)',
+      previous_state: 'RETURNED_TO_VP_FOR_CORRECTIONS',
+      new_state: 'AWAITING_RAPHAEL_APPROVAL',
+      details: { corrections_applied: annotations.length, model_version: aiResponse.model_version },
+    });
+
+    res.json({ success: true, data: updatedItem });
   }
 }
 

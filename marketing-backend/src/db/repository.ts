@@ -6,6 +6,7 @@ import {
   LinkedInAccount,
   WorkflowState,
   ContentMetadata,
+  QAEntry,
 } from '../types';
 
 // ─── Row shapes from SQLite ───────────────────────────────────────────────────
@@ -21,6 +22,7 @@ interface ContentItemRow {
   metadata: string;
   publish_result: string | null;
   revision_history: string;
+  qa_history: string;
   created_at: string;
   updated_at: string;
 }
@@ -65,6 +67,7 @@ function deserializeContentItem(row: ContentItemRow): ContentItem {
     metadata: JSON.parse(row.metadata) as ContentMetadata,
     publish_result: row.publish_result ? JSON.parse(row.publish_result) : null,
     revision_history: JSON.parse(row.revision_history),
+    qa_history: JSON.parse(row.qa_history || '[]'),
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -165,6 +168,10 @@ export class ContentRepository {
       setClauses.push('revision_history = ?');
       values.push(JSON.stringify(patch.revision_history));
     }
+    if (patch.qa_history !== undefined) {
+      setClauses.push('qa_history = ?');
+      values.push(JSON.stringify(patch.qa_history));
+    }
 
     values.push(id);
 
@@ -173,6 +180,14 @@ export class ContentRepository {
     const updated = this.findById(id);
     if (!updated) throw new Error(`Failed to retrieve updated ContentItem ${id}`);
     return updated;
+  }
+
+  // ── Economist Q&A ────────────────────────────────────────────────────────────
+
+  appendQAEntry(id: string, entry: QAEntry): ContentItem {
+    const item = this.findById(id);
+    if (!item) throw new Error(`ContentItem ${id} not found`);
+    return this.update(id, { qa_history: [...item.qa_history, entry] });
   }
 
   // ── Audit Logs ───────────────────────────────────────────────────────────────

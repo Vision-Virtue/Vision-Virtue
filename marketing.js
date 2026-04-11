@@ -11,6 +11,11 @@ let currentView = 'pipeline';
 let contentItems = [];
 let currentItem = null;
 let raphaelAction = null; // 'approve' | 'reject'
+let selectedAgent = null; // 'economist' | 'sofia' | 'daniel' | 'raphael'
+let pipelineRunning = false;
+let currentPipelineStep = null;
+let raphaelAnnotations = [];
+let annAbortCtrl = null;
 
 // ── Workflow state config ──────────────────────────────────────
 const STATES = {
@@ -18,8 +23,9 @@ const STATES = {
   ECONOMIST_BRIEF_READY:    { label: 'Brief Ready',     color: 'blue' },
   DRAFT_READY:              { label: 'Draft Ready',     color: 'indigo' },
   UNDER_VP_REVIEW:          { label: 'VP Review',       color: 'yellow' },
-  AWAITING_RAPHAEL_APPROVAL:{ label: 'Awaiting Raphael',color: 'orange' },
-  APPROVED_FOR_PUBLISHING:  { label: 'Approved',        color: 'green' },
+  AWAITING_RAPHAEL_APPROVAL:          { label: 'Awaiting Raphael', color: 'orange' },
+  RETURNED_TO_VP_FOR_CORRECTIONS:     { label: 'VP Corrections',   color: 'yellow' },
+  APPROVED_FOR_PUBLISHING:            { label: 'Approved',         color: 'green' },
   PUBLISHED:                { label: 'Published',       color: 'teal' },
   RETURNED_FOR_REVISION:    { label: 'Revision',        color: 'amber' },
   REJECTED:                 { label: 'Rejected',        color: 'red' },
@@ -60,6 +66,15 @@ async function api(method, path, body) {
 const GET  = (p)    => api('GET', p);
 const POST = (p, b) => api('POST', p, b);
 const PUT  = (p, b) => api('PUT', p, b);
+
+// ── HTML escape ────────────────────────────────────────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
 
 // ── Toast ──────────────────────────────────────────────────────
 function toast(msg, type = 'info') {
@@ -111,8 +126,17 @@ async function checkLinkedInStatus() {
 
 // ── View router ────────────────────────────────────────────────
 function navigate(view, item) {
+  if (view !== 'detail') {
+    raphaelAnnotations = [];
+    if (annAbortCtrl) { annAbortCtrl.abort(); annAbortCtrl = null; }
+    const toolbar = document.getElementById('ann-toolbar');
+    const popup   = document.getElementById('ann-popup');
+    if (toolbar) toolbar.style.display = 'none';
+    if (popup)   popup.style.display   = 'none';
+  }
   currentView = view;
   currentItem = item || null;
+  if (view === 'detail') selectedAgent = null;
   document.querySelectorAll('.nav-item').forEach(n => {
     n.classList.toggle('active', n.dataset.view === view);
   });
@@ -194,17 +218,640 @@ function renderPipelineList() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// DETAIL VIEW
+// DETAIL VIEW — Agent Pipeline UX
 // ═══════════════════════════════════════════════════════════════
+
+function agentCubeStatus(key, item) {
+  const { state, economist_brief, marketing_draft, vp_review } = item;
+  if (pipelineRunning && currentPipelineStep === key) return 'active';
+  const greenStates = ['AWAITING_RAPHAEL_APPROVAL', 'APPROVED_FOR_PUBLISHING', 'PUBLISHED'];
+  switch (key) {
+    case 'economist':
+      return economist_brief ? 'done' : (state === 'IDEA_IDENTIFIED' ? 'idle' : 'locked');
+    case 'sofia':
+      if (!economist_brief) return 'locked';
+      if (marketing_draft) return 'done';
+      return (state === 'ECONOMIST_BRIEF_READY' || state === 'RETURNED_FOR_REVISION') ? 'active' : 'idle';
+    case 'daniel':
+      if (!marketing_draft) return 'locked';
+      if (state === 'RETURNED_TO_VP_FOR_CORRECTIONS') return 'active';
+      if (vp_review && state !== 'RETURNED_FOR_REVISION') return 'done';
+      return state === 'DRAFT_READY' ? 'active' : 'idle';
+    case 'raphael':
+      if (!vp_review || state === 'RETURNED_FOR_REVISION' || state === 'REJECTED') return 'locked';
+      if (greenStates.includes(state)) return 'green';
+      return 'locked';
+  }
+  return 'locked';
+}
+
+function renderPipelineStatusBarHTML(item) {
+  const { state, economist_brief, marketing_draft, vp_review } = item;
+  const greenStates = ['AWAITING_RAPHAEL_APPROVAL', 'APPROVED_FOR_PUBLISHING', 'PUBLISHED'];
+  const isGreen = greenStates.includes(state);
+
+  const stageDone = key => {
+    if (key === 'economist') return !!economist_brief;
+    if (key === 'sofia')     return !!marketing_draft;
+    if (key === 'daniel')    return !!vp_review && state !== 'RETURNED_FOR_REVISION' && state !== 'RETURNED_TO_VP_FOR_CORRECTIONS';
+    if (key === 'raphael')   return isGreen;
+    return false;
+  };
+
+  const stages = [
+    { key: 'economist', label: 'Chief Economist' },
+    { key: 'sofia',     label: 'Mgr. Marketing' },
+    { key: 'daniel',    label: 'VP Marketing' },
+    { key: 'raphael',   label: 'Partner' },
+  ];
+
+  let html = '<div class="pipeline-status-bar">';
+  stages.forEach((s, i) => {
+    const done   = stageDone(s.key);
+    const active = !done && (pipelineRunning ? currentPipelineStep === s.key : agentCubeStatus(s.key, item) === 'active');
+    const green  = s.key === 'raphael' && isGreen;
+    const cls    = green ? 'psb-green' : active ? 'psb-active' : done ? 'psb-done' : '';
+    html += `<div class="psb-agent ${cls}"><div class="psb-dot"></div><div class="psb-label">${s.label}</div></div>`;
+    if (i < stages.length - 1) {
+      html += `<div class="psb-connector ${done ? (isGreen ? 'psb-green' : 'psb-done') : ''}"></div>`;
+    }
+  });
+  return html + '</div>';
+}
+
+function renderAgentCubesHTML(item) {
+  const agents = [
+    { key: 'economist', photo: 'agent_economist.jpg', name: 'Dr. Ethan Ross', role: 'Chief Economist',  color: 'blue'   },
+    { key: 'sofia',     photo: 'agent_sofia.jpg',     name: 'Sofia Chen',     role: 'Mgr. Marketing',   color: 'purple' },
+    { key: 'daniel',    photo: 'agent_daniel.jpg',    name: 'Daniel Berg',    role: 'VP Marketing',     color: 'teal'   },
+    { key: 'raphael',   photo: 'team_raphael.png',    name: 'Raphael',        role: 'Final Approver',   color: 'gold'   },
+  ];
+  const statusCssMap  = { done: 'cube-done', active: 'cube-active', green: 'cube-green', locked: 'cube-locked' };
+  const statusLblMap  = { done: 'Complete', active: 'Working…', green: 'Awaiting you', idle: 'Pending', locked: '' };
+  const statusClsMap  = { done: 'cube-status-done', active: 'cube-status-active', green: 'cube-status-green', idle: 'cube-status-idle', locked: '' };
+
+  let html = '';
+  agents.forEach((a, i) => {
+    const status = agentCubeStatus(a.key, item);
+    const sel    = selectedAgent === a.key;
+    html += `
+      <div class="agent-cube ${statusCssMap[status] || ''} ${sel ? 'cube-selected' : ''}" id="cube-${a.key}" data-agent="${a.key}">
+        <div class="cube-avatar-wrap">
+          <img class="cube-avatar-img" src="${a.photo}" alt="${a.name}" style="object-fit:cover;object-position:center top" />
+          ${(status === 'done' || status === 'green') ? '<div class="cube-check-badge">✓</div>' : ''}
+        </div>
+        <div class="cube-name">${a.name}</div>
+        <div class="cube-role-tag">${a.role}</div>
+        <div class="cube-status-label ${statusClsMap[status] || ''}">${statusLblMap[status] || ''}</div>
+      </div>`;
+    if (i < agents.length - 1) html += '<div class="agent-cube-arrow">→</div>';
+  });
+  return html;
+}
+
+// ── Annotation helpers ─────────────────────────────────────────
+function applyAnnotationsToHTML(rawText, annotations, lang) {
+  let html = esc(rawText);
+  annotations.filter(a => a.lang === lang).forEach(a => {
+    const escapedSelected = esc(a.selectedText);
+    if (!escapedSelected || !html.includes(escapedSelected)) return;
+    const tooltip = `<span class="raphael-tooltip">${esc(a.comment)}<button class="ann-remove-btn" data-ann-id="${esc(a.id)}">×</button></span>`;
+    const mark = `<mark class="raphael-mark" data-ann-id="${esc(a.id)}">${escapedSelected}${tooltip}</mark>`;
+    html = html.replace(escapedSelected, mark);
+  });
+  return html;
+}
+
+function buildAnnotatedHTMLForVP(rawText, annotations, lang) {
+  let html = esc(rawText);
+  annotations.filter(a => a.lang === lang).forEach(a => {
+    const escapedSelected = esc(a.selectedText);
+    if (!escapedSelected || !html.includes(escapedSelected)) return;
+    const tooltip = `<span class="vp-ann-tooltip">${esc(a.comment)}</span>`;
+    const mark = `<mark class="vp-ann-mark">${escapedSelected}${tooltip}</mark>`;
+    html = html.replace(escapedSelected, mark);
+  });
+  return html;
+}
+
+function renderQAHistoryHTML(qaEntries) {
+  if (!qaEntries || qaEntries.length === 0) return '';
+  return `<div class="qa-history">
+    ${qaEntries.map(e => `
+      <div class="qa-exchange">
+        <div class="qa-question-bubble">
+          <div class="qa-q-label">You asked</div>
+          <div class="qa-q-text">${esc(e.question)}</div>
+        </div>
+        <div class="qa-answer-row">
+          <img class="qa-economist-avatar" src="agent_economist.jpg" alt="Dr. Ethan Ross" />
+          <div class="qa-answer-bubble">
+            <div class="qa-a-name">Dr. Ethan Ross</div>
+            <div class="qa-a-text">${esc(e.answer)}</div>
+            <div class="qa-a-time">${fmtDate(e.asked_at)}</div>
+          </div>
+        </div>
+      </div>`).join('')}
+  </div>`;
+}
+
+function updatePostAnnotations(item) {
+  const d = item.marketing_draft;
+  if (!d) return;
+  const hebrewEl = document.getElementById('raphael-post-hebrew');
+  const englishEl = document.getElementById('raphael-post-english');
+  if (hebrewEl) hebrewEl.innerHTML = applyAnnotationsToHTML(d.hebrew?.text || '', raphaelAnnotations, 'hebrew');
+  if (englishEl) englishEl.innerHTML = applyAnnotationsToHTML(d.english?.text || '', raphaelAnnotations, 'english');
+  const sendBtn = document.getElementById('return-to-vp-btn');
+  if (sendBtn) {
+    const count = raphaelAnnotations.length;
+    sendBtn.disabled = count === 0;
+    sendBtn.textContent = count > 0
+      ? `\u21A9 Send Back to VP (${count} correction${count !== 1 ? 's' : ''})`
+      : '\u21A9 Send Back to VP';
+  }
+  const hint = document.getElementById('ann-hint');
+  if (hint) hint.style.display = raphaelAnnotations.length === 0 ? 'block' : 'none';
+  // Re-bind remove buttons on updated DOM
+  document.querySelectorAll('.ann-remove-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const id = btn.dataset.annId;
+      raphaelAnnotations = raphaelAnnotations.filter(a => a.id !== id);
+      updatePostAnnotations(item);
+    });
+  });
+}
+
+function renderAgentContentHTML(key, item) {
+  const meta = {
+    economist: { photo: 'agent_economist.jpg', color: 'blue',   title: 'Dr. Ethan Ross — Economist Brief' },
+    sofia:     { photo: 'agent_sofia.jpg',     color: 'purple', title: 'Sofia Chen — Marketing Draft' },
+    daniel:    { photo: 'agent_daniel.jpg',    color: 'teal',   title: 'Daniel Berg — VP Review' },
+    raphael:   { photo: 'team_raphael.png',    color: 'gold',   title: 'Raphael — Final Approval Gate' },
+  }[key];
+
+  let body = '';
+
+  if (key === 'economist') {
+    if (!item.economist_brief) {
+      body = `<div class="empty-state" style="padding:24px 0"><p>Brief will be generated when you start the pipeline.</p></div>`;
+    } else {
+      const b = item.economist_brief;
+      body = `<div class="brief-grid">
+        <div class="brief-field"><div class="brief-label">Summary</div><div class="brief-value">${b.summary || ''}</div></div>
+        <div class="brief-field"><div class="brief-label">Israel Context</div><div class="brief-value">${b.israel_context || ''}</div></div>
+        <div class="brief-field"><div class="brief-label">US Context</div><div class="brief-value">${b.us_context || ''}</div></div>
+        <div class="brief-field"><div class="brief-label">Global Context</div><div class="brief-value">${b.global_context || ''}</div></div>
+        <div class="brief-field"><div class="brief-label">Geopolitical Implications</div><div class="brief-value">${b.geopolitical_implications || ''}</div></div>
+        <div class="brief-field"><div class="brief-label">Central Bank Stance</div><div class="brief-value">${b.central_bank_stance || ''}</div></div>
+        <div class="brief-field"><div class="brief-label">Risks &amp; Uncertainties</div><div class="brief-value">${(b.risks_and_uncertainties || []).join('<br>')}</div></div>
+        <div class="brief-field"><div class="brief-label">Actionable Insights</div><div class="brief-value">${(b.actionable_insights || []).join('<br>')}</div></div>
+        ${b.confidence_level ? `<div class="brief-field"><div class="brief-label">Confidence</div><div class="brief-value">${b.confidence_level}${b.requires_verification ? ' — <em>verification required</em>' : ''}</div></div>` : ''}
+      </div>`;
+    }
+  }
+
+  else if (key === 'sofia') {
+    if (!item.marketing_draft) {
+      body = `<div class="empty-state" style="padding:24px 0"><p>Draft will appear here after the economist brief is ready.</p></div>`;
+    } else {
+      const d = item.marketing_draft;
+      body = `<div class="draft-grid">
+        <div class="draft-panel">
+          <div class="draft-lang">🇮🇱 Hebrew</div>
+          <div class="draft-text" dir="rtl">${d.hebrew?.text || ''}</div>
+          <div class="draft-meta">${(d.hebrew?.hashtags || []).join(' ')}</div>
+        </div>
+        <div class="draft-panel">
+          <div class="draft-lang">🇺🇸 English</div>
+          <div class="draft-text">${d.english?.text || ''}</div>
+          <div class="draft-meta">${(d.english?.hashtags || []).join(' ')}</div>
+        </div>
+      </div>
+      ${d.key_message ? `<div class="brief-field" style="margin-top:1rem"><div class="brief-label">Key Message</div><div class="brief-value">${d.key_message}</div></div>` : ''}`;
+    }
+  }
+
+  else if (key === 'daniel') {
+    if (item.state === 'RETURNED_TO_VP_FOR_CORRECTIONS') {
+      const d = item.marketing_draft;
+      const annotations = item.metadata?.raphael_annotations || [];
+      const hebrewAnns = annotations.filter(a => a.lang === 'hebrew');
+      const englishAnns = annotations.filter(a => a.lang === 'english');
+      body = `
+        <div class="ann-review-notice">
+          <strong>Raphael has sent back ${annotations.length} correction${annotations.length !== 1 ? 's' : ''} for your review.</strong>
+          Highlighted sections show what needs to be fixed. Click the button below to apply all corrections via AI and send back to Raphael.
+        </div>
+        <div class="draft-grid" style="margin-bottom:1.5rem">
+          <div class="draft-panel">
+            <div class="draft-lang">🇮🇱 Hebrew Post — Raphael's Corrections</div>
+            <div class="draft-text" dir="rtl" style="white-space:pre-wrap">${buildAnnotatedHTMLForVP(d?.hebrew?.text || '', hebrewAnns, 'hebrew')}</div>
+            <div class="draft-meta">${(d?.hebrew?.hashtags || []).join(' ')}</div>
+          </div>
+          <div class="draft-panel">
+            <div class="draft-lang">🇺🇸 English Post — Raphael's Corrections</div>
+            <div class="draft-text" style="white-space:pre-wrap">${buildAnnotatedHTMLForVP(d?.english?.text || '', englishAnns, 'english')}</div>
+            <div class="draft-meta">${(d?.english?.hashtags || []).join(' ')}</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:0.75rem;padding-top:1.25rem;border-top:1px solid var(--card-border)">
+          <button class="btn btn-primary" id="vp-correct-btn">Fix Corrections &amp; Send Back to Raphael</button>
+        </div>`;
+    } else if (!item.vp_review) {
+      body = `<div class="empty-state" style="padding:24px 0"><p>VP review will appear here after a draft is ready.</p></div>`;
+    } else {
+      const r = item.vp_review;
+      const dc = { APPROVED: 'decision-approved', REVISE: 'decision-revise', REJECT: 'decision-reject' }[r.decision] || '';
+      body = `
+        <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.25rem;flex-wrap:wrap">
+          <span class="panel-decision ${dc}" style="font-size:13px;padding:5px 14px">${r.decision}</span>
+          <span style="color:var(--gray-400);font-size:12px">Factual: ${r.factual_accuracy_score}/10 · Brand: ${r.brand_alignment_score}/10 · Clarity: ${r.clarity_score}/10 · Risk: <strong>${r.reputational_risk}</strong></span>
+        </div>
+        <div class="brief-grid">
+          <div class="brief-field"><div class="brief-label">Comments</div><div class="brief-value">${r.comments || ''}</div></div>
+          ${r.edits?.hebrew  ? `<div class="brief-field"><div class="brief-label">🇮🇱 Suggested Edit</div><div class="brief-value">${r.edits.hebrew}</div></div>` : ''}
+          ${r.edits?.english ? `<div class="brief-field"><div class="brief-label">🇺🇸 Suggested Edit</div><div class="brief-value">${r.edits.english}</div></div>` : ''}
+          ${r.edits?.general ? `<div class="brief-field"><div class="brief-label">General Notes</div><div class="brief-value">${r.edits.general}</div></div>` : ''}
+        </div>`;
+    }
+  }
+
+  else if (key === 'raphael') {
+    const { state, marketing_draft, approval, publish_result, qa_history } = item;
+    const qaEntries = qa_history || [];
+
+    if (state === 'AWAITING_RAPHAEL_APPROVAL' && marketing_draft) {
+      const d = marketing_draft;
+      const annCount = raphaelAnnotations.length;
+      body = `
+        <p class="annotation-hint" id="ann-hint" style="display:${annCount > 0 ? 'none' : 'block'}">
+          Select text in either post below to mark corrections, then click "Send Back to VP".
+        </p>
+        <div class="draft-grid" style="margin-bottom:1.5rem">
+          <div class="draft-panel">
+            <div class="draft-lang">🇮🇱 Hebrew Post — Final Review</div>
+            <div id="raphael-post-hebrew" class="draft-text annotatable-post" dir="rtl" style="white-space:pre-wrap" data-lang="hebrew">${applyAnnotationsToHTML(d.hebrew?.text || '', raphaelAnnotations, 'hebrew')}</div>
+            <div class="draft-meta">${(d.hebrew?.hashtags || []).join(' ')}</div>
+          </div>
+          <div class="draft-panel">
+            <div class="draft-lang">🇺🇸 English Post — Final Review</div>
+            <div id="raphael-post-english" class="draft-text annotatable-post" style="white-space:pre-wrap" data-lang="english">${applyAnnotationsToHTML(d.english?.text || '', raphaelAnnotations, 'english')}</div>
+            <div class="draft-meta">${(d.english?.hashtags || []).join(' ')}</div>
+          </div>
+        </div>
+
+        <div class="qa-section">
+          <div class="qa-section-header">
+            <img class="qa-section-avatar" src="agent_economist.jpg" alt="Dr. Ethan Ross" />
+            <div>
+              <div class="qa-section-title">Consult Dr. Ethan Ross</div>
+              <div class="qa-section-sub">Ask the Economist anything about these posts before you decide</div>
+            </div>
+          </div>
+          <div id="qa-history-container">${renderQAHistoryHTML(qaEntries)}</div>
+          <div class="qa-form">
+            <textarea id="qa-question-input" class="qa-textarea" rows="2" placeholder="e.g. Is the Fed rate claim accurate given last week's data?"></textarea>
+            <button class="btn btn-outline qa-send-btn" id="qa-send-btn">Ask Dr. Ross</button>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:0.75rem;padding-top:1.25rem;border-top:1px solid var(--card-border);flex-wrap:wrap;align-items:center">
+          <button class="btn btn-primary" id="approve-btn">✓ Approve &amp; Authorize Publication</button>
+          <button class="btn btn-danger" id="reject-btn">✕ Reject</button>
+          <button class="btn btn-warning" id="return-to-vp-btn" style="margin-left:auto" ${annCount === 0 ? 'disabled' : ''}>
+            ↩ Send Back to VP${annCount > 0 ? ` (${annCount} correction${annCount !== 1 ? 's' : ''})` : ''}
+          </button>
+        </div>`;
+    } else if (state === 'APPROVED_FOR_PUBLISHING' || state === 'PUBLISHED') {
+      body = `<div class="brief-grid">
+        <div class="brief-field"><div class="brief-label">Decision</div><div class="brief-value"><span class="panel-decision decision-approved">APPROVED</span></div></div>
+        <div class="brief-field"><div class="brief-label">Approved By</div><div class="brief-value">${approval?.approved_by || 'Raphael'}</div></div>
+        <div class="brief-field"><div class="brief-label">At</div><div class="brief-value">${fmtDate(approval?.approved_at)}</div></div>
+        ${approval?.notes ? `<div class="brief-field"><div class="brief-label">Notes</div><div class="brief-value">${approval.notes}</div></div>` : ''}
+      </div>
+      ${qaEntries.length > 0 ? `<div class="qa-section qa-section-readonly"><div class="qa-section-header"><img class="qa-section-avatar" src="agent_economist.jpg" alt="Dr. Ethan Ross" /><div><div class="qa-section-title">Economist Q&amp;A</div><div class="qa-section-sub">Questions asked before approval</div></div></div>${renderQAHistoryHTML(qaEntries)}</div>` : ''}
+      ${state === 'APPROVED_FOR_PUBLISHING' ? `<div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--card-border)"><button class="btn btn-publish" id="publish-btn">Publish to LinkedIn Now</button></div>` : ''}
+      ${state === 'PUBLISHED' && publish_result ? `<div class="brief-field" style="margin-top:1rem"><div class="brief-label">Published At</div><div class="brief-value">${fmtDate(publish_result.published_at)}</div></div>` : ''}`;
+    } else if (state === 'REJECTED' && approval) {
+      body = `<div class="brief-grid">
+        <div class="brief-field"><div class="brief-label">Decision</div><div class="brief-value"><span class="panel-decision decision-reject">REJECTED</span></div></div>
+        ${approval.notes ? `<div class="brief-field"><div class="brief-label">Notes</div><div class="brief-value">${approval.notes}</div></div>` : ''}
+      </div>`;
+    } else {
+      body = `<div class="empty-state" style="padding:24px 0"><p>Content not yet ready for approval.</p></div>`;
+    }
+  }
+
+  return `<div class="agent-content-panel">
+    <div class="panel-header-bar">
+      <div class="panel-header-bar-title">
+        <img class="sm-avatar-img" src="${meta.photo}" alt="${meta.title}" />
+        ${meta.title}
+      </div>
+      <button class="panel-close-btn" id="close-agent-panel">×</button>
+    </div>
+    <div class="panel-content-body">${body}</div>
+  </div>`;
+}
+
+function bindCubeClicks(item) {
+  document.querySelectorAll('.agent-cube[data-agent]').forEach(el => {
+    el.addEventListener('click', () => {
+      const key = el.dataset.agent;
+      const panelArea = document.getElementById('agent-content-panel-area');
+      if (!panelArea) return;
+      if (selectedAgent === key) {
+        selectedAgent = null;
+        el.classList.remove('cube-selected');
+        if (annAbortCtrl) { annAbortCtrl.abort(); annAbortCtrl = null; }
+        document.getElementById('ann-toolbar').style.display = 'none';
+        document.getElementById('ann-popup').style.display   = 'none';
+        panelArea.innerHTML = '';
+      } else {
+        document.querySelectorAll('.agent-cube').forEach(c => c.classList.remove('cube-selected'));
+        el.classList.add('cube-selected');
+        selectedAgent = key;
+        panelArea.innerHTML = renderAgentContentHTML(key, item);
+        bindPanelActions(item);
+      }
+    });
+  });
+}
+
+function bindPanelActions(item) {
+  const closeBtn = document.getElementById('close-agent-panel');
+  if (closeBtn) closeBtn.onclick = () => {
+    selectedAgent = null;
+    if (annAbortCtrl) { annAbortCtrl.abort(); annAbortCtrl = null; }
+    // Hide annotation UI
+    const toolbar = document.getElementById('ann-toolbar');
+    const popup   = document.getElementById('ann-popup');
+    if (toolbar) toolbar.style.display = 'none';
+    if (popup)   popup.style.display   = 'none';
+    const area = document.getElementById('agent-content-panel-area');
+    if (area) area.innerHTML = '';
+    document.querySelectorAll('.agent-cube').forEach(c => c.classList.remove('cube-selected'));
+  };
+  bindDetailActions(item);
+  bindQAForm(item);
+  if (selectedAgent === 'raphael' && item.state === 'AWAITING_RAPHAEL_APPROVAL') {
+    bindAnnotationSystem(item);
+    bindReturnToVp(item);
+    // Re-bind any existing annotation remove buttons (from raphaelAnnotations array)
+    updatePostAnnotations(item);
+  }
+  if (selectedAgent === 'daniel' && item.state === 'RETURNED_TO_VP_FOR_CORRECTIONS') {
+    bindVpCorrect(item);
+  }
+}
+
+function bindQAForm(item) {
+  const btn   = document.getElementById('qa-send-btn');
+  const input = document.getElementById('qa-question-input');
+  if (!btn || !input) return;
+
+  btn.onclick = async () => {
+    const q = input.value.trim();
+    if (!q) { input.focus(); return; }
+
+    setLoading(btn, true, 'Asking…');
+    input.disabled = true;
+
+    try {
+      const updated = await POST(`/content/${item.id}/ask-economist`, { question: q });
+      currentItem = updated;
+      // Only refresh the Q&A history container — preserves annotation DOM
+      const historyContainer = document.getElementById('qa-history-container');
+      if (historyContainer) {
+        historyContainer.innerHTML = renderQAHistoryHTML(updated.qa_history || []);
+        const qaHistory = historyContainer.querySelector('.qa-history');
+        if (qaHistory) qaHistory.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+      input.value = '';
+      setLoading(btn, false, 'Ask Dr. Ross');
+      input.disabled = false;
+    } catch (err) {
+      toast(err.message || 'Failed to reach Dr. Ross', 'error');
+      setLoading(btn, false, 'Ask Dr. Ross');
+      input.disabled = false;
+    }
+  };
+
+  // Allow Cmd/Ctrl+Enter to submit
+  input.onkeydown = (e) => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') btn.click();
+  };
+}
+
+function bindAnnotationSystem(item) {
+  // Abort any previous annotation listeners
+  if (annAbortCtrl) annAbortCtrl.abort();
+  annAbortCtrl = new AbortController();
+  const signal = annAbortCtrl.signal;
+
+  const toolbar = document.getElementById('ann-toolbar');
+  const toolbarBtn = document.getElementById('ann-toolbar-btn');
+  const popup = document.getElementById('ann-popup');
+  const commentInput = document.getElementById('ann-comment-input');
+  const confirmBtn = document.getElementById('ann-confirm-btn');
+  const cancelBtn = document.getElementById('ann-cancel-btn');
+
+  let pendingText = null;
+  let pendingLang = null;
+
+  function hideToolbar() { toolbar.style.display = 'none'; pendingText = null; pendingLang = null; }
+  function hidePopup()   { popup.style.display = 'none'; }
+
+  document.addEventListener('mouseup', (e) => {
+    if (popup.contains(e.target) || toolbar.contains(e.target)) return;
+    const sel = window.getSelection();
+    const text = sel ? sel.toString().trim() : '';
+    if (!text) { hideToolbar(); return; }
+
+    // Walk up from selection anchor to find annotatable-post container
+    let postEl = null;
+    let node = sel.anchorNode;
+    while (node && node !== document.body) {
+      if (node.classList && node.classList.contains('annotatable-post')) { postEl = node; break; }
+      node = node.parentNode;
+    }
+    if (!postEl) { hideToolbar(); return; }
+
+    pendingText = text;
+    pendingLang = postEl.dataset.lang;
+
+    const range = sel.getRangeAt(0);
+    const rect  = range.getBoundingClientRect();
+    toolbar.style.display = 'flex';
+    toolbar.style.left = (rect.left + rect.width / 2 - 80) + 'px';
+    toolbar.style.top  = (rect.top + window.scrollY - 48) + 'px';
+  }, { signal });
+
+  if (toolbarBtn) {
+    toolbarBtn.addEventListener('click', () => {
+      if (!pendingText) return;
+      toolbar.style.display = 'none';
+      commentInput.value = '';
+      popup.style.left = (window.innerWidth  / 2 - 185) + 'px';
+      popup.style.top  = (window.innerHeight / 2 - 85)  + 'px';
+      popup.style.display = 'block';
+      setTimeout(() => commentInput.focus(), 30);
+    }, { signal });
+  }
+
+  if (confirmBtn) {
+    confirmBtn.addEventListener('click', () => {
+      const comment = commentInput.value.trim();
+      if (!comment || !pendingText) { commentInput.focus(); return; }
+      const annotation = {
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        lang: pendingLang,
+        selectedText: pendingText,
+        comment,
+      };
+      raphaelAnnotations.push(annotation);
+      pendingText = null;
+      pendingLang = null;
+      hidePopup();
+      window.getSelection()?.removeAllRanges();
+      updatePostAnnotations(item);
+    }, { signal });
+  }
+
+  if (cancelBtn) {
+    cancelBtn.addEventListener('click', () => { hidePopup(); hideToolbar(); }, { signal });
+  }
+
+  // Esc key dismisses toolbar/popup
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { hidePopup(); hideToolbar(); }
+  }, { signal });
+}
+
+function bindReturnToVp(item) {
+  const btn = document.getElementById('return-to-vp-btn');
+  if (!btn) return;
+  btn.onclick = async () => {
+    if (raphaelAnnotations.length === 0) { toast('Mark at least one correction first.', 'error'); return; }
+    const count = raphaelAnnotations.length;
+    setLoading(btn, true);
+    try {
+      currentItem = await POST(`/content/${item.id}/return-to-vp`, { annotations: raphaelAnnotations });
+      raphaelAnnotations = [];
+      if (annAbortCtrl) { annAbortCtrl.abort(); annAbortCtrl = null; }
+      document.getElementById('ann-toolbar').style.display = 'none';
+      document.getElementById('ann-popup').style.display   = 'none';
+      toast(`Sent back to VP with ${count} correction${count !== 1 ? 's' : ''}.`, 'success');
+      selectedAgent = 'daniel';
+      renderDetail(document.getElementById('content-area'));
+    } catch(e) {
+      toast(e.message, 'error');
+      setLoading(btn, false, '\u21A9 Send Back to VP');
+    }
+  };
+}
+
+function bindVpCorrect(item) {
+  const btn = document.getElementById('vp-correct-btn');
+  if (!btn) return;
+  btn.onclick = async () => {
+    setLoading(btn, true, 'Applying corrections…');
+    try {
+      currentItem = await POST(`/content/${item.id}/vp-correct`);
+      raphaelAnnotations = [];
+      toast('Daniel has applied all corrections — ready for your review.', 'success');
+      selectedAgent = 'raphael';
+      renderDetail(document.getElementById('content-area'));
+    } catch(e) {
+      toast(e.message, 'error');
+      setLoading(btn, false, 'Fix Corrections & Send Back to Raphael');
+    }
+  };
+}
+
+async function runFullPipeline(id) {
+  const MAX_REVISIONS = 3;
+  let it = currentItem;
+  let revisions = 0;
+  const area = document.getElementById('content-area');
+  pipelineRunning = true;
+
+  const activating = (agentKey, msg) => {
+    toast(msg, 'info');
+    currentPipelineStep = agentKey;
+    currentItem = it;
+    renderDetail(area);
+  };
+
+  try {
+    if (it.state === 'IDEA_IDENTIFIED') {
+      activating('economist', 'Dr. Ethan Ross is analyzing the topic…');
+      it = await POST(`/content/${id}/economist-brief`);
+      selectedAgent = 'economist';
+    }
+    while (revisions < MAX_REVISIONS) {
+      if (it.state === 'ECONOMIST_BRIEF_READY' || it.state === 'RETURNED_FOR_REVISION') {
+        activating('sofia', `Sofia Chen is drafting${revisions > 0 ? ' (revision ' + revisions + ')' : ''}…`);
+        it = await POST(`/content/${id}/marketing-draft`);
+        selectedAgent = 'sofia';
+      }
+      if (it.state === 'DRAFT_READY' || it.state === 'UNDER_VP_REVIEW') {
+        activating('daniel', it.state === 'UNDER_VP_REVIEW' ? 'Resuming VP review…' : 'Daniel Berg is reviewing the draft…');
+        it = await POST(`/content/${id}/vp-review`);
+        selectedAgent = it.state === 'AWAITING_RAPHAEL_APPROVAL' ? 'raphael' : 'daniel';
+      }
+      if (it.state === 'AWAITING_RAPHAEL_APPROVAL') {
+        toast('Pipeline complete — ready for your approval.', 'success');
+        break;
+      }
+      if (it.state === 'RETURNED_FOR_REVISION') {
+        revisions++;
+        if (revisions >= MAX_REVISIONS) {
+          activating('daniel', 'Daniel Berg is rewriting the posts himself…');
+          it = await POST(`/content/${id}/vp-self-edit`);
+          selectedAgent = 'raphael';
+          toast('Daniel Berg has rewritten the posts — ready for your approval.', 'success');
+          break;
+        }
+        continue;
+      }
+      if (it.state === 'REJECTED') {
+        toast('VP rejected this content. Please create a new topic.', 'error');
+        selectedAgent = 'daniel';
+        break;
+      }
+      break;
+    }
+  } catch (e) {
+    toast(e.message, 'error');
+  } finally {
+    pipelineRunning = false;
+    currentPipelineStep = null;
+    currentItem = it;
+    renderDetail(area);
+  }
+}
+
 async function renderDetail(area) {
   if (!currentItem) { navigate('pipeline'); return; }
   const item = currentItem;
 
-  const stepIndex = WORKFLOW_STEPS.indexOf(item.state);
-  const progress = Math.max(0, Math.min(100, ((stepIndex) / (WORKFLOW_STEPS.length - 1)) * 100));
+  // Auto-select initial agent based on state when none is selected
+  if (!selectedAgent) {
+    const { state } = item;
+    if (['AWAITING_RAPHAEL_APPROVAL', 'APPROVED_FOR_PUBLISHING', 'PUBLISHED'].includes(state)) selectedAgent = 'raphael';
+    else if (state === 'RETURNED_FOR_REVISION' || state === 'REJECTED' || state === 'RETURNED_TO_VP_FOR_CORRECTIONS') selectedAgent = 'daniel';
+    else if (state === 'DRAFT_READY' || state === 'UNDER_VP_REVIEW') selectedAgent = 'sofia';
+    else if (state === 'ECONOMIST_BRIEF_READY') selectedAgent = 'economist';
+  }
+
+  const showStart  = item.state === 'IDEA_IDENTIFIED' && !pipelineRunning;
+  const showResume = ['RETURNED_FOR_REVISION', 'DRAFT_READY', 'UNDER_VP_REVIEW'].includes(item.state) && !pipelineRunning;
 
   area.innerHTML = `
-    <div class="detail-header">
+    <div class="detail-header-row">
       <button class="btn-back" id="back-btn">← Pipeline</button>
       <div class="detail-meta">
         ${badge(item.state)}
@@ -214,321 +861,64 @@ async function renderDetail(area) {
 
     <h2 class="detail-topic">${item.topic}</h2>
 
-    <!-- Progress bar -->
-    <div class="workflow-progress">
-      ${WORKFLOW_STEPS.map((s, i) => `
-        <div class="wp-step ${i <= stepIndex ? 'wp-done' : ''} ${s === item.state ? 'wp-current' : ''}">
-          <div class="wp-dot"></div>
-          <div class="wp-label">${STATES[s]?.label || s}</div>
-        </div>`).join('<div class="wp-line"></div>')}
+    <div class="agent-pipeline-section">
+      ${renderPipelineStatusBarHTML(item)}
+      <div class="agent-cubes-row">
+        ${renderAgentCubesHTML(item)}
+      </div>
+      ${showStart ? `
+        <div class="pipeline-start-action">
+          <button class="btn btn-primary btn-lg" id="gen-brief-btn">▶ Start Pipeline</button>
+          <span class="pipeline-start-hint">All agents will run automatically through to your approval gate</span>
+        </div>` : ''}
+      ${showResume ? `
+        <div class="pipeline-start-action">
+          <button class="btn btn-secondary btn-lg" id="gen-draft-btn">↺ Resume Pipeline</button>
+        </div>` : ''}
     </div>
 
-    <!-- Step panels -->
-    <div class="step-panels" id="step-panels"></div>
+    <div id="agent-content-panel-area">
+      ${selectedAgent ? renderAgentContentHTML(selectedAgent, item) : ''}
+    </div>
 
-    <!-- Audit history -->
-    <div class="audit-section">
+    <div class="audit-section-card">
       <h3 class="section-heading">Audit Trail</h3>
-      <div id="audit-list" class="audit-list">
-        ${renderAuditList(item.revision_history || [])}
-      </div>
+      <div class="audit-list">${renderAuditList(item.revision_history || [])}</div>
     </div>`;
 
   document.getElementById('back-btn').onclick = () => navigate('pipeline');
-  renderStepPanels(item);
-}
 
-function renderStepPanels(item) {
-  const container = document.getElementById('step-panels');
-  if (!container) return;
-
-  const panels = [];
-
-  // ── Step 1: Economist Brief ──────────────────────────────
-  const hasBrief = !!item.economist_brief?.summary;
-  const canBrief = item.state === 'IDEA_IDENTIFIED' || item.state === 'RETURNED_FOR_REVISION';
-  panels.push(`
-    <div class="step-panel ${hasBrief ? 'panel-done' : ''}">
-      <div class="panel-header">
-        <div class="panel-agent">
-          <div class="agent-avatar avatar-blue sm-avatar">ER</div>
-          <div>
-            <div class="panel-title">Dr. Ethan Ross — Economist Brief</div>
-            <div class="panel-sub">Macro-economic analysis and structured insight brief</div>
-          </div>
-        </div>
-        ${hasBrief ? '<span class="panel-check">✓</span>' : ''}
-      </div>
-      ${hasBrief ? `
-        <div class="panel-body">
-          <div class="brief-grid">
-            <div class="brief-field"><div class="brief-label">Summary</div><div class="brief-value">${item.economist_brief.summary}</div></div>
-            <div class="brief-field"><div class="brief-label">Israel Context</div><div class="brief-value">${item.economist_brief.israel_context}</div></div>
-            <div class="brief-field"><div class="brief-label">US Context</div><div class="brief-value">${item.economist_brief.us_context}</div></div>
-            <div class="brief-field"><div class="brief-label">Global Context</div><div class="brief-value">${item.economist_brief.global_context}</div></div>
-            <div class="brief-field"><div class="brief-label">Geopolitical Implications</div><div class="brief-value">${item.economist_brief.geopolitical_implications}</div></div>
-            <div class="brief-field"><div class="brief-label">Central Bank Stance</div><div class="brief-value">${item.economist_brief.central_bank_stance}</div></div>
-            <div class="brief-field"><div class="brief-label">Risks & Uncertainties</div><div class="brief-value">${(item.economist_brief.risks_and_uncertainties || []).join('<br>')}</div></div>
-            <div class="brief-field"><div class="brief-label">Actionable Insights</div><div class="brief-value">${(item.economist_brief.actionable_insights || []).join('<br>')}</div></div>
-          </div>
-        </div>` : ''}
-      ${canBrief || !hasBrief && item.state === 'IDEA_IDENTIFIED' ? `
-        <div class="panel-footer">
-          <button class="btn btn-primary" id="gen-brief-btn">Generate Economist Brief</button>
-        </div>` : ''}
-    </div>`);
-
-  // ── Step 2: Marketing Draft ──────────────────────────────
-  const hasDraft = !!item.marketing_draft?.english;
-  const canDraft = item.state === 'ECONOMIST_BRIEF_READY' || item.state === 'RETURNED_FOR_REVISION';
-  panels.push(`
-    <div class="step-panel ${hasDraft ? 'panel-done' : ''} ${!hasBrief ? 'panel-locked' : ''}">
-      <div class="panel-header">
-        <div class="panel-agent">
-          <div class="agent-avatar avatar-purple sm-avatar">SC</div>
-          <div>
-            <div class="panel-title">Sofia Chen — Marketing Draft</div>
-            <div class="panel-sub">Hebrew + English LinkedIn posts</div>
-          </div>
-        </div>
-        ${hasDraft ? '<span class="panel-check">✓</span>' : ''}
-      </div>
-      ${hasDraft ? `
-        <div class="panel-body">
-          <div class="draft-grid">
-            <div class="draft-panel">
-              <div class="draft-lang">🇮🇱 Hebrew</div>
-              <div class="draft-text" dir="rtl">${item.marketing_draft.hebrew?.text || ''}</div>
-              <div class="draft-meta">${(item.marketing_draft.hebrew?.hashtags || []).join(' ')}</div>
-            </div>
-            <div class="draft-panel">
-              <div class="draft-lang">🇺🇸 English</div>
-              <div class="draft-text">${item.marketing_draft.english?.text || ''}</div>
-              <div class="draft-meta">${(item.marketing_draft.english?.hashtags || []).join(' ')}</div>
-            </div>
-          </div>
-          <div class="brief-field" style="margin-top:1rem"><div class="brief-label">Key Message</div><div class="brief-value">${item.marketing_draft.key_message || ''}</div></div>
-        </div>` : ''}
-      ${canDraft && hasBrief ? `
-        <div class="panel-footer">
-          <button class="btn btn-primary" id="gen-draft-btn">Generate Marketing Draft</button>
-        </div>` : ''}
-    </div>`);
-
-  // ── Step 3: VP Review ────────────────────────────────────
-  const hasReview = !!item.vp_review?.decision;
-  const canReview = item.state === 'DRAFT_READY';
-  const decisionClass = { APPROVED: 'decision-approved', REVISE: 'decision-revise', REJECT: 'decision-reject' }[item.vp_review?.decision] || '';
-  panels.push(`
-    <div class="step-panel ${hasReview ? 'panel-done' : ''} ${!hasDraft ? 'panel-locked' : ''}">
-      <div class="panel-header">
-        <div class="panel-agent">
-          <div class="agent-avatar avatar-teal sm-avatar">DB</div>
-          <div>
-            <div class="panel-title">Daniel Berg — VP Review</div>
-            <div class="panel-sub">Factual accuracy, tone, brand alignment, reputational risk</div>
-          </div>
-        </div>
-        ${hasReview ? `<span class="panel-decision ${decisionClass}">${item.vp_review.decision}</span>` : ''}
-      </div>
-      ${hasReview ? `
-        <div class="panel-body">
-          <div class="brief-field"><div class="brief-label">Comments</div><div class="brief-value">${item.vp_review.comments}</div></div>
-          <div class="brief-field"><div class="brief-label">Scores</div><div class="brief-value">Factual: ${item.vp_review.factual_accuracy_score}/10 · Brand: ${item.vp_review.brand_alignment_score}/10 · Clarity: ${item.vp_review.clarity_score}/10 · Risk: ${item.vp_review.reputational_risk}</div></div>
-          ${item.vp_review.edits ? `<div class="brief-field"><div class="brief-label">Suggested Edits</div><div class="brief-value">${[item.vp_review.edits.hebrew ? '🇮🇱 ' + item.vp_review.edits.hebrew : '', item.vp_review.edits.english ? '🇺🇸 ' + item.vp_review.edits.english : '', item.vp_review.edits.general || ''].filter(Boolean).join('<br><br>')}</div></div>` : ''}
-        </div>` : ''}
-      ${canReview && hasDraft ? `
-        <div class="panel-footer">
-          <button class="btn btn-primary" id="submit-review-btn">Submit for VP Review</button>
-        </div>` : ''}
-    </div>`);
-
-  // ── Step 4: Raphael Approval ─────────────────────────────
-  const hasApproval = !!item.approval?.status && item.approval.status !== 'PENDING';
-  const canApprove = item.state === 'AWAITING_RAPHAEL_APPROVAL';
-  const approvalClass = item.approval?.status === 'APPROVED' ? 'decision-approved' : item.approval?.status === 'REJECTED' ? 'decision-reject' : '';
-  panels.push(`
-    <div class="step-panel ${hasApproval ? 'panel-done' : ''} ${!hasReview ? 'panel-locked' : ''}">
-      <div class="panel-header">
-        <div class="panel-agent">
-          <div class="agent-avatar avatar-gold sm-avatar">R</div>
-          <div>
-            <div class="panel-title">Raphael — Final Approval Gate</div>
-            <div class="panel-sub">No publication without explicit human approval</div>
-          </div>
-        </div>
-        ${hasApproval ? `<span class="panel-decision ${approvalClass}">${item.approval.status}</span>` : ''}
-      </div>
-      ${hasApproval ? `
-        <div class="panel-body">
-          <div class="brief-field"><div class="brief-label">Approved By</div><div class="brief-value">${item.approval.approved_by}</div></div>
-          <div class="brief-field"><div class="brief-label">At</div><div class="brief-value">${fmtDate(item.approval.approved_at)}</div></div>
-        </div>` : ''}
-      ${canApprove ? `
-        <div class="panel-body">
-          <div class="brief-field"><div class="brief-label">Final Review — Hebrew Post</div>
-            <div class="brief-value" dir="rtl" style="white-space:pre-wrap;line-height:1.7">${item.marketing_draft?.hebrew?.text || ''}</div>
-            <div style="margin-top:0.5rem;color:var(--text-muted);font-size:0.8rem">${(item.marketing_draft?.hebrew?.hashtags || []).join(' ')}</div>
-          </div>
-          <div class="brief-field" style="margin-top:1rem"><div class="brief-label">Final Review — English Post</div>
-            <div class="brief-value" style="white-space:pre-wrap;line-height:1.7">${item.marketing_draft?.english?.text || ''}</div>
-            <div style="margin-top:0.5rem;color:var(--text-muted);font-size:0.8rem">${(item.marketing_draft?.english?.hashtags || []).join(' ')}</div>
-          </div>
-        </div>
-        <div class="panel-footer" style="gap:0.75rem;display:flex">
-          <button class="btn btn-primary" id="approve-btn">Approve & Authorize</button>
-          <button class="btn btn-danger" id="reject-btn">Reject</button>
-        </div>` : ''}
-      ${item.state === 'UNDER_VP_REVIEW' && item.vp_review?.decision === 'APPROVED' ? `
-        <div class="panel-footer">
-          <button class="btn btn-primary" id="request-approval-btn">Send to Raphael</button>
-        </div>` : ''}
-    </div>`);
-
-  // ── Step 5: LinkedIn Publish ─────────────────────────────
-  const isPublished = item.state === 'PUBLISHED';
-  const canPublish = item.state === 'APPROVED_FOR_PUBLISHING';
-  panels.push(`
-    <div class="step-panel ${isPublished ? 'panel-done' : ''} ${!canPublish && !isPublished ? 'panel-locked' : ''}">
-      <div class="panel-header">
-        <div class="panel-agent">
-          <div class="panel-icon-li">
-            <svg viewBox="0 0 24 24" fill="currentColor" width="24" height="24"><path d="M19 3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14m-.5 15.5v-5.3a3.26 3.26 0 0 0-3.26-3.26c-.85 0-1.84.52-2.32 1.3v-1.11h-2.79v8.37h2.79v-4.93c0-.77.62-1.4 1.39-1.4a1.4 1.4 0 0 1 1.4 1.4v4.93h2.79M6.88 8.56a1.68 1.68 0 0 0 1.68-1.68c0-.93-.75-1.69-1.68-1.69a1.69 1.69 0 0 0-1.69 1.69c0 .93.76 1.68 1.69 1.68m1.39 9.94v-8.37H5.5v8.37h2.77z"/></svg>
-          </div>
-          <div>
-            <div class="panel-title">Publish to LinkedIn</div>
-            <div class="panel-sub">vision-virtue-success — Official Company Page</div>
-          </div>
-        </div>
-        ${isPublished ? '<span class="panel-check">✓ Published</span>' : ''}
-      </div>
-      ${isPublished && item.publish_result ? `
-        <div class="panel-body">
-          <div class="brief-field"><div class="brief-label">Published At</div><div class="brief-value">${fmtDate(item.publish_result.published_at)}</div></div>
-          ${item.publish_result.english_post_id ? `<div class="brief-field"><div class="brief-label">Post IDs</div><div class="brief-value">EN: ${item.publish_result.english_post_id}${item.publish_result.hebrew_post_id ? ' | HE: ' + item.publish_result.hebrew_post_id : ''}</div></div>` : ''}
-        </div>` : ''}
-      ${canPublish ? `
-        <div class="panel-footer">
-          <button class="btn btn-publish" id="publish-btn">Publish to LinkedIn Now</button>
-        </div>` : ''}
-    </div>`);
-
-  container.innerHTML = panels.join('');
-  bindDetailActions(item);
+  if (selectedAgent) {
+    const cubeEl = document.getElementById(`cube-${selectedAgent}`);
+    if (cubeEl) cubeEl.classList.add('cube-selected');
+  }
+  bindCubeClicks(item);
+  bindPanelActions(item);
 }
 
 function bindDetailActions(item) {
   const $ = id => document.getElementById(id);
 
-  // ── Full auto-pipeline ────────────────────────────────────
-  async function runFullPipeline(id) {
-    const MAX_REVISIONS = 3;
-    let it = currentItem;
-    let revisions = 0;
-    const area = document.getElementById('content-area');
-
-    const step = (msg) => toast(msg, 'info');
-
-    try {
-      // Step 1 — Economist Brief
-      if (it.state === 'IDEA_IDENTIFIED' || it.state === 'RETURNED_FOR_REVISION') {
-        if (it.state === 'IDEA_IDENTIFIED') {
-          step('Dr. Ethan Ross is analyzing the topic...');
-          it = await POST(`/content/${id}/economist-brief`);
-          currentItem = it;
-          renderDetail(area);
-        }
-      }
-
-      // Steps 2+3 — Draft → VP Review loop
-      while (revisions < MAX_REVISIONS) {
-        if (it.state === 'ECONOMIST_BRIEF_READY' || it.state === 'RETURNED_FOR_REVISION') {
-          step(`Sofia Chen is drafting${revisions > 0 ? ' (revision ' + revisions + ')' : ''}...`);
-          it = await POST(`/content/${id}/marketing-draft`);
-          currentItem = it;
-          renderDetail(area);
-        }
-
-        if (it.state === 'DRAFT_READY') {
-          step('Daniel Berg is reviewing the draft...');
-          it = await POST(`/content/${id}/vp-review`);
-          currentItem = it;
-          renderDetail(area);
-        }
-
-        if (it.state === 'AWAITING_RAPHAEL_APPROVAL') {
-          toast('Pipeline complete — ready for your approval.', 'success');
-          break;
-        }
-
-        if (it.state === 'RETURNED_FOR_REVISION') {
-          revisions++;
-          if (revisions >= MAX_REVISIONS) {
-            toast('VP requested revisions ' + MAX_REVISIONS + ' times. Please review manually.', 'error');
-            break;
-          }
-          step('VP requested revisions. Regenerating draft...');
-          continue;
-        }
-
-        if (it.state === 'REJECTED') {
-          toast('VP rejected this content. Please create a new topic.', 'error');
-          break;
-        }
-        break;
-      }
-    } catch(e) {
-      toast(e.message, 'error');
-    }
-  }
-
-  // Generate brief → triggers full pipeline
   const briefBtn = $('gen-brief-btn');
   if (briefBtn) briefBtn.onclick = async () => {
     setLoading(briefBtn, true);
     await runFullPipeline(item.id);
-    setLoading(briefBtn, false, 'Generate Economist Brief');
+    setLoading(briefBtn, false, '▶ Start Pipeline');
   };
 
-  // Retry pipeline from revision state
   const draftBtn = $('gen-draft-btn');
   if (draftBtn) draftBtn.onclick = async () => {
     setLoading(draftBtn, true);
     await runFullPipeline(item.id);
-    setLoading(draftBtn, false, 'Generate Marketing Draft');
+    setLoading(draftBtn, false, '↺ Resume Pipeline');
   };
 
-  // VP review (manual fallback)
-  const reviewBtn = $('submit-review-btn');
-  if (reviewBtn) reviewBtn.onclick = async () => {
-    setLoading(reviewBtn, true);
-    try {
-      currentItem = await POST(`/content/${item.id}/vp-review`);
-      toast('VP review complete.', 'success');
-      renderDetail(document.getElementById('content-area'));
-    } catch(e) { toast(e.message, 'error'); setLoading(reviewBtn, false, 'Submit for VP Review'); }
-  };
-
-  // Send to Raphael (manual fallback)
-  const reqBtn = $('request-approval-btn');
-  if (reqBtn) reqBtn.onclick = async () => {
-    setLoading(reqBtn, true);
-    try {
-      currentItem = await POST(`/content/${item.id}/request-approval`);
-      toast('Sent to Raphael for final approval.', 'success');
-      renderDetail(document.getElementById('content-area'));
-    } catch(e) { toast(e.message, 'error'); setLoading(reqBtn, false, 'Send to Raphael'); }
-  };
-
-  // Raphael approve
   const approveBtn = $('approve-btn');
   if (approveBtn) approveBtn.onclick = () => openRaphaelModal('approve', item);
 
-  // Raphael reject
   const rejectBtn = $('reject-btn');
   if (rejectBtn) rejectBtn.onclick = () => openRaphaelModal('reject', item);
 
-  // Publish
   const publishBtn = $('publish-btn');
   if (publishBtn) publishBtn.onclick = async () => {
     if (!confirm('Publish both Hebrew and English posts to Vision & Virtue LinkedIn page?')) return;
@@ -537,10 +927,9 @@ function bindDetailActions(item) {
       currentItem = await POST(`/content/${item.id}/publish`);
       toast('Successfully published to LinkedIn!', 'success');
       renderDetail(document.getElementById('content-area'));
-    } catch(e) { toast(e.message, 'error'); setLoading(publishBtn, false, 'Publish to LinkedIn Now'); }
+    } catch (e) { toast(e.message, 'error'); setLoading(publishBtn, false, 'Publish to LinkedIn Now'); }
   };
 }
-
 function renderAuditList(history) {
   if (!history || !history.length) return '<p class="audit-empty">No history yet.</p>';
   return history.slice().reverse().map(entry => `

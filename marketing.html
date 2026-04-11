@@ -170,6 +170,24 @@
     </div>
   </div>
 
-  <script src="marketing.js?v=4"></script>
+  <!-- ─── Annotation Toolbar (shown on text selection) ────────────────────── -->
+  <div id="ann-toolbar" class="ann-toolbar" style="display:none">
+    <button id="ann-toolbar-btn" class="ann-toolbar-btn">✎ Add Correction</button>
+  </div>
+
+  <!-- ─── Annotation Comment Popup ─────────────────────────────────────────── -->
+  <div id="ann-popup" class="ann-popup" style="display:none">
+    <div class="ann-popup-inner">
+      <div class="ann-popup-label">Describe the correction needed:</div>
+      <textarea id="ann-comment-input" class="ann-comment-textarea" rows="2"
+        placeholder="e.g. This rate figure is outdated"></textarea>
+      <div class="ann-popup-actions">
+        <button id="ann-cancel-btn" class="btn btn-secondary">Cancel</button>
+        <button id="ann-confirm-btn" class="btn btn-warning">Mark Yellow</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="marketing.js?v=10"></script>
 </body>
 </html>

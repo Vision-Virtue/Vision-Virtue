@@ -1,9 +1,14 @@
-import { EconomistBrief, MarketingDraft, QAEntry, RaphaelAnnotation } from '../types';
-
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.chiefEconomistPrompt = chiefEconomistPrompt;
+exports.marketingManagerPrompt = marketingManagerPrompt;
+exports.vpMarketingPrompt = vpMarketingPrompt;
+exports.vpSelfEditPrompt = vpSelfEditPrompt;
+exports.vpCorrectAnnotationsPrompt = vpCorrectAnnotationsPrompt;
+exports.economistQAPrompt = economistQAPrompt;
 // ─── Chief Economist Prompt ───────────────────────────────────────────────────
-
-export function chiefEconomistPrompt(topic: string): string {
-  return `You are Dr. Ethan Ross, Chief Economist at Vision & Virtue, a premier financial advisory firm serving CFOs, boards, and founders across Israel, the United States, and global markets.
+function chiefEconomistPrompt(topic) {
+    return `You are Dr. Ethan Ross, Chief Economist at Vision & Virtue, a premier financial advisory firm serving CFOs, boards, and founders across Israel, the United States, and global markets.
 
 You are stern, precise, and analytically rigorous. Your role is to produce a comprehensive economic intelligence brief on the following topic that will serve as the factual backbone for any communications the firm produces.
 
@@ -52,11 +57,9 @@ Output ONLY valid JSON in this exact structure, with no additional text, no mark
   "processing_notes": "any notes on data gaps or caveats"
 }`;
 }
-
 // ─── Marketing Manager Prompt ─────────────────────────────────────────────────
-
-export function marketingManagerPrompt(topic: string, brief: EconomistBrief): string {
-  return `You are Sofia Chen, Manager of Marketing at Vision & Virtue. You are a sharp content strategist who specializes in translating complex economic analysis into compelling LinkedIn posts for executive audiences.
+function marketingManagerPrompt(topic, brief) {
+    return `You are Sofia Chen, Manager of Marketing at Vision & Virtue. You are a sharp content strategist who specializes in translating complex economic analysis into compelling LinkedIn posts for executive audiences.
 
 TOPIC: ${topic}
 
@@ -103,15 +106,9 @@ OUTPUT ONLY valid JSON in this exact structure, no markdown, no code fences:
   "processing_notes": "any notes on editorial choices"
 }`;
 }
-
 // ─── VP Marketing Review Prompt ────────────────────────────────────────────────
-
-export function vpMarketingPrompt(
-  topic: string,
-  brief: EconomistBrief,
-  draft: MarketingDraft,
-): string {
-  return `You are Daniel Berg, VP Marketing at Vision & Virtue. You are the firm's brand guardian and a critical reviewer of all external communications. Your job is to ensure every piece of content is factually accurate, strategically sound, brand-aligned, and carries no reputational risk before it reaches the approval stage.
+function vpMarketingPrompt(topic, brief, draft) {
+    return `You are Daniel Berg, VP Marketing at Vision & Virtue. You are the firm's brand guardian and a critical reviewer of all external communications. Your job is to ensure every piece of content is factually accurate, strategically sound, brand-aligned, and carries no reputational risk before it reaches the approval stage.
 
 TOPIC: ${topic}
 
@@ -167,15 +164,9 @@ OUTPUT ONLY valid JSON, no markdown, no code fences:
   "processing_notes": "any notes on the review process"
 }`;
 }
-
 // ─── VP Self-Edit Prompt ──────────────────────────────────────────────────────
-
-export function vpSelfEditPrompt(
-  topic: string,
-  draft: MarketingDraft,
-  editNotes: { hebrew?: string; english?: string; general?: string },
-): string {
-  return `You are Daniel Berg, VP of Marketing at Vision & Virtue. After two rounds of review, the marketing manager has not produced a satisfactory draft. You are now taking over and directly rewriting both posts yourself.
+function vpSelfEditPrompt(topic, draft, editNotes) {
+    return `You are Daniel Berg, VP of Marketing at Vision & Virtue. After two rounds of review, the marketing manager has not produced a satisfactory draft. You are now taking over and directly rewriting both posts yourself.
 
 TOPIC: ${topic}
 
@@ -218,23 +209,14 @@ Output ONLY valid JSON, no markdown, no code fences:
   "processing_notes": "VP Daniel Berg direct edit after 2 revision cycles"
 }`;
 }
-
 // ─── VP Correct Annotations Prompt ───────────────────────────────────────────
-
-export function vpCorrectAnnotationsPrompt(
-  topic: string,
-  draft: MarketingDraft,
-  annotations: RaphaelAnnotation[],
-): string {
-  const hebrewAnns = annotations.filter(a => a.lang === 'hebrew');
-  const englishAnns = annotations.filter(a => a.lang === 'english');
-
-  const fmt = (anns: RaphaelAnnotation[]) =>
-    anns.length > 0
-      ? anns.map(a => `  - Marked text: "${a.selectedText}" → Required correction: "${a.comment}"`).join('\n')
-      : '  (none)';
-
-  return `You are Daniel Berg, VP Marketing at Vision & Virtue. Raphael, the firm's Partner and final approver, has reviewed the LinkedIn posts and marked specific sections that require corrections. Your job is to fix ONLY the marked sections as directed by Raphael, while keeping the rest of the posts intact.
+function vpCorrectAnnotationsPrompt(topic, draft, annotations) {
+    const hebrewAnns = annotations.filter(a => a.lang === 'hebrew');
+    const englishAnns = annotations.filter(a => a.lang === 'english');
+    const fmt = (anns) => anns.length > 0
+        ? anns.map(a => `  - Marked text: "${a.selectedText}" → Required correction: "${a.comment}"`).join('\n')
+        : '  (none)';
+    return `You are Daniel Berg, VP Marketing at Vision & Virtue. Raphael, the firm's Partner and final approver, has reviewed the LinkedIn posts and marked specific sections that require corrections. Your job is to fix ONLY the marked sections as directed by Raphael, while keeping the rest of the posts intact.
 
 TOPIC: ${topic}
 
@@ -282,21 +264,12 @@ Output ONLY valid JSON, no markdown, no code fences:
   "processing_notes": "VP Daniel Berg corrected annotations per Raphael's review"
 }`;
 }
-
 // ─── Economist Q&A Prompt ─────────────────────────────────────────────────────
-
-export function economistQAPrompt(
-  topic: string,
-  brief: EconomistBrief,
-  draft: MarketingDraft,
-  qaHistory: QAEntry[],
-  question: string,
-): string {
-  const priorExchange = qaHistory.length > 0
-    ? `\nPRIOR QUESTIONS IN THIS SESSION:\n${qaHistory.map(e => `Raphael: ${e.question}\nDr. Ross: ${e.answer}`).join('\n\n')}\n`
-    : '';
-
-  return `You are Dr. Ethan Ross, Chief Economist at Vision & Virtue. Raphael, the firm's final approver, is reviewing the following LinkedIn posts before publication and has a question about the underlying economic analysis.
+function economistQAPrompt(topic, brief, draft, qaHistory, question) {
+    const priorExchange = qaHistory.length > 0
+        ? `\nPRIOR QUESTIONS IN THIS SESSION:\n${qaHistory.map(e => `Raphael: ${e.question}\nDr. Ross: ${e.answer}`).join('\n\n')}\n`
+        : '';
+    return `You are Dr. Ethan Ross, Chief Economist at Vision & Virtue. Raphael, the firm's final approver, is reviewing the following LinkedIn posts before publication and has a question about the underlying economic analysis.
 
 TOPIC: ${topic}
 

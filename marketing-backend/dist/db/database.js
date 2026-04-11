@@ -1,34 +1,33 @@
-import Database from 'better-sqlite3';
-import path from 'path';
-import fs from 'fs';
-import dotenv from 'dotenv';
-
-dotenv.config();
-
-let db: Database.Database | null = null;
-
-export function getDb(): Database.Database {
-  if (db) return db;
-
-  const dbPath = process.env.DB_PATH || './data/marketing.db';
-  const resolvedPath = path.resolve(dbPath);
-  const dir = path.dirname(resolvedPath);
-
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
-
-  db = new Database(resolvedPath);
-  db.pragma('journal_mode = WAL');
-  db.pragma('foreign_keys = ON');
-
-  initializeSchema(db);
-
-  return db;
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.getDb = getDb;
+exports.closeDb = closeDb;
+const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
+const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
+const dotenv_1 = __importDefault(require("dotenv"));
+dotenv_1.default.config();
+let db = null;
+function getDb() {
+    if (db)
+        return db;
+    const dbPath = process.env.DB_PATH || './data/marketing.db';
+    const resolvedPath = path_1.default.resolve(dbPath);
+    const dir = path_1.default.dirname(resolvedPath);
+    if (!fs_1.default.existsSync(dir)) {
+        fs_1.default.mkdirSync(dir, { recursive: true });
+    }
+    db = new better_sqlite3_1.default(resolvedPath);
+    db.pragma('journal_mode = WAL');
+    db.pragma('foreign_keys = ON');
+    initializeSchema(db);
+    return db;
 }
-
-function initializeSchema(database: Database.Database): void {
-  database.exec(`
+function initializeSchema(database) {
+    database.exec(`
     CREATE TABLE IF NOT EXISTS content_items (
       id               TEXT PRIMARY KEY,
       topic            TEXT NOT NULL,
@@ -74,20 +73,18 @@ function initializeSchema(database: Database.Database): void {
       updated_at TEXT NOT NULL
     );
   `);
-
-  // Migrations — add new columns to existing tables
-  try {
-    database.exec(`ALTER TABLE content_items ADD COLUMN qa_history TEXT NOT NULL DEFAULT '[]'`);
-  } catch {
-    // Column already exists — safe to ignore
-  }
-
-  console.log('[DB] Schema initialized successfully');
+    // Migrations — add new columns to existing tables
+    try {
+        database.exec(`ALTER TABLE content_items ADD COLUMN qa_history TEXT NOT NULL DEFAULT '[]'`);
+    }
+    catch {
+        // Column already exists — safe to ignore
+    }
+    console.log('[DB] Schema initialized successfully');
 }
-
-export function closeDb(): void {
-  if (db) {
-    db.close();
-    db = null;
-  }
+function closeDb() {
+    if (db) {
+        db.close();
+        db = null;
+    }
 }

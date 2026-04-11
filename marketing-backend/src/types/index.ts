@@ -6,6 +6,7 @@ export type WorkflowState =
   | 'DRAFT_READY'
   | 'UNDER_VP_REVIEW'
   | 'AWAITING_RAPHAEL_APPROVAL'
+  | 'RETURNED_TO_VP_FOR_CORRECTIONS'
   | 'APPROVED_FOR_PUBLISHING'
   | 'PUBLISHED'
   | 'RETURNED_FOR_REVISION'
@@ -72,6 +73,14 @@ export interface VpReview {
   reviewed_at: string;
 }
 
+// ─── Economist Q&A ────────────────────────────────────────────────────────────
+
+export interface QAEntry {
+  question: string;
+  answer: string;
+  asked_at: string;
+}
+
 // ─── Approval ─────────────────────────────────────────────────────────────────
 
 export interface Approval {
@@ -79,6 +88,15 @@ export interface Approval {
   decision: 'APPROVED' | 'REJECTED' | 'RETURNED_FOR_REVISION';
   notes: string;
   approved_at: string;
+}
+
+// ─── Raphael Annotation ───────────────────────────────────────────────────────
+
+export interface RaphaelAnnotation {
+  id: string;
+  lang: 'hebrew' | 'english';
+  selectedText: string;
+  comment: string;
 }
 
 // ─── Content Metadata ─────────────────────────────────────────────────────────
@@ -89,6 +107,7 @@ export interface ContentMetadata {
   revision_count: number;
   time_to_approval?: number;
   tags?: string[];
+  raphael_annotations?: RaphaelAnnotation[];
 }
 
 // ─── Publish Result ───────────────────────────────────────────────────────────
@@ -115,6 +134,7 @@ export interface ContentItem {
   metadata: ContentMetadata;
   publish_result: PublishResult | null;
   revision_history: RevisionEntry[];
+  qa_history: QAEntry[];
   created_at: string;
   updated_at: string;
 }

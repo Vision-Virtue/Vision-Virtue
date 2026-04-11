@@ -73,6 +73,12 @@ router.post(
   asyncHandler((req, res) => contentController.requestVpReview(req, res)),
 );
 
+// VP self-edit after 3 revision cycles
+router.post(
+  '/content/:id/vp-self-edit',
+  asyncHandler((req, res) => contentController.vpSelfEdit(req, res)),
+);
+
 // Request Raphael approval (after VP approves)
 router.post(
   '/content/:id/request-approval',
@@ -91,6 +97,24 @@ router.post(
   '/content/:id/reject',
   requireRaphael,
   asyncHandler((req, res) => contentController.reject(req, res)),
+);
+
+// Ask the Economist a question (available during Raphael approval review)
+router.post(
+  '/content/:id/ask-economist',
+  asyncHandler((req, res) => contentController.askEconomist(req, res)),
+);
+
+// Raphael returns annotated posts to VP for corrections
+router.post(
+  '/content/:id/return-to-vp',
+  asyncHandler((req, res) => contentController.returnToVp(req, res)),
+);
+
+// VP applies AI corrections and sends back to Raphael
+router.post(
+  '/content/:id/vp-correct',
+  asyncHandler((req, res) => contentController.vpCorrect(req, res)),
 );
 
 // Publish to LinkedIn
