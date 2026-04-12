@@ -22,20 +22,22 @@ function tryAccess() {
     accessPin.focus();
     return;
   }
-  if (!key.startsWith('sk-ant-')) {
-    gateError.textContent = 'Please enter a valid Claude API key (starts with sk-ant-).';
+  // API key is optional — the backend uses its own key. A user key is accepted
+  // as a fallback and stored if provided.
+  if (key && !key.startsWith('sk-ant-')) {
+    gateError.textContent = 'API key must start with sk-ant- (or leave it blank).';
     accessApiKey.focus();
     return;
   }
 
   sessionStorage.setItem('vv_auth', '1');
-  sessionStorage.setItem('vv_key', key);
+  if (key) sessionStorage.setItem('vv_key', key);
   accessGate.style.display = 'none';
   agentsApp.style.display  = 'block';
 }
 
 // Auto-pass if already authenticated this session
-if (sessionStorage.getItem('vv_auth') === '1' && sessionStorage.getItem('vv_key')) {
+if (sessionStorage.getItem('vv_auth') === '1') {
   accessGate.style.display = 'none';
   agentsApp.style.display  = 'block';
 }
@@ -243,7 +245,7 @@ async function sendMessage() {
   const typingEl = appendTyping();
 
   try {
-    const responseText = await callClaude(agent.system, conversationHistory);
+    const responseText = await callClaude(currentAgent, conversationHistory);
     typingEl.remove();
 
     // Parse XML response
@@ -264,86 +266,51 @@ async function sendMessage() {
   chatInput.focus();
 }
 
-// ── Claude API call ──────────────────────────────────────────
-const MODELS = [
-  'claude-opus-4-5-20251001',
-  'claude-sonnet-4-5-20251001',
-  'claude-haiku-4-5-20251001',
-  'claude-3-5-sonnet-20241022',
-  'claude-3-5-haiku-20241022',
-];
+// ── Claude API call — routed through V&V backend (no CORS issues) ────────────
+const BACKEND_URL = 'https://vv-marketing-api.onrender.com';
 
-async function callClaude(systemPrompt, messages) {
-  const apiKey = sessionStorage.getItem('vv_key') || window.VV_API_KEY || '';
+async function callClaude(agentKey, messages) {
+  // messages is the full history including the latest user message at the end
+  const history = messages.slice(0, -1);
+  const message = messages[messages.length - 1].content;
 
-  if (!apiKey) {
-    throw new Error('No API key found. Please log out and re-enter your Claude API key (sk-ant-...).');
-  }
-  if (!apiKey.startsWith('sk-ant-')) {
-    throw new Error('Invalid API key format. Must start with sk-ant-...');
+  const headers = { 'Content-Type': 'application/json' };
+  // Pass user's key as fallback in case the backend env key is missing
+  const apiKey = sessionStorage.getItem('vv_key') || '';
+  if (apiKey && apiKey.startsWith('sk-ant-')) {
+    headers['x-api-key'] = apiKey;
   }
 
-  // Try each model in order until one succeeds
-  let lastErr = null;
-  for (const model of MODELS) {
-    let res;
-    try {
-      res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type':            'application/json',
-          'x-api-key':               apiKey,
-          'anthropic-version':       '2023-06-01',
-          'anthropic-beta':          'interleaved-thinking-2025-05-14',
-          'anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify({
-          model,
-          max_tokens: 4096,
-          system:     systemPrompt,
-          messages:   messages
-        })
-      });
-    } catch (networkErr) {
-      // Network / CORS failure — no response at all
+  let res;
+  try {
+    res = await fetch(`${BACKEND_URL}/api/chat/${agentKey}`, {
+      method:  'POST',
+      headers,
+      body: JSON.stringify({ message, history })
+    });
+  } catch (networkErr) {
+    throw new Error(
+      'Network error: Cannot reach the Vision & Virtue backend.\n\n' +
+      'The server may be starting up (Render free tier spins down after inactivity). ' +
+      'Please wait 30 seconds and try again.\n\n' +
+      `Detail: ${networkErr.message}`
+    );
+  }
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    const msg = errBody?.error?.message || `Server error ${res.status}`;
+    if (res.status === 500 && msg.includes('ANTHROPIC_API_KEY')) {
       throw new Error(
-        'Network error: Cannot reach the Anthropic API.\n\n' +
-        'Most likely cause: your browser is blocking the request (CORS policy).\n\n' +
-        'Fix: Open this page in a browser that allows cross-origin requests, ' +
-        'or disable CORS restrictions in your browser settings for testing.\n\n' +
-        `Technical detail: ${networkErr.message}`
+        'The backend API key is not configured.\n\n' +
+        'Enter your Claude API key (sk-ant-...) at the access gate to use it as a fallback.'
       );
     }
-
-    if (res.status === 529 || res.status === 529) {
-      lastErr = new Error('Anthropic API is overloaded (529). Please try again in a moment.');
-      continue; // try next model
-    }
-    if (res.status === 401) {
-      throw new Error('Authentication failed (401). Your API key is invalid or expired. Please log out and enter a valid sk-ant-... key.');
-    }
-    if (res.status === 403) {
-      throw new Error('Access denied (403). Your API key does not have permission to use this model. Check your Anthropic account tier.');
-    }
-    if (res.status === 429) {
-      throw new Error('Rate limit exceeded (429). You have hit your API usage limit. Check your Anthropic account quota.');
-    }
-    if (res.status === 404) {
-      // Model not found — try next model in list
-      lastErr = new Error(`Model "${model}" not found (404). Trying next model...`);
-      continue;
-    }
-    if (!res.ok) {
-      const errBody = await res.json().catch(() => ({}));
-      const msg = errBody?.error?.message || `API error ${res.status}`;
-      throw new Error(`${msg} (HTTP ${res.status})`);
-    }
-
-    const data = await res.json();
-    return data.content?.find(b => b.type === 'text')?.text ?? data.content[0].text;
+    throw new Error(`${msg} (HTTP ${res.status})`);
   }
 
-  throw lastErr || new Error('All Claude models failed. Check your API key and account status at console.anthropic.com.');
+  const data = await res.json();
+  return data.data.reply;
 }
 
 // ── DOM helpers ──────────────────────────────────────────────
