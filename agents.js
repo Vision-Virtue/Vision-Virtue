@@ -45,6 +45,18 @@ accessBtn.addEventListener('click', tryAccess);
   el.addEventListener('keydown', e => { if (e.key === 'Enter') tryAccess(); })
 );
 
+// Reset key — clears session and shows gate again
+document.getElementById('resetKeyBtn')?.addEventListener('click', () => {
+  sessionStorage.removeItem('vv_auth');
+  sessionStorage.removeItem('vv_key');
+  agentsApp.style.display  = 'none';
+  accessGate.style.display = 'flex';
+  accessPin.value = '';
+  accessApiKey.value = '';
+  gateError.textContent = '';
+  setTimeout(() => accessPin.focus(), 50);
+});
+
 // ── Agent definitions ────────────────────────────────────────
 const AGENTS = {
   cfo: {
@@ -253,36 +265,85 @@ async function sendMessage() {
 }
 
 // ── Claude API call ──────────────────────────────────────────
+const MODELS = [
+  'claude-opus-4-5-20251001',
+  'claude-sonnet-4-5-20251001',
+  'claude-haiku-4-5-20251001',
+  'claude-3-5-sonnet-20241022',
+  'claude-3-5-haiku-20241022',
+];
+
 async function callClaude(systemPrompt, messages) {
   const apiKey = sessionStorage.getItem('vv_key') || window.VV_API_KEY || '';
 
   if (!apiKey) {
-    throw new Error('Claude API key not configured. Set window.VV_API_KEY before using agents.');
+    throw new Error('No API key found. Please log out and re-enter your Claude API key (sk-ant-...).');
+  }
+  if (!apiKey.startsWith('sk-ant-')) {
+    throw new Error('Invalid API key format. Must start with sk-ant-...');
   }
 
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type':            'application/json',
-      'x-api-key':               apiKey,
-      'anthropic-version':       '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    },
-    body: JSON.stringify({
-      model:      'claude-sonnet-4-6',
-      max_tokens: 1024,
-      system:     systemPrompt,
-      messages:   messages
-    })
-  });
+  // Try each model in order until one succeeds
+  let lastErr = null;
+  for (const model of MODELS) {
+    let res;
+    try {
+      res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type':            'application/json',
+          'x-api-key':               apiKey,
+          'anthropic-version':       '2023-06-01',
+          'anthropic-beta':          'interleaved-thinking-2025-05-14',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 4096,
+          system:     systemPrompt,
+          messages:   messages
+        })
+      });
+    } catch (networkErr) {
+      // Network / CORS failure — no response at all
+      throw new Error(
+        'Network error: Cannot reach the Anthropic API.\n\n' +
+        'Most likely cause: your browser is blocking the request (CORS policy).\n\n' +
+        'Fix: Open this page in a browser that allows cross-origin requests, ' +
+        'or disable CORS restrictions in your browser settings for testing.\n\n' +
+        `Technical detail: ${networkErr.message}`
+      );
+    }
 
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.error?.message || `API error ${res.status}`);
+    if (res.status === 529 || res.status === 529) {
+      lastErr = new Error('Anthropic API is overloaded (529). Please try again in a moment.');
+      continue; // try next model
+    }
+    if (res.status === 401) {
+      throw new Error('Authentication failed (401). Your API key is invalid or expired. Please log out and enter a valid sk-ant-... key.');
+    }
+    if (res.status === 403) {
+      throw new Error('Access denied (403). Your API key does not have permission to use this model. Check your Anthropic account tier.');
+    }
+    if (res.status === 429) {
+      throw new Error('Rate limit exceeded (429). You have hit your API usage limit. Check your Anthropic account quota.');
+    }
+    if (res.status === 404) {
+      // Model not found — try next model in list
+      lastErr = new Error(`Model "${model}" not found (404). Trying next model...`);
+      continue;
+    }
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      const msg = errBody?.error?.message || `API error ${res.status}`;
+      throw new Error(`${msg} (HTTP ${res.status})`);
+    }
+
+    const data = await res.json();
+    return data.content?.find(b => b.type === 'text')?.text ?? data.content[0].text;
   }
 
-  const data = await res.json();
-  return data.content[0].text;
+  throw lastErr || new Error('All Claude models failed. Check your API key and account status at console.anthropic.com.');
 }
 
 // ── DOM helpers ──────────────────────────────────────────────
@@ -339,7 +400,9 @@ function appendError(msg) {
   const msgs = document.getElementById('chatMessages');
   const el = document.createElement('div');
   el.className = 'api-error';
-  el.textContent = `Error: ${msg}`;
+  // Render newlines in error messages
+  el.innerHTML = '<strong>Error:</strong> ' +
+    msg.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/\n/g,'<br>');
   msgs.appendChild(el);
   msgs.scrollTop = msgs.scrollHeight;
 }
