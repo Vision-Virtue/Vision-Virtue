@@ -12,19 +12,20 @@ from pptx.enum.text import PP_ALIGN
 from pptx.chart.data import ChartData
 from pptx.enum.chart import XL_CHART_TYPE
 
-# ── Colors ─────────────────────────────────────────────────────────────────────
-NAVY      = RGBColor(0x24, 0x28, 0x52)
-NAVY2     = RGBColor(0x1A, 0x1E, 0x42)
-NAVY3     = RGBColor(0x0F, 0x11, 0x25)
-GOLD      = RGBColor(0xE7, 0xCC, 0x59)
-BLUE      = RGBColor(0x4A, 0x66, 0xAC)
-LBLUE     = RGBColor(0x8F, 0xA1, 0xCF)
+# ── Colors — website palette (deep blue-black + clear blue) ────────────────────
+NAVY      = RGBColor(0x0A, 0x16, 0x28)  # Deep blue-black (website bg)
+NAVY2     = RGBColor(0x10, 0x20, 0x3C)  # Panel / card bg
+NAVY3     = RGBColor(0x06, 0x0E, 0x1A)  # Table headers / darkest
+GOLD      = RGBColor(0xE7, 0xCC, 0x59)  # Primary accent — unchanged
+BLUE      = RGBColor(0x3D, 0x6F, 0xCE)  # Website button blue (clear blue)
+LBLUE     = RGBColor(0x6B, 0x9B, 0xDB)  # Soft blue labels
 WHITE     = RGBColor(0xFF, 0xFF, 0xFF)
 LGRAY     = RGBColor(0xC8, 0xD0, 0xE0)
-GRAY      = RGBColor(0x88, 0x92, 0xAA)
+GRAY      = RGBColor(0x70, 0x85, 0xA8)
 GREEN     = RGBColor(0x4C, 0xAF, 0x7A)
 RED       = RGBColor(0xE0, 0x5B, 0x5B)
-TBLALT    = RGBColor(0x1E, 0x22, 0x48)
+TBLALT    = RGBColor(0x0D, 0x1B, 0x32)  # Alternating table row
+VMARK_COL = RGBColor(0x14, 0x2A, 0x4A)  # Subtle V watermark colour
 
 # ── Canvas ─────────────────────────────────────────────────────────────────────
 prs = Presentation()
@@ -70,10 +71,28 @@ def hdr(sl, title, sub=None):
         tx(sl, 0.45, 0.66, 12.4, 0.28, sub, 10, LBLUE, italic=True)
     box(sl, 0.45, 0.88, 12.4, 0.045, GOLD)
 
+def vmark(sl):
+    """Bottom-right watermark: large semi-transparent V inside a gold circle."""
+    # Dimensions: 2.1" circle, bottom-right corner
+    cx, cy, r = 11.72, 5.32, 1.05   # centre x, centre y, radius (inches)
+    # Gold circle — no fill, gold stroke
+    o = sl.shapes.add_shape(
+        9,                             # oval / ellipse
+        Inches(cx - r), Inches(cy - r),
+        Inches(r * 2), Inches(r * 2)
+    )
+    o.fill.background()               # transparent fill
+    o.line.color.rgb = GOLD
+    o.line.width = Pt(2.0)
+    # Muted V — visually transparent against NAVY bg
+    tx(sl, cx - r + 0.08, cy - r - 0.08, r * 2 - 0.16, r * 2,
+       'V', 110, VMARK_COL, bold=True, align=PP_ALIGN.CENTER)
+
 def ftr(sl, n):
     tx(sl, 0.3, 7.1, 2.5, 0.3, '▶ VISION & VIRTUE', 7, GOLD, bold=True)
     tx(sl, 3.0, 7.1, 7.0, 0.3, 'CONFIDENTIAL — NOT FOR DISTRIBUTION', 7, GRAY)
     tx(sl, 12.0, 7.1, 1.1, 0.3, f'{n} / {TOTAL}', 8, GRAY, align=PP_ALIGN.RIGHT)
+    vmark(sl)
 
 def panel(sl, metrics, x=7.05, y=0.92, w=5.85, h=6.02):
     """metrics = list of (label, value, note)"""
@@ -146,7 +165,7 @@ s = blank(); bg(s)
 box(s, 0, 0, 13.33, 0.07, GOLD)
 box(s, 0, 7.43, 13.33, 0.07, GOLD)
 # Large decorative V
-tx(s, 8.8, 0.5, 5.0, 6.5, 'V', 300, RGBColor(0x2C,0x31,0x60), bold=True)
+tx(s, 8.8, 0.5, 5.0, 6.5, 'V', 300, RGBColor(0x12,0x24,0x40), bold=True)
 # Logo
 tx(s, 0.5, 0.18, 0.9, 0.5, 'V', 28, GOLD, bold=True)
 tx(s, 1.35, 0.27, 4.5, 0.35, 'VISION & VIRTUE', 10.5, WHITE, bold=True)
@@ -159,6 +178,7 @@ tx(s, 0.7, 3.32, 8.5, 0.45, 'Investor Presentation', 22, WHITE, bold=True)
 box(s, 0.5, 3.85, 5.5, 0.04, GOLD)
 tx(s, 0.5, 3.97, 8.0, 0.32, '[DATE]  ·  STRICTLY CONFIDENTIAL', 10, GRAY)
 tx(s, 0.5, 4.28, 8.0, 0.3, 'Prepared for: [INVESTOR / BOARD MEMBER]', 10, GRAY, italic=True)
+vmark(s)
 note(s, "Set the stage. Speak clearly: company name, industry, stage.\n"
      "Investor framing: 'We are building [X] for [ICP]. We have [traction]. "
      "We are asking for [amount] to achieve [milestone]. Let me show you the business.'")
