@@ -776,11 +776,46 @@ function wfComment(agent, text) {
   list.appendChild(c);
 }
 
+// ── Read actual content from uploaded files ────────────────────
+async function extractFileContents(files) {
+  if (!files || files.length === 0) return '';
+  const MAX_CHARS = 3000; // cap per file to avoid oversized prompts
+  const parts = [];
+
+  for (const file of files) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    try {
+      if (['xlsx', 'xls'].includes(ext)) {
+        // Parse with SheetJS (already loaded on page)
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array' });
+        let text = `=== ${file.name} (Excel) ===\n`;
+        wb.SheetNames.forEach(sheetName => {
+          const csv = XLSX.utils.sheet_to_csv(wb.Sheets[sheetName]);
+          text += `--- Sheet: ${sheetName} ---\n${csv.substring(0, MAX_CHARS)}\n`;
+        });
+        parts.push(text);
+      } else if (['csv', 'txt', 'md', 'json'].includes(ext)) {
+        const text = await file.text();
+        parts.push(`=== ${file.name} ===\n${text.substring(0, MAX_CHARS)}`);
+      } else if (ext === 'pdf') {
+        // Cannot parse PDF client-side without extra library — flag it
+        parts.push(`=== ${file.name} (PDF) ===\n[PDF content not extractable in browser. Use filename and any context clues from this file's name to inform assumptions.]`);
+      } else {
+        parts.push(`=== ${file.name} ===\n[Binary or unsupported file type — use filename as context only.]`);
+      }
+    } catch (err) {
+      parts.push(`=== ${file.name} ===\n[Could not read file: ${err.message}]`);
+    }
+  }
+  return parts.join('\n\n');
+}
+
 // ── Core workflow execution ────────────────────────────────────
 async function startFinanceWorkflow() {
   const ctx = getCompanyContext();
   const ctxStr = contextSummary(ctx);
-  const files = fileNamesList();
+  const fileNames = fileNamesList();
 
   // Show workflow section
   const wfSection = document.getElementById('wfSection');
@@ -801,25 +836,32 @@ async function startFinanceWorkflow() {
   try {
     // ─── STAGE 1: ANALYSIS ─────────────────────────────────────
     wfSetStage('analysis');
-    wfLog('System', 'Workflow initiated. Ingesting company context and uploaded materials.');
+    wfLog('System', 'Workflow initiated. Reading uploaded files…');
     wfLog('System', `Context: ${ctxStr}`);
-    wfLog('System', `Files: ${files}`);
+
+    // Extract actual content from uploaded files
+    const fileContent = await extractFileContents(uploadedFiles);
+    wfLog('System', `Files parsed: ${fileNames || 'none'}.`);
 
     wfLog('Director of Finance', 'Analyzing uploaded materials and extracting financial data…');
-    const analysisPrompt = `You are the Director of Finance at Vision & Virtue Partnership. Analyze the following company context and uploaded file list. Extract the key financial, operational, and commercial data points that will inform the Excel financial model and PowerPoint presentation.
+    const analysisPrompt = `You are the Director of Finance at Vision & Virtue Partnership. Analyze the company context and uploaded document contents below. Extract all financial, operational, and commercial data to inform the Excel financial model and investor presentation.
 
 Company Context: ${ctxStr}
-Uploaded Files: ${files}
+Uploaded Files: ${fileNames || 'none'}
 
-Based on this context, provide:
-1. A summary of what financial data is likely available
-2. Key assumptions that need to be made for missing data
-3. The 5-year revenue growth logic (consult with VC/PE expert thinking)
+--- UPLOADED FILE CONTENTS ---
+${fileContent || 'No files uploaded — derive all figures from the structured context and reasonable industry assumptions.'}
+--- END FILE CONTENTS ---
+
+Based on the above, provide:
+1. A summary of the actual financial data found in the files (revenue, costs, margins, customers, etc.)
+2. Key assumptions for any data not present in the files
+3. The 5-year revenue growth logic (grounded in the actual data where available)
 4. TAM/SAM/SOM estimates
-5. Key financial metrics to model (ARPU, CAC, churn, margins, etc.)
-6. Recommended structure for the P&L, Cash Flow, and KPI dashboard
+5. Key metrics to model (ARPU, CAC, churn, margins, NRR, etc.)
+6. Recommended P&L, Cash Flow, and KPI dashboard structure
 
-Be specific, quantitative, and investor-grade. Flag all assumptions clearly.`;
+Be specific and quantitative. Flag every assumption clearly vs. data taken from the files.`;
 
     const analysisResult = await callClaude('dof', [{ role: 'user', content: analysisPrompt }]);
     wfLog('Director of Finance', 'Financial analysis complete. Extracted key data points and assumptions.');
@@ -854,6 +896,7 @@ Be specific and quantitative.`;
 Company Context: ${ctxStr}
 Analysis: ${analysisResult.substring(0, 1500)}
 VC Expert Input: ${vcResult.substring(0, 1500)}
+Source Data (from uploaded files, use this to populate real numbers): ${fileContent ? fileContent.substring(0, 2000) : 'None — use assumptions from analysis.'}
 
 IMPORTANT: Return your response as valid JSON (and ONLY JSON, no markdown fences, no extra text) with exactly this structure:
 

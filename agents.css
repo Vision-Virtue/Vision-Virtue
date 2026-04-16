@@ -265,6 +265,22 @@
 .dof-avatar  { box-shadow: 0 0 0 3px rgba(91,141,224,0.4); }
 .ctrl-avatar { box-shadow: 0 0 0 3px rgba(42,138,122,0.4); }
 .asst-avatar { box-shadow: 0 0 0 3px rgba(130,80,200,0.4); }
+.vc-avatar   { box-shadow: 0 0 0 3px rgba(231,204,89,0.5); }
+
+.vc-initials-avatar {
+  background: linear-gradient(135deg, #162340 0%, #1e3260 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.vc-initials-avatar span {
+  font-family: var(--font-head);
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #E7CC59;
+  letter-spacing: 0.04em;
+  user-select: none;
+}
 
 .agent-rank {
   font-family: var(--font-sans);
