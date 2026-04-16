@@ -898,63 +898,63 @@ Analysis: ${analysisResult.substring(0, 1500)}
 VC Expert Input: ${vcResult.substring(0, 1500)}
 Source Data (from uploaded files, use this to populate real numbers): ${fileContent ? fileContent.substring(0, 2000) : 'None — use assumptions from analysis.'}
 
-IMPORTANT: Return your response as valid JSON (and ONLY JSON, no markdown fences, no extra text) with exactly this structure:
+IMPORTANT: Return ONLY valid JSON (no markdown fences, no text outside the JSON). Use this exact schema:
 
 {
   "companyName": "string",
   "industry": "string",
   "stage": "string",
   "round": "string",
-  "years": ["Year 1","Year 2","Year 3","Year 4","Year 5"],
+  "startYear": 2025,
   "pnl": {
-    "revenue": [num,num,num,num,num],
-    "cogs": [num,num,num,num,num],
-    "grossProfit": [num,num,num,num,num],
-    "rd": [num,num,num,num,num],
-    "sm": [num,num,num,num,num],
-    "ga": [num,num,num,num,num],
-    "ebitda": [num,num,num,num,num],
-    "grossMarginPct": [num,num,num,num,num],
-    "ebitdaMarginPct": [num,num,num,num,num]
+    "saasRevenue":  [num,num,num,num,num],
+    "otherRevenue": [num,num,num,num,num],
+    "cogsTotal":    [num,num,num,num,num],
+    "rdTotal":      [num,num,num,num,num],
+    "smTotal":      [num,num,num,num,num],
+    "gaTotal":      [num,num,num,num,num],
+    "ebitda":       [num,num,num,num,num]
   },
   "cashFlow": {
-    "ebitda": [num,num,num,num,num],
-    "workingCapital": [num,num,num,num,num],
-    "capex": [num,num,num,num,num],
-    "financing": [num,num,num,num,num],
-    "netCash": [num,num,num,num,num],
-    "cumulativeCash": [num,num,num,num,num]
+    "openingCash": num,
+    "capex":       [num,num,num,num,num],
+    "financing":   [num,num,num,num,num],
+    "taxes":       [num,num,num,num,num],
+    "arDays": num,
+    "apDays": num
   },
   "kpis": {
-    "arr": [num,num,num,num,num],
-    "mrr": [num,num,num,num,num],
-    "arpu": [num,num,num,num,num],
-    "cac": [num,num,num,num,num],
-    "ltv": [num,num,num,num,num],
-    "churnPct": [num,num,num,num,num],
-    "nrrPct": [num,num,num,num,num],
-    "customers": [num,num,num,num,num]
+    "customers":      [num,num,num,num,num],
+    "arpu":           [num,num,num,num,num],
+    "cac":            [num,num,num,num,num],
+    "ltv":            [num,num,num,num,num],
+    "churnPct":       [num,num,num,num,num],
+    "nrrPct":         [num,num,num,num,num],
+    "mrr":            [num,num,num,num,num],
+    "arr":            [num,num,num,num,num],
+    "tam":            "string (e.g. '$5B')",
+    "penetrationPct": [num,num,num,num,num]
   },
   "assumptions": [
-    {"item": "string", "value": "string", "rationale": "string"}
+    {"item":"string","value":"string","rationale":"string"}
   ],
   "slides": {
-    "execSummary": {"title":"string","bullets":["string"],"metrics":[{"label":"string","value":"string"}]},
-    "businessModel": {"title":"string","bullets":["string"]},
-    "revenueModel": {"title":"string","bullets":["string"],"metrics":[{"label":"string","value":"string"}]},
-    "marketOpportunity": {"title":"string","bullets":["string"],"tam":"string","sam":"string","som":"string"},
-    "financialHighlights": {"title":"string","bullets":["string"],"metrics":[{"label":"string","value":"string"}]},
-    "pnlSummary": {"title":"string","commentary":"string"},
-    "cashFlowRunway": {"title":"string","bullets":["string"],"runway":"string"},
-    "growthStrategy": {"title":"string","bullets":["string"]},
-    "unitEconomics": {"title":"string","bullets":["string"],"metrics":[{"label":"string","value":"string"}]},
-    "kpiDashboard": {"title":"string","highlights":["string"]},
-    "useOfFunds": {"title":"string","allocations":[{"category":"string","amount":"string","pct":"string"}]},
-    "closing": {"title":"string","bullets":["string"],"contactInfo":"string"}
+    "execSummary":        {"title":"string","bullets":["string"],"metrics":[{"label":"string","value":"string"}]},
+    "businessModel":      {"title":"string","bullets":["string"]},
+    "revenueModel":       {"title":"string","bullets":["string"],"metrics":[{"label":"string","value":"string"}]},
+    "marketOpportunity":  {"title":"string","bullets":["string"],"tam":"string","sam":"string","som":"string"},
+    "financialHighlights":{"title":"string","bullets":["string"],"metrics":[{"label":"string","value":"string"}]},
+    "pnlSummary":         {"title":"string","commentary":"string"},
+    "cashFlowRunway":     {"title":"string","bullets":["string"],"runway":"string"},
+    "growthStrategy":     {"title":"string","bullets":["string"]},
+    "unitEconomics":      {"title":"string","bullets":["string"],"metrics":[{"label":"string","value":"string"}]},
+    "kpiDashboard":       {"title":"string","highlights":["string"]},
+    "useOfFunds":         {"title":"string","allocations":[{"category":"string","amount":"string","pct":"string"}]},
+    "closing":            {"title":"string","bullets":["string"],"contactInfo":"string"}
   }
 }
 
-All numbers must be realistic, internally consistent, and in thousands (e.g. 5000 = $5M). Use the VC Expert's guidance for growth and market assumptions. Gross Profit must equal Revenue minus COGS. EBITDA must equal Gross Profit minus R&D minus S&M minus G&A. Provide at least 6 assumptions.`;
+Rules: all numbers in $K (5000 = $5M). startYear = current calendar year. saasRevenue+otherRevenue = total revenue. cogsTotal < total revenue. ebitda = (saasRevenue+otherRevenue-cogsTotal) - rdTotal - smTotal - gaTotal. arDays 30-90, apDays 20-60. Provide at least 8 detailed assumptions. Use VC Expert's guidance for growth rates, TAM, and penetration.`;
 
     const buildResult = await callClaude('dof', [{ role: 'user', content: buildPrompt }]);
     wfLog('Director of Finance', 'Initial build complete. Submitting to CFO for review.');
@@ -1059,7 +1059,7 @@ Provide your decision: APPROVED or REVISION NEEDED with specific comments.`;
     wfLog('System', `Parsed model for "${modelData.companyName}". Generating files…`);
 
     // Generate Excel
-    const xlsBlob = generateExcelModel(modelData);
+    const xlsBlob = await generateExcelModel(modelData);
     document.getElementById('wfXlsStatus').textContent = 'Ready';
     const dlXls = document.getElementById('wfDownloadXls');
     if (dlXls) {
@@ -1117,14 +1117,11 @@ function downloadBlob(blob, filename) {
 
 // ── Parse JSON from AI response (with robust fallback) ─────────────────────
 function parseModelJson(primary, fallback, ctx) {
-  const defaultYears = ['Year 1','Year 2','Year 3','Year 4','Year 5'];
   const z5 = [0,0,0,0,0];
 
   function tryParse(text) {
     if (!text) return null;
-    // Strip markdown fences if present
     const clean = text.replace(/^```[\w]*\n?/m,'').replace(/```$/m,'').trim();
-    // Find first { and last }
     const start = clean.indexOf('{');
     const end   = clean.lastIndexOf('}');
     if (start === -1 || end === -1) return null;
@@ -1133,38 +1130,72 @@ function parseModelJson(primary, fallback, ctx) {
 
   const data = tryParse(primary) || tryParse(fallback) || {};
 
-  // Normalise with safe defaults
   const company = data.companyName || ctx?.industry || 'Company';
-  const years   = data.years || defaultYears;
+  const startYear = data.startYear || new Date().getFullYear();
+  const years = [0,1,2,3,4].map(i => String(startYear + i));
+
+  // Revenue components
+  const saasRevenue  = data.pnl?.saasRevenue  || [400,960,2240,4400,7600];
+  const otherRevenue = data.pnl?.otherRevenue || [100,240, 560,1100,1900];
+  const revenue      = saasRevenue.map((v,i) => v + otherRevenue[i]);
+  const cogsTotal    = data.pnl?.cogsTotal    || revenue.map(v => Math.round(v * 0.40));
+  const grossProfit  = revenue.map((v,i) => v - cogsTotal[i]);
+  const grossMarginPct = revenue.map((v,i) => v ? Math.round(grossProfit[i]/v*100) : 0);
+  const rdTotal      = data.pnl?.rdTotal      || revenue.map(v => Math.round(v * 0.18));
+  const smTotal      = data.pnl?.smTotal      || revenue.map(v => Math.round(v * 0.22));
+  const gaTotal      = data.pnl?.gaTotal      || revenue.map(v => Math.round(v * 0.10));
+  const ebitda       = data.pnl?.ebitda       || grossProfit.map((gp,i) => gp - rdTotal[i] - smTotal[i] - gaTotal[i]);
+  const ebitdaMarginPct = revenue.map((v,i) => v ? Math.round(ebitda[i]/v*100) : 0);
+
   const pnl = {
-    revenue:         (data.pnl?.revenue)         || [500,1200,2800,5500,9500],
-    cogs:            (data.pnl?.cogs)            || [200, 480,1120,2200,3800],
-    grossProfit:     (data.pnl?.grossProfit)     || [300, 720,1680,3300,5700],
-    rd:              (data.pnl?.rd)              || [150, 300, 560, 900,1400],
-    sm:              (data.pnl?.sm)              || [200, 420, 840,1500,2400],
-    ga:              (data.pnl?.ga)              || [100, 180, 300, 450, 650],
-    ebitda:          (data.pnl?.ebitda)          || [-150,-180, -20, 450,1250],
-    grossMarginPct:  (data.pnl?.grossMarginPct)  || [60,  60,  60,  60,  60],
-    ebitdaMarginPct: (data.pnl?.ebitdaMarginPct) || [-30,-15,  -1,   8,  13],
+    saasRevenue, otherRevenue, revenue, cogsTotal, grossProfit, grossMarginPct,
+    rdTotal, smTotal, gaTotal, ebitda, ebitdaMarginPct,
   };
+
+  // Cash flow — derive working capital from arDays/apDays if available
+  const openingCash = data.cashFlow?.openingCash ?? 1000;
+  const arDays      = data.cashFlow?.arDays ?? 45;
+  const apDays      = data.cashFlow?.apDays ?? 30;
+  const cfCapex     = data.cashFlow?.capex     || revenue.map(v => -Math.round(v * 0.05));
+  const cfFinancing = data.cashFlow?.financing || [3000,0,2000,0,0];
+  const cfTaxes     = data.cashFlow?.taxes     || ebitda.map(v => v > 0 ? -Math.round(v*0.21) : 0);
+  // AR change = (arDays/365)*deltaRevenue; AP change = (apDays/365)*deltaCOGS
+  const wcChanges = revenue.map((rev,i) => {
+    const prevRev  = i === 0 ? 0 : revenue[i-1];
+    const prevCogs = i === 0 ? 0 : cogsTotal[i-1];
+    const arChange  = -Math.round((arDays/365)*(rev - prevRev));
+    const apChange  =  Math.round((apDays/365)*(cogsTotal[i] - prevCogs));
+    return arChange + apChange;
+  });
+  // Opening balances per year
+  const openingBalances = years.map((_,i) => {
+    if (i === 0) return openingCash;
+    let bal = openingCash;
+    for (let j = 0; j < i; j++) bal += ebitda[j] + wcChanges[j] + cfCapex[j] + cfFinancing[j] + cfTaxes[j];
+    return Math.round(bal);
+  });
+  const netCash = ebitda.map((v,i) => Math.round(v + wcChanges[i] + cfCapex[i] + cfFinancing[i] + cfTaxes[i]));
+  const closingBalances = openingBalances.map((v,i) => Math.round(v + netCash[i]));
+
   const cashFlow = {
-    ebitda:          data.cashFlow?.ebitda         || pnl.ebitda,
-    workingCapital:  data.cashFlow?.workingCapital || [-50,-80,-120,-180,-250],
-    capex:           data.cashFlow?.capex          || [-30,-50, -80,-120,-160],
-    financing:       data.cashFlow?.financing      || [3000,0,2000,0,0],
-    netCash:         data.cashFlow?.netCash        || [2770,-330,1800,150,840],
-    cumulativeCash:  data.cashFlow?.cumulativeCash || [2770,2440,4240,4390,5230],
+    openingCash, openingBalances, arDays, apDays,
+    ebitda, wcChanges, capex: cfCapex, financing: cfFinancing, taxes: cfTaxes,
+    netCash, closingBalances,
   };
+
   const kpis = {
-    arr:      data.kpis?.arr      || [400,960,2240,4400,7600],
-    mrr:      data.kpis?.mrr      || [33, 80, 187, 367, 633],
-    arpu:     data.kpis?.arpu     || [8,  8,   9,  10,  11],
-    cac:      data.kpis?.cac      || [120,110, 100,  90,  85],
-    ltv:      data.kpis?.ltv      || [480,528, 576, 650, 715],
-    churnPct: data.kpis?.churnPct || [20, 18,  16,  14,  12],
-    nrrPct:   data.kpis?.nrrPct   || [105,108, 112, 115, 118],
-    customers:data.kpis?.customers|| [50,120, 250, 440, 690],
+    arr:           data.kpis?.arr           || saasRevenue,
+    mrr:           data.kpis?.mrr           || saasRevenue.map(v => Math.round(v/12)),
+    arpu:          data.kpis?.arpu          || [8,  8,   9,  10,  11],
+    cac:           data.kpis?.cac           || [120,110, 100,  90,  85],
+    ltv:           data.kpis?.ltv           || [480,528, 576, 650, 715],
+    churnPct:      data.kpis?.churnPct      || [20, 18,  16,  14,  12],
+    nrrPct:        data.kpis?.nrrPct        || [105,108, 112, 115, 118],
+    customers:     data.kpis?.customers     || [50,120, 250, 440, 690],
+    tam:           data.kpis?.tam           || '$5B',
+    penetrationPct:data.kpis?.penetrationPct|| [0.1,0.2,0.5,0.9,1.4],
   };
+
   const assumptions = data.assumptions?.length
     ? data.assumptions
     : [
@@ -1173,111 +1204,405 @@ function parseModelJson(primary, fallback, ctx) {
         {item:'Churn Rate',       value:'20% Y1, improving to 12% Y5',        rationale:'Early-stage churn with retention investment'},
         {item:'CAC',              value:'$120 declining to $85',              rationale:'Scale efficiencies in S&M'},
         {item:'NRR',              value:'105%→118%',                          rationale:'Expansion revenue from upsell/cross-sell'},
+        {item:'AR Days',          value:`${arDays} days`,                     rationale:'Collections cycle assumption'},
+        {item:'AP Days',          value:`${apDays} days`,                     rationale:'Payables cycle assumption'},
         {item:'Fundraising',      value:'Seed + Series A modelled',           rationale:'Based on cash runway analysis'},
       ];
+
   const slides = data.slides || {};
 
   return { companyName: company, industry: data.industry || ctx?.industry || '',
     stage: data.stage || ctx?.stage || '', round: data.round || ctx?.round || '',
-    years, pnl, cashFlow, kpis, assumptions, slides };
+    startYear, years, pnl, cashFlow, kpis, assumptions, slides };
 }
 
-// ── Excel Model Generator (SheetJS) — 4 sheets ────────────────────────────
-function generateExcelModel(d) {
-  const wb = XLSX.utils.book_new();
-  const yr = d.years;
+// ── Excel Model Generator (ExcelJS) — institutional quality ──────────────
+async function generateExcelModel(d) {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Vision & Virtue Agentic Finance Team';
+  wb.created = new Date();
 
-  // Helper: write sheet from rows array
-  function addSheet(name, rows) {
-    const ws = XLSX.utils.aoa_to_sheet(rows);
-    XLSX.utils.book_append_sheet(wb, ws, name);
-    return ws;
+  const yr = d.years; // ['2025','2026','2027','2028','2029']
+
+  // V&V palette (ARGB)
+  const NAVY  = 'FF0A1628';
+  const NAVY2 = 'FF101F3A';
+  const GOLD  = 'FFE7CC59';
+  const BLUE  = 'FF3D6FCE';
+  const WHITE = 'FFFFFFFF';
+  const LGRAY = 'FFF0F4FA';
+  const MGRAY = 'FFD0D8E8';
+  const BLACK = 'FF1A2540';
+
+  // ── Sub-item distribution mixes ────────────────────────────────
+  const cogsMix = { 'Cloud & Hosting':0.30, 'Personnel (CoGS)':0.35, 'Support & Success':0.20, 'Third-Party Licences':0.15 };
+  const rdMix   = { 'Engineering Salaries':0.55, 'Contractors & Freelancers':0.15, 'R&D Tools & Infrastructure':0.12, 'QA & Testing':0.10, 'IP & Patents':0.08 };
+  const smMix   = { 'Marketing & Demand Gen':0.30, 'Sales Salaries':0.35, 'Commissions & Bonuses':0.15, 'Events & Sponsorships':0.10, 'Marketing Technology':0.10 };
+  const gaMix   = { 'Executive & Admin Salaries':0.35, 'Legal & Compliance':0.15, 'Finance & Accounting':0.15, 'Office & Facilities':0.12, 'Insurance':0.08, 'HR & Recruiting':0.10, 'Miscellaneous G&A':0.05 };
+
+  function distribute(totals, mix) {
+    return Object.fromEntries(
+      Object.entries(mix).map(([k, pct]) => [k, totals.map(v => Math.round(v * pct))])
+    );
   }
 
-  // ── Sheet 1: Summary / KPI Dashboard ──────────────────────────
-  const summaryRows = [
-    [`${d.companyName} — Financial Model Summary`],
-    [`Industry: ${d.industry}   Stage: ${d.stage}   Round: ${d.round}`],
-    [],
-    ['KPI DASHBOARD', ...yr],
-    ['ARR ($K)',       ...d.kpis.arr],
-    ['MRR ($K)',       ...d.kpis.mrr],
-    ['Customers',      ...d.kpis.customers],
-    ['ARPU ($K)',      ...d.kpis.arpu],
-    ['CAC ($K)',       ...d.kpis.cac],
-    ['LTV ($K)',       ...d.kpis.ltv],
-    ['Churn (%)',      ...d.kpis.churnPct],
-    ['NRR (%)',        ...d.kpis.nrrPct],
-    [],
-    ['P&L SNAPSHOT', ...yr],
-    ['Revenue ($K)',   ...d.pnl.revenue],
-    ['Gross Profit ($K)', ...d.pnl.grossProfit],
-    ['Gross Margin (%)',  ...d.pnl.grossMarginPct],
-    ['EBITDA ($K)',    ...d.pnl.ebitda],
-    ['EBITDA Margin (%)', ...d.pnl.ebitdaMarginPct],
-    [],
-    ['CASH FLOW SNAPSHOT', ...yr],
-    ['Net Cash ($K)',       ...d.cashFlow.netCash],
-    ['Cumulative Cash ($K)',...d.cashFlow.cumulativeCash],
-    [],
-    ['Generated by Vision & Virtue Agentic Finance Team'],
-  ];
-  addSheet('Summary', summaryRows);
+  const cogsItems = distribute(d.pnl.cogsTotal, cogsMix);
+  const rdItems   = distribute(d.pnl.rdTotal,   rdMix);
+  const smItems   = distribute(d.pnl.smTotal,   smMix);
+  const gaItems   = distribute(d.pnl.gaTotal,   gaMix);
 
-  // ── Sheet 2: P&L ──────────────────────────────────────────────
-  const pnlRows = [
-    [`${d.companyName} — 5-Year Income Statement ($K)`],
-    [],
-    ['',              ...yr],
-    ['Revenue',       ...d.pnl.revenue],
-    ['COGS',          ...d.pnl.cogs.map(v => -Math.abs(v))],
-    ['Gross Profit',  ...d.pnl.grossProfit],
-    ['Gross Margin %',...d.pnl.grossMarginPct.map(v => v/100)],
-    [],
-    ['R&D',           ...d.pnl.rd.map(v => -Math.abs(v))],
-    ['Sales & Marketing', ...d.pnl.sm.map(v => -Math.abs(v))],
-    ['G&A',           ...d.pnl.ga.map(v => -Math.abs(v))],
-    ['Total OpEx',    ...yr.map((_,i) => -(Math.abs(d.pnl.rd[i])+Math.abs(d.pnl.sm[i])+Math.abs(d.pnl.ga[i])))],
-    [],
-    ['EBITDA',        ...d.pnl.ebitda],
-    ['EBITDA Margin %',...d.pnl.ebitdaMarginPct.map(v => v/100)],
-  ];
-  const pnlSheet = addSheet('P&L', pnlRows);
-  // Format percentage rows
-  [4,8,15].forEach(r => {
-    yr.forEach((_,c) => {
-      const cell = XLSX.utils.encode_cell({r, c: c+1});
-      if (pnlSheet[cell]) pnlSheet[cell].z = '0.0%';
+  // ── Shared style helpers ────────────────────────────────────────
+  function hdrFill(argb) { return { type:'pattern', pattern:'solid', fgColor:{argb} }; }
+  function thinBorder() {
+    const s = { style:'thin', color:{argb:MGRAY} };
+    return { top:s, left:s, bottom:s, right:s };
+  }
+  function boldFont(sz=11, argb=BLACK)   { return { bold:true,  size:sz, color:{argb}, name:'Calibri' }; }
+  function normFont(sz=11, argb=BLACK)   { return { bold:false, size:sz, color:{argb}, name:'Calibri' }; }
+  function italFont(sz=10, argb='FF708598') { return { italic:true, size:sz, color:{argb}, name:'Calibri' }; }
+
+  // Apply title row (merged A1:F1)
+  function applyTitle(ws, text, lastCol='F') {
+    ws.mergeCells(`A1:${lastCol}1`);
+    const c = ws.getCell('A1');
+    c.value = text;
+    c.fill  = hdrFill(NAVY);
+    c.font  = { bold:true, size:14, color:{argb:GOLD}, name:'Calibri' };
+    c.alignment = { vertical:'middle', horizontal:'left', indent:1 };
+    ws.getRow(1).height = 28;
+  }
+
+  // Apply sub-title row (merged)
+  function applySubTitle(ws, row, text, lastCol='F') {
+    ws.mergeCells(`A${row}:${lastCol}${row}`);
+    const c = ws.getCell(`A${row}`);
+    c.value = text;
+    c.fill  = hdrFill(NAVY2);
+    c.font  = { bold:true, size:10, color:{argb:GOLD}, name:'Calibri' };
+    c.alignment = { vertical:'middle', horizontal:'left', indent:1 };
+    ws.getRow(row).height = 18;
+  }
+
+  // Write a year-header row (B..F = years)
+  function writeYearHeader(ws, row) {
+    ws.getCell(`A${row}`).value = '';
+    yr.forEach((y,i) => {
+      const c = ws.getCell(row, 2+i);
+      c.value = y;
+      c.fill  = hdrFill(BLUE);
+      c.font  = boldFont(11, WHITE);
+      c.alignment = { horizontal:'center' };
+      c.border = thinBorder();
+    });
+    ws.getRow(row).height = 20;
+  }
+
+  // Write a data row — label in col A, numbers in B..F
+  function writeRow(ws, row, label, values, opts={}) {
+    const { indent=0, bold=false, italic=false, fillArgb=null,
+            labelArgb=BLACK, valArgb=BLACK, fmt='#,##0', negative=false,
+            pctFmt=false, topBorder=false, bottomBorder=false } = opts;
+
+    const lc = ws.getCell(`A${row}`);
+    lc.value = label;
+    lc.font  = bold ? boldFont(11, labelArgb) : italic ? italFont(10) : normFont(11, labelArgb);
+    lc.alignment = { indent };
+    if (fillArgb) lc.fill = hdrFill(fillArgb);
+
+    values.forEach((v, i) => {
+      const c = ws.getCell(row, 2+i);
+      c.value = negative ? -Math.abs(v) : v;
+      c.font  = bold ? boldFont(11, valArgb) : normFont(11, valArgb);
+      if (fillArgb) c.fill = hdrFill(fillArgb);
+      c.numFmt = pctFmt ? '0.0%' : fmt;
+      c.alignment = { horizontal:'right' };
+      c.border = thinBorder();
+      if (topBorder)    c.border.top    = { style:'medium', color:{argb:GOLD} };
+      if (bottomBorder) c.border.bottom = { style:'medium', color:{argb:GOLD} };
+    });
+    // blank / label cell border
+    lc.border = thinBorder();
+    if (topBorder)    lc.border.top    = { style:'medium', color:{argb:GOLD} };
+    if (bottomBorder) lc.border.bottom = { style:'medium', color:{argb:GOLD} };
+  }
+
+  function blankRow(ws, row) { ws.getRow(row).height = 6; }
+
+  function setColWidths(ws, widths) {
+    widths.forEach((w, i) => { ws.getColumn(i+1).width = w; });
+  }
+
+  // ════════════════════════════════════════════════════════════════
+  // SHEET 1 — 5-Year P&L
+  // ════════════════════════════════════════════════════════════════
+  const pnl = wb.addWorksheet('P&L', { views:[{state:'frozen',ySplit:4}] });
+  setColWidths(pnl, [32, 14, 14, 14, 14, 14]);
+
+  applyTitle(pnl, `${d.companyName}  |  5-Year Income Statement  ($K)`);
+
+  pnl.mergeCells('A2:F2');
+  pnl.getCell('A2').value = `${d.industry}  ·  ${d.stage}  ·  ${d.round}`;
+  pnl.getCell('A2').font  = italFont(10, 'FF708598');
+  pnl.getCell('A2').fill  = hdrFill(NAVY2);
+  pnl.getRow(2).height = 16;
+
+  blankRow(pnl, 3);
+  writeYearHeader(pnl, 4);
+
+  // Revenue
+  applySubTitle(pnl, 5, 'REVENUE');
+  let r = 6;
+  writeRow(pnl, r++, '  SaaS / Subscription Revenue', d.pnl.saasRevenue, {indent:1});
+  writeRow(pnl, r++, '  Other / Professional Services', d.pnl.otherRevenue, {indent:1});
+  writeRow(pnl, r++, 'Total Revenue', d.pnl.revenue,
+    {bold:true, fillArgb:LGRAY, topBorder:true, bottomBorder:true});
+
+  blankRow(pnl, r++);
+
+  // COGS
+  applySubTitle(pnl, r++, 'COST OF GOODS SOLD');
+  for (const [lbl, vals] of Object.entries(cogsItems)) {
+    writeRow(pnl, r++, `  ${lbl}`, vals, {indent:1, negative:true, valArgb:'FF8B0000'});
+  }
+  writeRow(pnl, r++, 'Total COGS', d.pnl.cogsTotal,
+    {bold:true, negative:true, valArgb:'FF8B0000', fillArgb:LGRAY, topBorder:true});
+
+  blankRow(pnl, r++);
+
+  // Gross Profit
+  writeRow(pnl, r++, 'Gross Profit', d.pnl.grossProfit,
+    {bold:true, fillArgb:'FFDCE8FF', topBorder:true, bottomBorder:true});
+  writeRow(pnl, r++, 'Gross Margin %', d.pnl.grossMarginPct.map(v=>v/100),
+    {italic:true, pctFmt:true, fillArgb:LGRAY});
+
+  blankRow(pnl, r++);
+
+  // R&D
+  applySubTitle(pnl, r++, 'RESEARCH & DEVELOPMENT');
+  for (const [lbl, vals] of Object.entries(rdItems)) {
+    writeRow(pnl, r++, `  ${lbl}`, vals, {indent:1, negative:true, valArgb:'FF8B0000'});
+  }
+  writeRow(pnl, r++, 'Total R&D', d.pnl.rdTotal,
+    {bold:true, negative:true, valArgb:'FF8B0000', fillArgb:LGRAY, topBorder:true});
+
+  blankRow(pnl, r++);
+
+  // S&M
+  applySubTitle(pnl, r++, 'SALES & MARKETING');
+  for (const [lbl, vals] of Object.entries(smItems)) {
+    writeRow(pnl, r++, `  ${lbl}`, vals, {indent:1, negative:true, valArgb:'FF8B0000'});
+  }
+  writeRow(pnl, r++, 'Total S&M', d.pnl.smTotal,
+    {bold:true, negative:true, valArgb:'FF8B0000', fillArgb:LGRAY, topBorder:true});
+
+  blankRow(pnl, r++);
+
+  // G&A
+  applySubTitle(pnl, r++, 'GENERAL & ADMINISTRATIVE');
+  for (const [lbl, vals] of Object.entries(gaItems)) {
+    writeRow(pnl, r++, `  ${lbl}`, vals, {indent:1, negative:true, valArgb:'FF8B0000'});
+  }
+  writeRow(pnl, r++, 'Total G&A', d.pnl.gaTotal,
+    {bold:true, negative:true, valArgb:'FF8B0000', fillArgb:LGRAY, topBorder:true});
+
+  blankRow(pnl, r++);
+
+  // Total OpEx & EBITDA
+  const totalOpEx = d.pnl.rdTotal.map((v,i) => v + d.pnl.smTotal[i] + d.pnl.gaTotal[i]);
+  writeRow(pnl, r++, 'Total Operating Expenses', totalOpEx,
+    {bold:true, negative:true, valArgb:'FF8B0000', fillArgb:LGRAY, topBorder:true, bottomBorder:true});
+  blankRow(pnl, r++);
+  writeRow(pnl, r++, 'EBITDA', d.pnl.ebitda,
+    {bold:true, fillArgb:'FFD6F5E2', topBorder:true, bottomBorder:true,
+     valArgb: d.pnl.ebitda.some(v=>v<0) ? 'FF8B0000' : 'FF006400'});
+  writeRow(pnl, r++, 'EBITDA Margin %', d.pnl.ebitdaMarginPct.map(v=>v/100),
+    {italic:true, pctFmt:true, fillArgb:LGRAY});
+
+  pnl.getCell(`A${r}`).value = 'All figures in $K  ·  Generated by Vision & Virtue Agentic Finance Team';
+  pnl.getCell(`A${r}`).font  = italFont(9, 'FF708598');
+
+  // ════════════════════════════════════════════════════════════════
+  // SHEET 2 — Cash Flow Statement
+  // ════════════════════════════════════════════════════════════════
+  const cf = wb.addWorksheet('Cash Flow', { views:[{state:'frozen',ySplit:4}] });
+  setColWidths(cf, [32, 14, 14, 14, 14, 14]);
+
+  applyTitle(cf, `${d.companyName}  |  5-Year Cash Flow Statement  ($K)`);
+  cf.mergeCells('A2:F2');
+  cf.getCell('A2').value = `AR Days: ${d.cashFlow.arDays}  ·  AP Days: ${d.cashFlow.apDays}  ·  Opening Cash: $${d.cashFlow.openingCash}K`;
+  cf.getCell('A2').font  = italFont(10, 'FF708598');
+  cf.getCell('A2').fill  = hdrFill(NAVY2);
+  cf.getRow(2).height = 16;
+
+  blankRow(cf, 3);
+  writeYearHeader(cf, 4);
+
+  let cr = 5;
+  applySubTitle(cf, cr++, 'OPERATING CASH FLOW');
+  writeRow(cf, cr++, 'Opening Cash Balance', d.cashFlow.openingBalances, {bold:true});
+  writeRow(cf, cr++, 'EBITDA', d.cashFlow.ebitda, {indent:1});
+  writeRow(cf, cr++, '  ΔAR (Accounts Receivable)', d.cashFlow.wcChanges.map(v => {
+    // AR portion only (negative = cash out, positive = cash in)
+    return Math.round(v * (d.cashFlow.arDays / (d.cashFlow.arDays + d.cashFlow.apDays || 1)));
+  }), {indent:2, italic:true});
+  writeRow(cf, cr++, '  ΔAP (Accounts Payable)', d.cashFlow.wcChanges.map(v => {
+    return Math.round(v * (d.cashFlow.apDays / (d.cashFlow.arDays + d.cashFlow.apDays || 1)));
+  }), {indent:2, italic:true});
+  writeRow(cf, cr++, 'Net Working Capital Change', d.cashFlow.wcChanges, {indent:1, italic:true});
+  blankRow(cf, cr++);
+
+  applySubTitle(cf, cr++, 'INVESTING ACTIVITIES');
+  writeRow(cf, cr++, 'Capital Expenditure (CAPEX)', d.cashFlow.capex,
+    {indent:1, negative:true, valArgb:'FF8B0000'});
+  blankRow(cf, cr++);
+
+  applySubTitle(cf, cr++, 'FINANCING ACTIVITIES');
+  writeRow(cf, cr++, 'Equity / Debt Raised', d.cashFlow.financing, {indent:1});
+  writeRow(cf, cr++, 'Taxes Paid', d.cashFlow.taxes,
+    {indent:1, negative:true, valArgb:'FF8B0000'});
+  blankRow(cf, cr++);
+
+  writeRow(cf, cr++, 'Net Cash Movement', d.cashFlow.netCash,
+    {bold:true, fillArgb:LGRAY, topBorder:true, bottomBorder:true});
+  writeRow(cf, cr++, 'Closing Cash Balance', d.cashFlow.closingBalances,
+    {bold:true, fillArgb:'FFD6F5E2', topBorder:true, bottomBorder:true});
+
+  cf.getCell(`A${cr}`).value = 'All figures in $K  ·  Generated by Vision & Virtue Agentic Finance Team';
+  cf.getCell(`A${cr}`).font  = italFont(9, 'FF708598');
+
+  // ════════════════════════════════════════════════════════════════
+  // SHEET 3 — KPI Dashboard
+  // ════════════════════════════════════════════════════════════════
+  const kpi = wb.addWorksheet('KPI Dashboard', { views:[{state:'frozen',ySplit:4}] });
+  setColWidths(kpi, [32, 14, 14, 14, 14, 14]);
+
+  applyTitle(kpi, `${d.companyName}  |  KPI Dashboard  ($K unless noted)`);
+  kpi.mergeCells('A2:F2');
+  kpi.getCell('A2').value = `TAM: ${d.kpis.tam}`;
+  kpi.getCell('A2').font  = italFont(10, 'FF708598');
+  kpi.getCell('A2').fill  = hdrFill(NAVY2);
+  kpi.getRow(2).height = 16;
+
+  blankRow(kpi, 3);
+  writeYearHeader(kpi, 4);
+
+  let kr = 5;
+  applySubTitle(kpi, kr++, 'UNIT ECONOMICS');
+  writeRow(kpi, kr++, 'Customers',         d.kpis.customers, {fmt:'#,##0'});
+  writeRow(kpi, kr++, 'ARPU ($K / yr)',     d.kpis.arpu);
+  writeRow(kpi, kr++, 'CAC ($K)',           d.kpis.cac);
+  writeRow(kpi, kr++, 'LTV ($K)',           d.kpis.ltv);
+  writeRow(kpi, kr++, 'LTV / CAC Ratio',
+    d.kpis.ltv.map((v,i) => d.kpis.cac[i] ? +(v/d.kpis.cac[i]).toFixed(1) : 0),
+    {bold:true, fillArgb:'FFDCE8FF', fmt:'0.0x'});
+  writeRow(kpi, kr++, 'Churn Rate (%)',     d.kpis.churnPct.map(v=>v/100), {pctFmt:true});
+  blankRow(kpi, kr++);
+
+  applySubTitle(kpi, kr++, 'SAAS METRICS');
+  writeRow(kpi, kr++, 'ARR ($K)',  d.kpis.arr);
+  writeRow(kpi, kr++, 'MRR ($K)',  d.kpis.mrr);
+  writeRow(kpi, kr++, 'NRR (%)',   d.kpis.nrrPct.map(v=>v/100), {pctFmt:true, bold:true, fillArgb:'FFD6F5E2'});
+  blankRow(kpi, kr++);
+
+  applySubTitle(kpi, kr++, 'GROWTH METRICS');
+  const rrGrowth = d.pnl.revenue.map((v,i)=> i===0 ? null : (d.pnl.revenue[i-1] ? +((v/d.pnl.revenue[i-1]-1)*100).toFixed(1) : null));
+  const arrGrowth = d.kpis.arr.map((v,i)=> i===0 ? null : (d.kpis.arr[i-1] ? +((v/d.kpis.arr[i-1]-1)*100).toFixed(1) : null));
+  writeRow(kpi, kr++, 'Revenue YoY Growth (%)',
+    rrGrowth.map(v=>v==null?'n/a':v/100), {pctFmt:true});
+  writeRow(kpi, kr++, 'ARR YoY Growth (%)',
+    arrGrowth.map(v=>v==null?'n/a':v/100), {pctFmt:true});
+  writeRow(kpi, kr++, 'Gross Margin (%)',
+    d.pnl.grossMarginPct.map(v=>v/100), {pctFmt:true});
+  writeRow(kpi, kr++, 'EBITDA Margin (%)',
+    d.pnl.ebitdaMarginPct.map(v=>v/100), {pctFmt:true, bold:true, fillArgb:LGRAY});
+  blankRow(kpi, kr++);
+
+  applySubTitle(kpi, kr++, 'MARKET METRICS');
+  writeRow(kpi, kr++, 'TAM Penetration (%)',
+    d.kpis.penetrationPct.map(v=>v/100), {pctFmt:true});
+  writeRow(kpi, kr++, 'Revenue / Employee ($K)',
+    d.pnl.revenue.map((v,i)=> d.kpis.customers[i] ? Math.round(v/(d.kpis.customers[i]*0.5)) : 0));
+
+  kpi.getCell(`A${kr}`).value = 'Generated by Vision & Virtue Agentic Finance Team';
+  kpi.getCell(`A${kr}`).font  = italFont(9, 'FF708598');
+
+  // ════════════════════════════════════════════════════════════════
+  // SHEET 4 — Assumptions & Working Papers
+  // ════════════════════════════════════════════════════════════════
+  const asm = wb.addWorksheet('Assumptions');
+  setColWidths(asm, [30, 28, 40]);
+
+  applyTitle(asm, `${d.companyName}  |  Model Assumptions & Working Papers`, 'C');
+
+  asm.mergeCells('A2:C2');
+  asm.getCell('A2').value = 'All material assumptions driving the financial model';
+  asm.getCell('A2').font  = italFont(10, 'FF708598');
+  asm.getCell('A2').fill  = hdrFill(NAVY2);
+  asm.getRow(2).height = 16;
+
+  blankRow(asm, 3);
+
+  // Header row
+  ['Assumption', 'Value / Range', 'Rationale'].forEach((h, i) => {
+    const c = asm.getCell(4, i+1);
+    c.value = h;
+    c.fill  = hdrFill(BLUE);
+    c.font  = boldFont(11, WHITE);
+    c.alignment = { horizontal: i===0 ? 'left' : 'center' };
+    c.border = thinBorder();
+  });
+  asm.getRow(4).height = 20;
+
+  let ar = 5;
+  d.assumptions.forEach((a, idx) => {
+    const row = asm.getRow(ar);
+    row.height = 18;
+    const cells = [a.item, a.value, a.rationale];
+    cells.forEach((val, i) => {
+      const c = asm.getCell(ar, i+1);
+      c.value = val;
+      c.font  = i === 0 ? boldFont(10) : normFont(10);
+      c.fill  = hdrFill(idx % 2 === 0 ? WHITE : LGRAY);
+      c.border = thinBorder();
+      c.alignment = { wrapText:true, vertical:'middle' };
+    });
+    ar++;
+  });
+
+  blankRow(asm, ar++);
+
+  // Working paper: cost allocation ratios
+  applySubTitle(asm, ar++, 'COST ALLOCATION RATIOS (Working Paper)', 'C');
+  const ratioHdr = asm.getRow(ar++);
+  ['Category', 'Sub-Line Item', '% of Total Category'].forEach((h, i) => {
+    const c = asm.getCell(ar-1, i+1);
+    c.value = h;
+    c.fill  = hdrFill(NAVY2);
+    c.font  = boldFont(10, GOLD);
+    c.border = thinBorder();
+  });
+  const allMixes = [['COGS', cogsMix], ['R&D', rdMix], ['S&M', smMix], ['G&A', gaMix]];
+  allMixes.forEach(([cat, mix]) => {
+    Object.entries(mix).forEach(([item, pct], idx) => {
+      const c1 = asm.getCell(ar, 1); c1.value = idx === 0 ? cat : '';
+      const c2 = asm.getCell(ar, 2); c2.value = item;
+      const c3 = asm.getCell(ar, 3); c3.value = pct;
+      c3.numFmt = '0%';
+      [c1,c2,c3].forEach(c => {
+        c.fill   = hdrFill(ar % 2 === 0 ? WHITE : LGRAY);
+        c.font   = normFont(10);
+        c.border = thinBorder();
+      });
+      ar++;
     });
   });
 
-  // ── Sheet 3: Cash Flow ────────────────────────────────────────
-  const cfRows = [
-    [`${d.companyName} — 5-Year Cash Flow ($K)`],
-    [],
-    ['',                    ...yr],
-    ['EBITDA',              ...d.cashFlow.ebitda],
-    ['Working Capital Chg', ...d.cashFlow.workingCapital],
-    ['CAPEX',               ...d.cashFlow.capex.map(v => -Math.abs(v))],
-    ['Financing (raises)',  ...d.cashFlow.financing],
-    [],
-    ['Net Cash',            ...d.cashFlow.netCash],
-    ['Cumulative Cash',     ...d.cashFlow.cumulativeCash],
-  ];
-  addSheet('Cash Flow', cfRows);
+  asm.getCell(`A${ar}`).value = 'Generated by Vision & Virtue Agentic Finance Team';
+  asm.getCell(`A${ar}`).font  = italFont(9, 'FF708598');
 
-  // ── Sheet 4: Assumptions ──────────────────────────────────────
-  const asmRows = [
-    [`${d.companyName} — Model Assumptions`],
-    [],
-    ['Item', 'Value', 'Rationale'],
-    ...d.assumptions.map(a => [a.item, a.value, a.rationale]),
-  ];
-  addSheet('Assumptions', asmRows);
-
-  // Write to blob
-  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
-  return new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  // ── Write to Blob ──────────────────────────────────────────────
+  const buffer = await wb.xlsx.writeBuffer();
+  return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
 }
 
 // ── PPTX Investor Deck Generator (PptxGenJS) — 12 slides ─────────────────
