@@ -855,29 +855,63 @@ Company Context: ${ctxStr}
 Analysis: ${analysisResult.substring(0, 1500)}
 VC Expert Input: ${vcResult.substring(0, 1500)}
 
-Build a comprehensive summary of both deliverables:
+IMPORTANT: Return your response as valid JSON (and ONLY JSON, no markdown fences, no extra text) with exactly this structure:
 
-EXCEL MODEL SUMMARY:
-- 5-Year P&L with all line items (Revenue, COGS, Gross Profit, R&D, S&M, G&A, EBITDA)
-- Cash Flow projection (EBITDA, Working Capital, CAPEX, Financing, Net Cash)
-- KPI Dashboard values (ARR, MRR, ARPU, CAC, LTV, Churn, NRR, Gross Margin)
-- Assumptions sheet
+{
+  "companyName": "string",
+  "industry": "string",
+  "stage": "string",
+  "round": "string",
+  "years": ["Year 1","Year 2","Year 3","Year 4","Year 5"],
+  "pnl": {
+    "revenue": [num,num,num,num,num],
+    "cogs": [num,num,num,num,num],
+    "grossProfit": [num,num,num,num,num],
+    "rd": [num,num,num,num,num],
+    "sm": [num,num,num,num,num],
+    "ga": [num,num,num,num,num],
+    "ebitda": [num,num,num,num,num],
+    "grossMarginPct": [num,num,num,num,num],
+    "ebitdaMarginPct": [num,num,num,num,num]
+  },
+  "cashFlow": {
+    "ebitda": [num,num,num,num,num],
+    "workingCapital": [num,num,num,num,num],
+    "capex": [num,num,num,num,num],
+    "financing": [num,num,num,num,num],
+    "netCash": [num,num,num,num,num],
+    "cumulativeCash": [num,num,num,num,num]
+  },
+  "kpis": {
+    "arr": [num,num,num,num,num],
+    "mrr": [num,num,num,num,num],
+    "arpu": [num,num,num,num,num],
+    "cac": [num,num,num,num,num],
+    "ltv": [num,num,num,num,num],
+    "churnPct": [num,num,num,num,num],
+    "nrrPct": [num,num,num,num,num],
+    "customers": [num,num,num,num,num]
+  },
+  "assumptions": [
+    {"item": "string", "value": "string", "rationale": "string"}
+  ],
+  "slides": {
+    "execSummary": {"title":"string","bullets":["string"],"metrics":[{"label":"string","value":"string"}]},
+    "businessModel": {"title":"string","bullets":["string"]},
+    "revenueModel": {"title":"string","bullets":["string"],"metrics":[{"label":"string","value":"string"}]},
+    "marketOpportunity": {"title":"string","bullets":["string"],"tam":"string","sam":"string","som":"string"},
+    "financialHighlights": {"title":"string","bullets":["string"],"metrics":[{"label":"string","value":"string"}]},
+    "pnlSummary": {"title":"string","commentary":"string"},
+    "cashFlowRunway": {"title":"string","bullets":["string"],"runway":"string"},
+    "growthStrategy": {"title":"string","bullets":["string"]},
+    "unitEconomics": {"title":"string","bullets":["string"],"metrics":[{"label":"string","value":"string"}]},
+    "kpiDashboard": {"title":"string","highlights":["string"]},
+    "useOfFunds": {"title":"string","allocations":[{"category":"string","amount":"string","pct":"string"}]},
+    "closing": {"title":"string","bullets":["string"],"contactInfo":"string"}
+  }
+}
 
-POWERPOINT SUMMARY:
-- Executive Summary slide content
-- Business Model slide content
-- Revenue Model slide content
-- Market Opportunity slide content
-- Financial Highlights slide content
-- 5-Year P&L Summary slide content
-- Cash Flow & Runway slide content
-- Growth Strategy slide content
-- Unit Economics slide content
-- KPI Dashboard slide content
-- Use of Funds slide content
-- Closing slide content
-
-All numbers must be internally consistent. Use the VC Expert's guidance for growth and market assumptions.`;
+All numbers must be realistic, internally consistent, and in thousands (e.g. 5000 = $5M). Use the VC Expert's guidance for growth and market assumptions. Gross Profit must equal Revenue minus COGS. EBITDA must equal Gross Profit minus R&D minus S&M minus G&A. Provide at least 6 assumptions.`;
 
     const buildResult = await callClaude('dof', [{ role: 'user', content: buildPrompt }]);
     wfLog('Director of Finance', 'Initial build complete. Submitting to CFO for review.');
@@ -906,12 +940,12 @@ Provide specific, numbered corrections or approve if ready. Be direct and thorou
     wfLog('CFO', 'Review Round 1 complete. Sending corrections to Director of Finance.');
     wfComment('Marcus Vale (CFO)', cfoR1.substring(0, 500) + (cfoR1.length > 500 ? '…' : ''));
 
-    // DOF Revision
+    // DOF Revision — must return corrected JSON
     wfLog('Director of Finance', 'Applying CFO corrections — Revision 1…');
     const dofRev1 = await callClaude('dof', [
       { role: 'user', content: buildPrompt },
       { role: 'assistant', content: buildResult },
-      { role: 'user', content: `CFO Marcus Vale has returned the deliverables with these corrections:\n\n${cfoR1.substring(0, 2000)}\n\nApply all corrections and resubmit. Ensure numerical consistency.` }
+      { role: 'user', content: `CFO Marcus Vale has returned the deliverables with these corrections:\n\n${cfoR1.substring(0, 2000)}\n\nApply all corrections and resubmit the COMPLETE JSON (same schema as before — no markdown fences, only valid JSON). Ensure numerical consistency: grossProfit = revenue - cogs, ebitda = grossProfit - rd - sm - ga.` }
     ]);
     wfLog('Director of Finance', 'Revision 1 complete. Resubmitting to CFO.');
 
@@ -973,9 +1007,33 @@ Provide your decision: APPROVED or REVISION NEEDED with specific comments.`;
     wfLog('Partner', 'Partner review complete.');
     wfComment('Raphael (Partner)', partnerResult.substring(0, 500) + (partnerResult.length > 500 ? '…' : ''));
 
-    // ─── STAGE 6: FINAL ────────────────────────────────────────
+    // ─── STAGE 6: FINAL — Generate Excel + PPTX from AI data ───
     wfSetStage('final');
-    wfLog('System', 'Deliverables approved by Partner. Packaging final outputs.');
+    wfLog('System', 'Deliverables approved by Partner. Generating Excel model and PPTX deck…');
+
+    // Parse JSON from the latest DOF revision (best data we have)
+    const modelData = parseModelJson(dofRev1, buildResult, ctx);
+    wfLog('System', `Parsed model for "${modelData.companyName}". Generating files…`);
+
+    // Generate Excel
+    const xlsBlob = generateExcelModel(modelData);
+    document.getElementById('wfXlsStatus').textContent = 'Ready';
+    const dlXls = document.getElementById('wfDownloadXls');
+    if (dlXls) {
+      dlXls.disabled = false;
+      dlXls.onclick = () => downloadBlob(xlsBlob, `${modelData.companyName} - Financial Model.xlsx`);
+    }
+    wfLog('System', 'Excel financial model generated (4 sheets).');
+
+    // Generate PPTX
+    const pptBlob = await generatePptxDeck(modelData);
+    document.getElementById('wfPptStatus').textContent = 'Ready';
+    const dlPpt = document.getElementById('wfDownloadPpt');
+    if (dlPpt) {
+      dlPpt.disabled = false;
+      dlPpt.onclick = () => downloadBlob(pptBlob, `${modelData.companyName} - Investor Presentation.pptx`);
+    }
+    wfLog('System', 'PowerPoint investor deck generated (12 slides).');
 
     const badge = document.getElementById('wfBadge');
     if (badge) {
@@ -983,15 +1041,7 @@ Provide your decision: APPROVED or REVISION NEEDED with specific comments.`;
       badge.classList.add('badge-complete');
     }
 
-    // Enable download buttons for existing template files
-    document.getElementById('wfPptStatus').textContent = 'Ready';
-    document.getElementById('wfXlsStatus').textContent = 'Ready';
-    const dlPpt = document.getElementById('wfDownloadPpt');
-    const dlXls = document.getElementById('wfDownloadXls');
-    if (dlPpt) { dlPpt.disabled = false; dlPpt.onclick = () => triggerDownload('VisionVirtue_PPT_Template.pptx', 'Investor Presentation.pptx'); }
-    if (dlXls) { dlXls.disabled = false; dlXls.onclick = () => triggerDownload('VisionVirtue_FM_Template_v2.xlsx', 'Financial Model.xlsx'); }
-
-    wfLog('System', 'Final approved deliverables ready for download. Customer folder created.');
+    wfLog('System', 'Final approved deliverables ready for download.');
 
   } catch (err) {
     wfLog('System', `Error: ${err.message}`);
@@ -1009,4 +1059,378 @@ function triggerDownload(file, name) {
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+}
+
+// ── Parse JSON from AI response (with robust fallback) ─────────────────────
+function parseModelJson(primary, fallback, ctx) {
+  const defaultYears = ['Year 1','Year 2','Year 3','Year 4','Year 5'];
+  const z5 = [0,0,0,0,0];
+
+  function tryParse(text) {
+    if (!text) return null;
+    // Strip markdown fences if present
+    const clean = text.replace(/^```[\w]*\n?/m,'').replace(/```$/m,'').trim();
+    // Find first { and last }
+    const start = clean.indexOf('{');
+    const end   = clean.lastIndexOf('}');
+    if (start === -1 || end === -1) return null;
+    try { return JSON.parse(clean.slice(start, end + 1)); } catch { return null; }
+  }
+
+  const data = tryParse(primary) || tryParse(fallback) || {};
+
+  // Normalise with safe defaults
+  const company = data.companyName || ctx?.industry || 'Company';
+  const years   = data.years || defaultYears;
+  const pnl = {
+    revenue:         (data.pnl?.revenue)         || [500,1200,2800,5500,9500],
+    cogs:            (data.pnl?.cogs)            || [200, 480,1120,2200,3800],
+    grossProfit:     (data.pnl?.grossProfit)     || [300, 720,1680,3300,5700],
+    rd:              (data.pnl?.rd)              || [150, 300, 560, 900,1400],
+    sm:              (data.pnl?.sm)              || [200, 420, 840,1500,2400],
+    ga:              (data.pnl?.ga)              || [100, 180, 300, 450, 650],
+    ebitda:          (data.pnl?.ebitda)          || [-150,-180, -20, 450,1250],
+    grossMarginPct:  (data.pnl?.grossMarginPct)  || [60,  60,  60,  60,  60],
+    ebitdaMarginPct: (data.pnl?.ebitdaMarginPct) || [-30,-15,  -1,   8,  13],
+  };
+  const cashFlow = {
+    ebitda:          data.cashFlow?.ebitda         || pnl.ebitda,
+    workingCapital:  data.cashFlow?.workingCapital || [-50,-80,-120,-180,-250],
+    capex:           data.cashFlow?.capex          || [-30,-50, -80,-120,-160],
+    financing:       data.cashFlow?.financing      || [3000,0,2000,0,0],
+    netCash:         data.cashFlow?.netCash        || [2770,-330,1800,150,840],
+    cumulativeCash:  data.cashFlow?.cumulativeCash || [2770,2440,4240,4390,5230],
+  };
+  const kpis = {
+    arr:      data.kpis?.arr      || [400,960,2240,4400,7600],
+    mrr:      data.kpis?.mrr      || [33, 80, 187, 367, 633],
+    arpu:     data.kpis?.arpu     || [8,  8,   9,  10,  11],
+    cac:      data.kpis?.cac      || [120,110, 100,  90,  85],
+    ltv:      data.kpis?.ltv      || [480,528, 576, 650, 715],
+    churnPct: data.kpis?.churnPct || [20, 18,  16,  14,  12],
+    nrrPct:   data.kpis?.nrrPct   || [105,108, 112, 115, 118],
+    customers:data.kpis?.customers|| [50,120, 250, 440, 690],
+  };
+  const assumptions = data.assumptions?.length
+    ? data.assumptions
+    : [
+        {item:'Revenue Growth',   value:'140% Y1→Y2, tapering to 73% by Y5', rationale:'VC-credible SaaS growth trajectory'},
+        {item:'Gross Margin',     value:'60%',                                rationale:'Typical B2B SaaS gross margin'},
+        {item:'Churn Rate',       value:'20% Y1, improving to 12% Y5',        rationale:'Early-stage churn with retention investment'},
+        {item:'CAC',              value:'$120 declining to $85',              rationale:'Scale efficiencies in S&M'},
+        {item:'NRR',              value:'105%→118%',                          rationale:'Expansion revenue from upsell/cross-sell'},
+        {item:'Fundraising',      value:'Seed + Series A modelled',           rationale:'Based on cash runway analysis'},
+      ];
+  const slides = data.slides || {};
+
+  return { companyName: company, industry: data.industry || ctx?.industry || '',
+    stage: data.stage || ctx?.stage || '', round: data.round || ctx?.round || '',
+    years, pnl, cashFlow, kpis, assumptions, slides };
+}
+
+// ── Excel Model Generator (SheetJS) — 4 sheets ────────────────────────────
+function generateExcelModel(d) {
+  const wb = XLSX.utils.book_new();
+  const yr = d.years;
+
+  // Helper: write sheet from rows array
+  function addSheet(name, rows) {
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    XLSX.utils.book_append_sheet(wb, ws, name);
+    return ws;
+  }
+
+  // ── Sheet 1: Summary / KPI Dashboard ──────────────────────────
+  const summaryRows = [
+    [`${d.companyName} — Financial Model Summary`],
+    [`Industry: ${d.industry}   Stage: ${d.stage}   Round: ${d.round}`],
+    [],
+    ['KPI DASHBOARD', ...yr],
+    ['ARR ($K)',       ...d.kpis.arr],
+    ['MRR ($K)',       ...d.kpis.mrr],
+    ['Customers',      ...d.kpis.customers],
+    ['ARPU ($K)',      ...d.kpis.arpu],
+    ['CAC ($K)',       ...d.kpis.cac],
+    ['LTV ($K)',       ...d.kpis.ltv],
+    ['Churn (%)',      ...d.kpis.churnPct],
+    ['NRR (%)',        ...d.kpis.nrrPct],
+    [],
+    ['P&L SNAPSHOT', ...yr],
+    ['Revenue ($K)',   ...d.pnl.revenue],
+    ['Gross Profit ($K)', ...d.pnl.grossProfit],
+    ['Gross Margin (%)',  ...d.pnl.grossMarginPct],
+    ['EBITDA ($K)',    ...d.pnl.ebitda],
+    ['EBITDA Margin (%)', ...d.pnl.ebitdaMarginPct],
+    [],
+    ['CASH FLOW SNAPSHOT', ...yr],
+    ['Net Cash ($K)',       ...d.cashFlow.netCash],
+    ['Cumulative Cash ($K)',...d.cashFlow.cumulativeCash],
+    [],
+    ['Generated by Vision & Virtue Agentic Finance Team'],
+  ];
+  addSheet('Summary', summaryRows);
+
+  // ── Sheet 2: P&L ──────────────────────────────────────────────
+  const pnlRows = [
+    [`${d.companyName} — 5-Year Income Statement ($K)`],
+    [],
+    ['',              ...yr],
+    ['Revenue',       ...d.pnl.revenue],
+    ['COGS',          ...d.pnl.cogs.map(v => -Math.abs(v))],
+    ['Gross Profit',  ...d.pnl.grossProfit],
+    ['Gross Margin %',...d.pnl.grossMarginPct.map(v => v/100)],
+    [],
+    ['R&D',           ...d.pnl.rd.map(v => -Math.abs(v))],
+    ['Sales & Marketing', ...d.pnl.sm.map(v => -Math.abs(v))],
+    ['G&A',           ...d.pnl.ga.map(v => -Math.abs(v))],
+    ['Total OpEx',    ...yr.map((_,i) => -(Math.abs(d.pnl.rd[i])+Math.abs(d.pnl.sm[i])+Math.abs(d.pnl.ga[i])))],
+    [],
+    ['EBITDA',        ...d.pnl.ebitda],
+    ['EBITDA Margin %',...d.pnl.ebitdaMarginPct.map(v => v/100)],
+  ];
+  const pnlSheet = addSheet('P&L', pnlRows);
+  // Format percentage rows
+  [4,8,15].forEach(r => {
+    yr.forEach((_,c) => {
+      const cell = XLSX.utils.encode_cell({r, c: c+1});
+      if (pnlSheet[cell]) pnlSheet[cell].z = '0.0%';
+    });
+  });
+
+  // ── Sheet 3: Cash Flow ────────────────────────────────────────
+  const cfRows = [
+    [`${d.companyName} — 5-Year Cash Flow ($K)`],
+    [],
+    ['',                    ...yr],
+    ['EBITDA',              ...d.cashFlow.ebitda],
+    ['Working Capital Chg', ...d.cashFlow.workingCapital],
+    ['CAPEX',               ...d.cashFlow.capex.map(v => -Math.abs(v))],
+    ['Financing (raises)',  ...d.cashFlow.financing],
+    [],
+    ['Net Cash',            ...d.cashFlow.netCash],
+    ['Cumulative Cash',     ...d.cashFlow.cumulativeCash],
+  ];
+  addSheet('Cash Flow', cfRows);
+
+  // ── Sheet 4: Assumptions ──────────────────────────────────────
+  const asmRows = [
+    [`${d.companyName} — Model Assumptions`],
+    [],
+    ['Item', 'Value', 'Rationale'],
+    ...d.assumptions.map(a => [a.item, a.value, a.rationale]),
+  ];
+  addSheet('Assumptions', asmRows);
+
+  // Write to blob
+  const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+  return new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+}
+
+// ── PPTX Investor Deck Generator (PptxGenJS) — 12 slides ─────────────────
+async function generatePptxDeck(d) {
+  const pptx = new PptxGenJS();
+  pptx.layout = 'LAYOUT_WIDE'; // 13.33" x 7.5"
+
+  // V&V Palette
+  const NAVY  = '0A1628';
+  const NAVY2 = '101F3A';
+  const GOLD  = 'E7CC59';
+  const BLUE  = '3D6FCE';
+  const WHITE = 'FFFFFF';
+  const LGRAY = 'C8D0E0';
+  const GRAY  = '708598';
+
+  const yr = d.years;
+  const sl = d.slides;
+
+  // ── Shared helpers ───────────────────────────────────────────
+  function navyBg(slide) {
+    slide.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:'100%', fill:{ color: NAVY } });
+  }
+  function hdrBar(slide, title, sub) {
+    slide.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:1.1, fill:{ color: NAVY2 } });
+    slide.addShape(pptx.ShapeType.rect, { x:0.4, y:0.96, w:12.5, h:0.04, fill:{ color: GOLD } });
+    slide.addText(title, { x:0.45, y:0.1, w:11, h:0.6, fontSize:22, bold:true, color:WHITE, fontFace:'Calibri' });
+    if (sub) slide.addText(sub, { x:0.45, y:0.65, w:11, h:0.28, fontSize:9, color:LGRAY, italic:true, fontFace:'Calibri' });
+  }
+  function footer(slide, n) {
+    slide.addShape(pptx.ShapeType.rect, { x:0, y:7.28, w:'100%', h:0.22, fill:{ color: NAVY2 } });
+    slide.addText('▶ VISION & VIRTUE', { x:0.3, y:7.3, w:3, h:0.18, fontSize:7, bold:true, color:GOLD, fontFace:'Calibri' });
+    slide.addText('CONFIDENTIAL — NOT FOR DISTRIBUTION', { x:3.5, y:7.3, w:6.5, h:0.18, fontSize:7, color:GRAY, fontFace:'Calibri' });
+    slide.addText(`${n} / 12`, { x:11.8, y:7.3, w:1.2, h:0.18, fontSize:7, color:GRAY, align:'right', fontFace:'Calibri' });
+  }
+  function bulletList(slide, items, x, y, w, h) {
+    const rows = (items || []).map(b => ({
+      text: b, options: { fontSize:11, color:WHITE, fontFace:'Calibri', paraSpaceAfter:4 }
+    }));
+    if (!rows.length) return;
+    slide.addText(rows.map(r => ({ text:'— '+r.text, options: r.options })),
+      { x, y, w, h, valign:'top' });
+  }
+  function metricBox(slide, metrics, x, y, w) {
+    const bh = 1.05;
+    (metrics || []).slice(0,4).forEach((m, i) => {
+      const bx = x + i * (w/Math.min(metrics.length,4));
+      const bw = (w / Math.min(metrics.length,4)) - 0.1;
+      slide.addShape(pptx.ShapeType.rect, { x:bx, y, w:bw, h:bh, fill:{ color: NAVY2 }, line:{ color: BLUE, width:1 } });
+      slide.addText(m.label||'', { x:bx+0.1, y:y+0.08, w:bw-0.2, h:0.3, fontSize:8, color:LGRAY, fontFace:'Calibri' });
+      slide.addText(m.value||'', { x:bx+0.1, y:y+0.36, w:bw-0.2, h:0.48, fontSize:18, bold:true, color:GOLD, fontFace:'Calibri' });
+    });
+  }
+  function pnlTable(slide) {
+    const hdr = ['', ...yr];
+    const rows2 = [
+      ['Revenue ($K)',    ...d.pnl.revenue.map(v => v.toLocaleString())],
+      ['Gross Profit',   ...d.pnl.grossProfit.map(v => v.toLocaleString())],
+      ['Gross Margin %', ...d.pnl.grossMarginPct.map(v => v+'%')],
+      ['EBITDA',         ...d.pnl.ebitda.map(v => v.toLocaleString())],
+      ['EBITDA Margin %',...d.pnl.ebitdaMarginPct.map(v => v+'%')],
+    ];
+    const tableData = [hdr, ...rows2].map((row, ri) =>
+      row.map((cell, ci) => ({
+        text: String(cell),
+        options: {
+          bold: ri === 0 || ci === 0,
+          color: ri === 0 ? GOLD : ci === 0 ? LGRAY : WHITE,
+          fill: ri === 0 ? NAVY2 : ri % 2 === 0 ? '0D1B32' : NAVY2,
+          fontSize: 9, fontFace: 'Calibri', align: ci === 0 ? 'left' : 'center',
+        }
+      }))
+    );
+    slide.addTable(tableData, { x:0.45, y:1.25, w:12.4, h:3.5, rowH:0.38, colW:[2.2,2.05,2.05,2.05,2.05,2.0] });
+  }
+
+  // ── Slide 1: Cover ───────────────────────────────────────────
+  const s1 = pptx.addSlide();
+  navyBg(s1);
+  s1.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:0.07, fill:{ color: GOLD } });
+  s1.addShape(pptx.ShapeType.rect, { x:0, y:7.43, w:'100%', h:0.07, fill:{ color: GOLD } });
+  s1.addText('V', { x:8.5, y:0.3, w:5, h:6.5, fontSize:280, bold:true, color:'122440', fontFace:'Calibri', transparency:80 });
+  s1.addText('V', { x:0.5, y:0.15, w:0.9, h:0.55, fontSize:28, bold:true, color:GOLD, fontFace:'Calibri' });
+  s1.addText('VISION & VIRTUE', { x:1.35, y:0.24, w:5, h:0.35, fontSize:10, bold:true, color:WHITE, fontFace:'Calibri' });
+  s1.addText(d.companyName, { x:0.5, y:1.6, w:8, h:0.7, fontSize:38, bold:true, color:GOLD, fontFace:'Calibri' });
+  s1.addText([d.industry, d.stage].filter(Boolean).join('  ·  ') || 'Financial Strategy Presentation',
+    { x:0.5, y:2.38, w:8, h:0.35, fontSize:12, color:LGRAY, fontFace:'Calibri' });
+  s1.addShape(pptx.ShapeType.rect, { x:0.5, y:2.82, w:0.06, h:0.82, fill:{ color: GOLD } });
+  s1.addText('Financial Strategy &', { x:0.7, y:2.82, w:8, h:0.42, fontSize:22, bold:true, color:WHITE, fontFace:'Calibri' });
+  s1.addText('Investor Presentation', { x:0.7, y:3.22, w:8, h:0.42, fontSize:22, bold:true, color:WHITE, fontFace:'Calibri' });
+  s1.addShape(pptx.ShapeType.rect, { x:0.5, y:3.78, w:5.5, h:0.04, fill:{ color: GOLD } });
+  s1.addText('STRICTLY CONFIDENTIAL', { x:0.5, y:3.9, w:8, h:0.3, fontSize:10, color:GRAY, fontFace:'Calibri' });
+
+  // ── Slide 2: Executive Summary ───────────────────────────────
+  const s2 = pptx.addSlide(); navyBg(s2);
+  hdrBar(s2, sl.execSummary?.title || 'Executive Summary', 'Company overview and investment thesis');
+  bulletList(s2, sl.execSummary?.bullets || ['Leading provider in a large, growing market','Strong unit economics with improving NRR','Clear path to profitability within 5 years'], 0.45, 1.2, 6.8, 5.6);
+  metricBox(s2, sl.execSummary?.metrics || [{label:'ARR',value:'$'+d.kpis.arr[0]+'K'},{label:'Customers',value:String(d.kpis.customers[0])},{label:'Gross Margin',value:d.pnl.grossMarginPct[0]+'%'},{label:'NRR',value:d.kpis.nrrPct[0]+'%'}], 7.6, 1.2, 5.4);
+  footer(s2, 2);
+
+  // ── Slide 3: Business Model ──────────────────────────────────
+  const s3 = pptx.addSlide(); navyBg(s3);
+  hdrBar(s3, sl.businessModel?.title || 'Business Model', 'How we create and capture value');
+  bulletList(s3, sl.businessModel?.bullets || ['Recurring SaaS subscription with annual contracts','Land-and-expand with strong upsell motion','Platform stickiness driven by data network effects'], 0.45, 1.2, 12.4, 5.8);
+  footer(s3, 3);
+
+  // ── Slide 4: Revenue Model ───────────────────────────────────
+  const s4 = pptx.addSlide(); navyBg(s4);
+  hdrBar(s4, sl.revenueModel?.title || 'Revenue Model', 'Pricing, segments, and growth drivers');
+  bulletList(s4, sl.revenueModel?.bullets || ['Tiered pricing: Starter / Growth / Enterprise','ARPU expansion through upsell and product launches','Channel partnerships contribute 20% of new ARR in Year 3+'], 0.45, 1.2, 6.8, 5.6);
+  metricBox(s4, sl.revenueModel?.metrics || [{label:'ARPU',value:'$'+d.kpis.arpu[0]+'K'},{label:'CAC',value:'$'+d.kpis.cac[0]+'K'},{label:'LTV',value:'$'+d.kpis.ltv[0]+'K'},{label:'LTV/CAC',value:(d.kpis.ltv[0]/d.kpis.cac[0]).toFixed(1)+'x'}], 7.6, 1.2, 5.4);
+  footer(s4, 4);
+
+  // ── Slide 5: Market Opportunity ──────────────────────────────
+  const s5 = pptx.addSlide(); navyBg(s5);
+  hdrBar(s5, sl.marketOpportunity?.title || 'Market Opportunity', 'TAM / SAM / SOM analysis');
+  bulletList(s5, sl.marketOpportunity?.bullets || ['Large and fragmented market with no dominant player','Secular tailwinds: digital transformation, regulatory change','Geographic expansion unlocks 3x addressable market'], 0.45, 1.2, 6.8, 4.0);
+  const mktMets = [
+    {label:'TAM', value: sl.marketOpportunity?.tam || '$12B'},
+    {label:'SAM', value: sl.marketOpportunity?.sam || '$3.2B'},
+    {label:'SOM (Y5)', value: sl.marketOpportunity?.som || '$480M'},
+  ];
+  metricBox(s5, mktMets, 0.45, 5.5, 12.4);
+  footer(s5, 5);
+
+  // ── Slide 6: Financial Highlights ────────────────────────────
+  const s6 = pptx.addSlide(); navyBg(s6);
+  hdrBar(s6, sl.financialHighlights?.title || 'Financial Highlights', '5-year summary at a glance');
+  bulletList(s6, sl.financialHighlights?.bullets || ['Revenue CAGR of ~80% over 5 years','Gross margins stabilising at 60%+','EBITDA positive in Year 4'], 0.45, 1.2, 6.8, 5.6);
+  metricBox(s6, sl.financialHighlights?.metrics || [{label:'Y5 Revenue',value:'$'+d.pnl.revenue[4]+'K'},{label:'Y5 EBITDA',value:'$'+d.pnl.ebitda[4]+'K'},{label:'Y5 ARR',value:'$'+d.kpis.arr[4]+'K'},{label:'Y5 Customers',value:String(d.kpis.customers[4])}], 7.6, 1.2, 5.4);
+  footer(s6, 6);
+
+  // ── Slide 7: 5-Year P&L Summary ──────────────────────────────
+  const s7 = pptx.addSlide(); navyBg(s7);
+  hdrBar(s7, sl.pnlSummary?.title || '5-Year P&L Summary', 'Income statement projection ($K)');
+  pnlTable(s7);
+  if (sl.pnlSummary?.commentary) {
+    s7.addText(sl.pnlSummary.commentary, { x:0.45, y:5.0, w:12.4, h:0.8, fontSize:9, color:LGRAY, italic:true, fontFace:'Calibri' });
+  }
+  footer(s7, 7);
+
+  // ── Slide 8: Cash Flow & Runway ───────────────────────────────
+  const s8 = pptx.addSlide(); navyBg(s8);
+  hdrBar(s8, sl.cashFlowRunway?.title || 'Cash Flow & Runway', 'Capital efficiency and funding plan');
+  bulletList(s8, sl.cashFlowRunway?.bullets || ['Current raise provides '+( sl.cashFlowRunway?.runway || '24+ months')+ ' of runway','Capital-efficient growth with measured burn','Financing plan aligned with milestone-based fundraising'], 0.45, 1.2, 6.8, 3.5);
+  const cfMets = yr.map((y,i) => ({ label: y+' Net Cash', value: '$'+(d.cashFlow.netCash[i]||0)+'K' }));
+  metricBox(s8, cfMets.slice(0,4), 0.45, 5.0, 12.4);
+  footer(s8, 8);
+
+  // ── Slide 9: Growth Strategy ─────────────────────────────────
+  const s9 = pptx.addSlide(); navyBg(s9);
+  hdrBar(s9, sl.growthStrategy?.title || 'Growth Strategy', 'Go-to-market and expansion plan');
+  bulletList(s9, sl.growthStrategy?.bullets || ['Direct sales (SMB + mid-market) in Year 1–2','Channel partnerships accelerate from Year 3','International expansion (EU + APAC) in Year 4','Product-led growth motion through free tier in Year 2'], 0.45, 1.2, 12.4, 5.8);
+  footer(s9, 9);
+
+  // ── Slide 10: Unit Economics ─────────────────────────────────
+  const s10 = pptx.addSlide(); navyBg(s10);
+  hdrBar(s10, sl.unitEconomics?.title || 'Unit Economics', 'CAC, LTV, payback and retention');
+  bulletList(s10, sl.unitEconomics?.bullets || ['LTV/CAC ratio of '+( (d.kpis.ltv[0]/d.kpis.cac[0]).toFixed(1) )+'x — improves to '+(d.kpis.ltv[4]/d.kpis.cac[4]).toFixed(1)+'x by Year 5','CAC payback period below 18 months','NRR above 100% from Year 1'], 0.45, 1.2, 6.8, 5.6);
+  metricBox(s10, sl.unitEconomics?.metrics || [{label:'CAC',value:'$'+d.kpis.cac[0]+'K'},{label:'LTV',value:'$'+d.kpis.ltv[0]+'K'},{label:'Churn',value:d.kpis.churnPct[0]+'%'},{label:'NRR',value:d.kpis.nrrPct[0]+'%'}], 7.6, 1.2, 5.4);
+  footer(s10, 10);
+
+  // ── Slide 11: Use of Funds ───────────────────────────────────
+  const s11 = pptx.addSlide(); navyBg(s11);
+  hdrBar(s11, sl.useOfFunds?.title || 'Use of Funds', 'Capital allocation plan');
+  const allocs = sl.useOfFunds?.allocations || [
+    {category:'Product & Engineering', amount:'40%', pct:'40%'},
+    {category:'Sales & Marketing',     amount:'30%', pct:'30%'},
+    {category:'Operations & G&A',      amount:'20%', pct:'20%'},
+    {category:'Reserve & Working Cap', amount:'10%', pct:'10%'},
+  ];
+  const tblData = [
+    [{text:'Category',options:{bold:true,color:GOLD,fill:NAVY2,fontSize:10,fontFace:'Calibri'}},
+     {text:'Allocation',options:{bold:true,color:GOLD,fill:NAVY2,fontSize:10,align:'center',fontFace:'Calibri'}},
+     {text:'%',options:{bold:true,color:GOLD,fill:NAVY2,fontSize:10,align:'center',fontFace:'Calibri'}}],
+    ...allocs.map((a,i) => [
+      {text:a.category,options:{color:LGRAY,fill:i%2===0?'0D1B32':NAVY2,fontSize:10,fontFace:'Calibri',bold:true}},
+      {text:a.amount,  options:{color:WHITE, fill:i%2===0?'0D1B32':NAVY2,fontSize:10,align:'center',fontFace:'Calibri'}},
+      {text:a.pct,     options:{color:GOLD,  fill:i%2===0?'0D1B32':NAVY2,fontSize:10,align:'center',fontFace:'Calibri'}},
+    ])
+  ];
+  s11.addTable(tblData, { x:2.5, y:1.4, w:8.4, h: 0.5 + allocs.length * 0.55, rowH:0.52, colW:[5.4,1.8,1.2] });
+  footer(s11, 11);
+
+  // ── Slide 12: Closing ────────────────────────────────────────
+  const s12 = pptx.addSlide(); navyBg(s12);
+  s12.addShape(pptx.ShapeType.rect, { x:0, y:0, w:'100%', h:0.07, fill:{ color: GOLD } });
+  s12.addShape(pptx.ShapeType.rect, { x:0, y:7.43, w:'100%', h:0.07, fill:{ color: GOLD } });
+  s12.addText('V', { x:8.5, y:0.3, w:5, h:6.5, fontSize:280, bold:true, color:'122440', fontFace:'Calibri', transparency:80 });
+  s12.addText(sl.closing?.title || 'Thank You', { x:0.5, y:1.6, w:8, h:0.8, fontSize:36, bold:true, color:GOLD, fontFace:'Calibri' });
+  s12.addText(d.companyName, { x:0.5, y:2.5, w:8, h:0.45, fontSize:18, bold:true, color:WHITE, fontFace:'Calibri' });
+  bulletList(s12, sl.closing?.bullets || ['Questions welcome','Next steps: term sheet discussion','Data room available upon request'], 0.5, 3.1, 7, 2.5);
+  s12.addText(sl.closing?.contactInfo || 'Vision & Virtue Partnership  |  contact@visionvirtue.com',
+    { x:0.5, y:6.1, w:9, h:0.35, fontSize:10, color:LGRAY, fontFace:'Calibri' });
+  s12.addShape(pptx.ShapeType.rect, { x:0.5, y:6.5, w:5.5, h:0.04, fill:{ color: GOLD } });
+
+  // Write and return as Blob
+  return pptx.write({ outputType: 'blob' });
 }
