@@ -72,9 +72,9 @@ def hdr(sl, title, sub=None):
     box(sl, 0.45, 0.88, 12.4, 0.045, GOLD)
 
 def vmark(sl):
-    """Bottom-right watermark: large semi-transparent V inside a gold circle."""
-    # Dimensions: 2.1" circle, bottom-right corner
-    cx, cy, r = 11.72, 5.32, 1.05   # centre x, centre y, radius (inches)
+    """Bottom-right watermark: small semi-transparent V inside a gold circle in footer zone."""
+    # Moved to footer zone to avoid overlapping metrics panels
+    cx, cy, r = 12.58, 7.08, 0.46   # centre x, centre y, radius (inches)
     # Gold circle — no fill, gold stroke
     o = sl.shapes.add_shape(
         9,                             # oval / ellipse
@@ -83,10 +83,10 @@ def vmark(sl):
     )
     o.fill.background()               # transparent fill
     o.line.color.rgb = GOLD
-    o.line.width = Pt(2.0)
+    o.line.width = Pt(1.5)
     # Muted V — visually transparent against NAVY bg
-    tx(sl, cx - r + 0.08, cy - r - 0.08, r * 2 - 0.16, r * 2,
-       'V', 110, VMARK_COL, bold=True, align=PP_ALIGN.CENTER)
+    tx(sl, cx - r + 0.04, cy - r - 0.04, r * 2 - 0.08, r * 2,
+       'V', 48, VMARK_COL, bold=True, align=PP_ALIGN.CENTER)
 
 def ftr(sl, n):
     tx(sl, 0.3, 7.1, 2.5, 0.3, '▶ VISION & VIRTUE', 7, GOLD, bold=True)
@@ -94,7 +94,7 @@ def ftr(sl, n):
     tx(sl, 12.0, 7.1, 1.1, 0.3, f'{n} / {TOTAL}', 8, GRAY, align=PP_ALIGN.RIGHT)
     vmark(sl)
 
-def panel(sl, metrics, x=7.05, y=0.92, w=5.85, h=6.02):
+def panel(sl, metrics, x=7.05, y=0.92, w=5.85, h=5.88):
     """metrics = list of (label, value, note)"""
     box(sl, x, y, w, h, NAVY2)
     box(sl, x, y, w, 0.33, BLUE)
@@ -103,10 +103,10 @@ def panel(sl, metrics, x=7.05, y=0.92, w=5.85, h=6.02):
     for i, (lbl, val, note) in enumerate(metrics):
         my = y + 0.38 + i * ih
         if i: box(sl, x+0.15, my-0.02, w-0.3, 0.01, NAVY3)
-        tx(sl, x+0.2, my+0.04, w-0.4, 0.2,  lbl,  7.5, LBLUE)
-        tx(sl, x+0.2, my+0.22, w-0.4, 0.38, val,  18,  GOLD, bold=True)
+        tx(sl, x+0.2, my+0.04, w-0.4, 0.18, lbl,  7.5, LBLUE)
+        tx(sl, x+0.2, my+0.27, w-0.4, 0.32, val,  15,  GOLD, bold=True)
         if note:
-            tx(sl, x+0.2, my+0.58, w-0.4, 0.2, note, 7.5, GRAY)
+            tx(sl, x+0.2, my+0.57, w-0.4, 0.18, note, 7.5, GRAY)
 
 def bullets(sl, items, x=0.45, y=1.0, w=6.3, h=5.95, label='KEY MESSAGE'):
     tx(sl, x, y, w, 0.22, label, 7.5, GOLD, bold=True)
@@ -116,10 +116,13 @@ def bullets(sl, items, x=0.45, y=1.0, w=6.3, h=5.95, label='KEY MESSAGE'):
             txt, sub = item
         else:
             txt, sub = item, False
-        if sub:
-            lines += [('    · '+txt, 10, LGRAY, False), ('', 3, NAVY, False)]
+        if not txt:
+            # Empty string = blank spacer (don't render a dash)
+            lines += [(' ', 6, NAVY, False)]
+        elif sub:
+            lines += [('    · '+txt, 10, LGRAY, False), (' ', 3, NAVY, False)]
         else:
-            lines += [('— '+txt, 12.5, WHITE, False), ('', 4, NAVY, False)]
+            lines += [('— '+txt, 12.5, WHITE, False), (' ', 4, NAVY, False)]
     multiline(sl, x, y+0.25, w, h-0.25, lines)
 
 def note(sl, txt):
