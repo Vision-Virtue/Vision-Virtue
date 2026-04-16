@@ -56,7 +56,7 @@
       <div class="agents-hero-content">
         <p class="hero-eyebrow">Internal Operations</p>
         <h1 class="agents-hero-title">Agentic Financial<br/>Department</h1>
-        <p class="agents-hero-sub">Four AI finance executives. Zero tolerance for noise.<br/>Select an agent below to begin.</p>
+        <p class="agents-hero-sub">Five AI finance executives. Zero tolerance for noise.<br/>Select an agent below to begin.</p>
       </div>
     </section>
 
@@ -114,6 +114,19 @@
             <div class="agent-bio">Master of the ledger. Finds the discrepancy before it finds you. Zero margin for error.</div>
           </div>
           <div class="agent-select-btn">Engage Controller</div>
+        </div>
+
+        <!-- VC / PE EXPERT CONSULTANT — bottom center -->
+        <div class="agent-card agent-card-wide" data-agent="vc_expert" tabindex="0">
+          <div class="agent-avatar vc-avatar">
+            <img src="agent_vc_expert.jpg" alt="Ethan Caldwell — VC / PE Expert" />
+          </div>
+          <div class="agent-info">
+            <div class="agent-rank">VC / PE Expert Consultant</div>
+            <div class="agent-name">Ethan Caldwell</div>
+            <div class="agent-bio">Sequoia-level VC & PE expert. Capital raises, M&amp;A, valuations, market sizing, and investor strategy across all stages and sectors.</div>
+          </div>
+          <div class="agent-select-btn">Engage VC Expert</div>
         </div>
 
       </div>
@@ -214,6 +227,70 @@
 
         </div>
 
+        <!-- STRUCTURED COMPANY CONTEXT BAR -->
+        <div class="fin-context-section" id="finContextSection">
+          <div class="fin-upload-header">
+            <h3 class="fin-upload-title">Company Context</h3>
+            <p class="fin-upload-sub">Provide structured company data before uploading materials. These inputs are used by the Finance AI workflow to inform analysis, assumptions, and deliverables.</p>
+          </div>
+
+          <div class="fin-context-grid">
+            <div class="fin-ctx-field">
+              <label class="fin-ctx-label" for="ctxIndustry">Industry</label>
+              <select id="ctxIndustry" class="fin-ctx-select">
+                <option value="">— Select —</option>
+                <option>Hi-Tech</option><option>Bio-Tech</option><option>Med-Tech</option>
+                <option>Fin-Tech</option><option>Ag-Tech</option><option>Automotive</option>
+                <option>Telematics</option><option>Industrial</option><option>Food-Tech</option>
+                <option>SaaS</option><option>Cybersecurity</option><option>AI / Machine Learning</option>
+                <option>Digital Health</option><option>Consumer Tech</option><option>Climate Tech</option>
+                <option>Other</option>
+              </select>
+            </div>
+            <div class="fin-ctx-field">
+              <label class="fin-ctx-label" for="ctxStage">Stage of Company</label>
+              <select id="ctxStage" class="fin-ctx-select">
+                <option value="">— Select —</option>
+                <option>Seed Stage / Validation</option>
+                <option>Early Stage / Series A-B</option>
+                <option>Expansion Stage</option>
+                <option>Maturity</option>
+              </select>
+            </div>
+            <div class="fin-ctx-field">
+              <label class="fin-ctx-label" for="ctxRound">Round</label>
+              <select id="ctxRound" class="fin-ctx-select">
+                <option value="">— Select —</option>
+                <option>Pre-Seed</option><option>Seed</option><option>Round A</option>
+                <option>Round B</option><option>Round C</option><option>Growth Round</option>
+                <option>Pre-IPO</option><option>Public Follow-On</option><option>Other</option>
+              </select>
+            </div>
+            <div class="fin-ctx-field">
+              <label class="fin-ctx-label" for="ctxPublic">Public</label>
+              <select id="ctxPublic" class="fin-ctx-select">
+                <option value="">— Select —</option>
+                <option>Yes</option>
+                <option>No</option>
+              </select>
+            </div>
+            <div class="fin-ctx-field">
+              <label class="fin-ctx-label" for="ctxLastRaise">Last Capital Raise (USD)</label>
+              <div class="fin-ctx-money">
+                <span class="fin-ctx-currency">$</span>
+                <input type="number" id="ctxLastRaise" class="fin-ctx-input" placeholder="0" min="0" step="1" />
+              </div>
+            </div>
+            <div class="fin-ctx-field">
+              <label class="fin-ctx-label" for="ctxEV">Company Last Enterprise Value (USD)</label>
+              <div class="fin-ctx-money">
+                <span class="fin-ctx-currency">$</span>
+                <input type="number" id="ctxEV" class="fin-ctx-input" placeholder="0" min="0" step="1" />
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- Customer Files Drop Zone -->
         <div class="fin-upload-section">
           <div class="fin-upload-header">
@@ -235,8 +312,102 @@
           </div>
 
           <div class="fin-file-list" id="finFileList"></div>
+
+          <!-- START WORKFLOW BUTTON -->
+          <button class="fin-start-workflow-btn" id="startWorkflowBtn" disabled>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            Start Finance Workflow
+          </button>
         </div>
 
+      </div>
+    </section>
+
+    <!-- FINANCE WORKFLOW STATUS PANEL -->
+    <section class="wf-section" id="wfSection" style="display:none">
+      <div class="wf-container">
+        <div class="wf-header">
+          <h2 class="wf-title">Finance Workflow</h2>
+          <span class="wf-status-badge" id="wfBadge">In Progress</span>
+        </div>
+
+        <!-- STAGE TRACKER -->
+        <div class="wf-stages" id="wfStages">
+          <div class="wf-stage" data-stage="analysis">
+            <div class="wf-stage-dot"></div>
+            <div class="wf-stage-info">
+              <div class="wf-stage-name">Analysis &amp; Input Extraction</div>
+              <div class="wf-stage-agent">Director of Finance + VC Expert</div>
+            </div>
+          </div>
+          <div class="wf-stage" data-stage="build">
+            <div class="wf-stage-dot"></div>
+            <div class="wf-stage-info">
+              <div class="wf-stage-name">Model &amp; Deck Build</div>
+              <div class="wf-stage-agent">Director of Finance &amp; Asst. Controller</div>
+            </div>
+          </div>
+          <div class="wf-stage" data-stage="cfo_review">
+            <div class="wf-stage-dot"></div>
+            <div class="wf-stage-info">
+              <div class="wf-stage-name">CFO Review Cycles</div>
+              <div class="wf-stage-agent">Marcus Vale — CFO</div>
+            </div>
+          </div>
+          <div class="wf-stage" data-stage="vc_review">
+            <div class="wf-stage-dot"></div>
+            <div class="wf-stage-info">
+              <div class="wf-stage-name">VC / PE Expert Review</div>
+              <div class="wf-stage-agent">Ethan Caldwell — VC Expert</div>
+            </div>
+          </div>
+          <div class="wf-stage" data-stage="partner_review">
+            <div class="wf-stage-dot"></div>
+            <div class="wf-stage-info">
+              <div class="wf-stage-name">Partner Review</div>
+              <div class="wf-stage-agent">Raphael — Partner</div>
+            </div>
+          </div>
+          <div class="wf-stage" data-stage="final">
+            <div class="wf-stage-dot"></div>
+            <div class="wf-stage-info">
+              <div class="wf-stage-name">Final Approved</div>
+              <div class="wf-stage-agent">Deliverables packaged</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- LIVE ACTIVITY LOG -->
+        <div class="wf-log-container">
+          <h3 class="wf-log-title">Activity Log</h3>
+          <div class="wf-log" id="wfLog"></div>
+        </div>
+
+        <!-- REVIEW COMMENTS PANEL -->
+        <div class="wf-comments-panel" id="wfCommentsPanel" style="display:none">
+          <h3 class="wf-comments-title" id="wfCommentsTitle">Review Comments</h3>
+          <div class="wf-comments-list" id="wfCommentsList"></div>
+        </div>
+
+        <!-- OUTPUT WINDOWS (replace legacy content) -->
+        <div class="wf-outputs" id="wfOutputs" style="display:none">
+          <div class="wf-output-card" id="wfOutputPpt">
+            <div class="wf-output-icon">📊</div>
+            <div class="wf-output-info">
+              <div class="wf-output-name">Investor Presentation</div>
+              <div class="wf-output-status" id="wfPptStatus">Pending</div>
+            </div>
+            <button class="fin-download-btn wf-download-btn" id="wfDownloadPpt" disabled>Download .pptx</button>
+          </div>
+          <div class="wf-output-card" id="wfOutputXls">
+            <div class="wf-output-icon">📈</div>
+            <div class="wf-output-info">
+              <div class="wf-output-name">Financial Model</div>
+              <div class="wf-output-status" id="wfXlsStatus">Pending</div>
+            </div>
+            <button class="fin-download-btn wf-download-btn" id="wfDownloadXls" disabled>Download .xlsx</button>
+          </div>
+        </div>
       </div>
     </section>
 

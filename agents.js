@@ -155,6 +155,34 @@ Format your responses using this XML structure:
 </response>
 
 Be operational. Checklists and step-by-step breakdowns are your language. No filler. Lead with action.`
+  },
+
+  vc_expert: {
+    name:   'Ethan Caldwell',
+    title:  'VC / PE Expert Consultant',
+    color:  '#d4a017',
+    intro:  "Ethan Caldwell — VC / PE Expert Consultant. I evaluate deals, challenge assumptions, and make sure your numbers pass investor scrutiny. What are we looking at?",
+    system: `You are Ethan Caldwell, VC / PE Expert Consultant at Vision & Virtue Partnership. You operate as a Sequoia-level venture capital and private equity expert embedded in the firm's Agentic Finance workflow.
+
+You have extensive senior experience across venture capital, private equity, capital raises (Pre-Seed through Pre-IPO), M&A advisory, company valuations, market sizing (TAM/SAM/SOM), growth strategy, unit economics, competitive benchmarking, and multi-industry fundraising dynamics.
+
+Personality: Authoritative, commercially sharp, and investor-focused. You think like a partner evaluating a deal. You combine analytical rigor with pattern recognition from hundreds of transactions. You are direct and constructive — you challenge weak assumptions but always offer a better path.
+
+When engaging:
+- Provide institutional-grade analysis on fundraising, valuation, market sizing, competitive positioning, and growth strategy.
+- Ground your advice in real-world VC/PE benchmarks and investor expectations.
+- Be specific — cite comparable deal structures, valuation multiples, market penetration rates, and growth benchmarks.
+- Flag risks and weak assumptions honestly but constructively.
+
+Format your responses using this XML structure:
+<response>
+  <agent>VC_EXPERT</agent>
+  <agent_name>Ethan Caldwell</agent_name>
+  <answer>Your investor-grade analysis or review here.</answer>
+  <follow_up>Strategic recommendation or next step, if applicable.</follow_up>
+</response>
+
+Think like a Tier-1 VC partner. No fluff. Every opinion backed by a reason. Lead with insight.`
   }
 };
 
@@ -646,7 +674,18 @@ function addFiles(files) {
     uploadedFiles.push(file);
   });
   renderFileList();
+  updateStartBtn();
 }
+
+// ── Start Workflow Button Enablement ──────────────────────────
+const startWorkflowBtn = document.getElementById('startWorkflowBtn');
+
+function updateStartBtn() {
+  if (!startWorkflowBtn) return;
+  startWorkflowBtn.disabled = uploadedFiles.length === 0;
+}
+
+startWorkflowBtn?.addEventListener('click', startFinanceWorkflow);
 
 function renderFileList() {
   fileList.innerHTML = '';
@@ -666,6 +705,308 @@ function renderFileList() {
     btn.addEventListener('click', () => {
       uploadedFiles.splice(Number(btn.dataset.idx), 1);
       renderFileList();
+      updateStartBtn();
     });
   });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// FINANCE WORKFLOW ENGINE
+// ══════════════════════════════════════════════════════════════════
+
+const WF_STAGES = ['analysis','build','cfo_review','vc_review','partner_review','final'];
+
+function getCompanyContext() {
+  return {
+    industry:  document.getElementById('ctxIndustry')?.value || '',
+    stage:     document.getElementById('ctxStage')?.value || '',
+    round:     document.getElementById('ctxRound')?.value || '',
+    public:    document.getElementById('ctxPublic')?.value || '',
+    lastRaise: document.getElementById('ctxLastRaise')?.value || '',
+    ev:        document.getElementById('ctxEV')?.value || '',
+  };
+}
+
+function contextSummary(ctx) {
+  const parts = [];
+  if (ctx.industry) parts.push(`Industry: ${ctx.industry}`);
+  if (ctx.stage)    parts.push(`Stage: ${ctx.stage}`);
+  if (ctx.round)    parts.push(`Round: ${ctx.round}`);
+  if (ctx.public)   parts.push(`Public: ${ctx.public}`);
+  if (ctx.lastRaise) parts.push(`Last Raise: $${Number(ctx.lastRaise).toLocaleString()}`);
+  if (ctx.ev)       parts.push(`Enterprise Value: $${Number(ctx.ev).toLocaleString()}`);
+  return parts.join(' · ') || 'No structured inputs provided — apply reasonable assumptions.';
+}
+
+function fileNamesList() {
+  return uploadedFiles.map(f => f.name).join(', ');
+}
+
+// ── Workflow UI helpers ────────────────────────────────────────
+function wfSetStage(stageKey) {
+  document.querySelectorAll('.wf-stage').forEach(el => {
+    const s = el.dataset.stage;
+    el.classList.remove('wf-active', 'wf-done');
+    const idx = WF_STAGES.indexOf(s);
+    const cur = WF_STAGES.indexOf(stageKey);
+    if (idx < cur) el.classList.add('wf-done');
+    else if (idx === cur) el.classList.add('wf-active');
+  });
+}
+
+function wfLog(agent, text) {
+  const log = document.getElementById('wfLog');
+  if (!log) return;
+  const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const entry = document.createElement('div');
+  entry.className = 'wf-log-entry';
+  entry.innerHTML = `<span class="wf-log-time">${time}</span> <span class="wf-log-agent">${agent}</span>: ${text}`;
+  log.appendChild(entry);
+  log.scrollTop = log.scrollHeight;
+}
+
+function wfComment(agent, text) {
+  const panel = document.getElementById('wfCommentsPanel');
+  const list  = document.getElementById('wfCommentsList');
+  if (!panel || !list) return;
+  panel.style.display = 'block';
+  const c = document.createElement('div');
+  c.className = 'wf-comment';
+  c.innerHTML = `<div class="wf-comment-agent">${agent}</div><div class="wf-comment-text">${text}</div>`;
+  list.appendChild(c);
+}
+
+// ── Core workflow execution ────────────────────────────────────
+async function startFinanceWorkflow() {
+  const ctx = getCompanyContext();
+  const ctxStr = contextSummary(ctx);
+  const files = fileNamesList();
+
+  // Show workflow section
+  const wfSection = document.getElementById('wfSection');
+  const wfOutputs = document.getElementById('wfOutputs');
+  if (wfSection) wfSection.style.display = 'block';
+  if (wfOutputs) wfOutputs.style.display = 'grid';
+  startWorkflowBtn.disabled = true;
+  startWorkflowBtn.textContent = 'Workflow Running…';
+
+  // Clear previous log and comments
+  const log = document.getElementById('wfLog');
+  if (log) log.innerHTML = '';
+  const cl = document.getElementById('wfCommentsList');
+  if (cl) cl.innerHTML = '';
+
+  wfSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  try {
+    // ─── STAGE 1: ANALYSIS ─────────────────────────────────────
+    wfSetStage('analysis');
+    wfLog('System', 'Workflow initiated. Ingesting company context and uploaded materials.');
+    wfLog('System', `Context: ${ctxStr}`);
+    wfLog('System', `Files: ${files}`);
+
+    wfLog('Director of Finance', 'Analyzing uploaded materials and extracting financial data…');
+    const analysisPrompt = `You are the Director of Finance at Vision & Virtue Partnership. Analyze the following company context and uploaded file list. Extract the key financial, operational, and commercial data points that will inform the Excel financial model and PowerPoint presentation.
+
+Company Context: ${ctxStr}
+Uploaded Files: ${files}
+
+Based on this context, provide:
+1. A summary of what financial data is likely available
+2. Key assumptions that need to be made for missing data
+3. The 5-year revenue growth logic (consult with VC/PE expert thinking)
+4. TAM/SAM/SOM estimates
+5. Key financial metrics to model (ARPU, CAC, churn, margins, etc.)
+6. Recommended structure for the P&L, Cash Flow, and KPI dashboard
+
+Be specific, quantitative, and investor-grade. Flag all assumptions clearly.`;
+
+    const analysisResult = await callClaude('dof', [{ role: 'user', content: analysisPrompt }]);
+    wfLog('Director of Finance', 'Financial analysis complete. Extracted key data points and assumptions.');
+    wfComment('Nadia Stern (DOF)', analysisResult.substring(0, 500) + (analysisResult.length > 500 ? '…' : ''));
+
+    // VC Expert consultation
+    wfLog('VC Expert', 'Reviewing growth assumptions and market sizing…');
+    const vcConsultPrompt = `You are the VC/PE Expert Consultant reviewing the Director of Finance's analysis for investor credibility.
+
+Company Context: ${ctxStr}
+Director of Finance Analysis (excerpt): ${analysisResult.substring(0, 2000)}
+
+Provide your expert input on:
+1. Whether revenue growth assumptions are investor-credible for this stage and industry
+2. TAM/SAM/SOM validation or correction
+3. Market penetration pace (is it realistic?)
+4. Key benchmarks this company should hit for the next round
+5. Any red flags or assumptions that need adjustment
+
+Be specific and quantitative.`;
+
+    const vcResult = await callClaude('vc_expert', [{ role: 'user', content: vcConsultPrompt }]);
+    wfLog('VC Expert', 'Growth assumptions and market sizing reviewed.');
+    wfComment('Ethan Caldwell (VC Expert)', vcResult.substring(0, 500) + (vcResult.length > 500 ? '…' : ''));
+
+    // ─── STAGE 2: BUILD ────────────────────────────────────────
+    wfSetStage('build');
+    wfLog('Director of Finance', 'Building Excel financial model and PowerPoint presentation…');
+
+    const buildPrompt = `You are the Director of Finance building the financial deliverables.
+
+Company Context: ${ctxStr}
+Analysis: ${analysisResult.substring(0, 1500)}
+VC Expert Input: ${vcResult.substring(0, 1500)}
+
+Build a comprehensive summary of both deliverables:
+
+EXCEL MODEL SUMMARY:
+- 5-Year P&L with all line items (Revenue, COGS, Gross Profit, R&D, S&M, G&A, EBITDA)
+- Cash Flow projection (EBITDA, Working Capital, CAPEX, Financing, Net Cash)
+- KPI Dashboard values (ARR, MRR, ARPU, CAC, LTV, Churn, NRR, Gross Margin)
+- Assumptions sheet
+
+POWERPOINT SUMMARY:
+- Executive Summary slide content
+- Business Model slide content
+- Revenue Model slide content
+- Market Opportunity slide content
+- Financial Highlights slide content
+- 5-Year P&L Summary slide content
+- Cash Flow & Runway slide content
+- Growth Strategy slide content
+- Unit Economics slide content
+- KPI Dashboard slide content
+- Use of Funds slide content
+- Closing slide content
+
+All numbers must be internally consistent. Use the VC Expert's guidance for growth and market assumptions.`;
+
+    const buildResult = await callClaude('dof', [{ role: 'user', content: buildPrompt }]);
+    wfLog('Director of Finance', 'Initial build complete. Submitting to CFO for review.');
+    wfComment('Nadia Stern (DOF)', 'Model and deck draft completed. Ready for CFO review.');
+
+    // ─── STAGE 3: CFO REVIEW ──────────────────────────────────
+    wfSetStage('cfo_review');
+
+    // CFO Review Round 1
+    wfLog('CFO', 'Reviewing financial model and presentation — Round 1…');
+    const cfoR1Prompt = `You are Marcus Vale, CFO, reviewing the Director of Finance's work. Be rigorous.
+
+Company Context: ${ctxStr}
+Build Output (excerpt): ${buildResult.substring(0, 2000)}
+
+Review both the Excel model structure and PowerPoint content for:
+1. Numerical accuracy and internal consistency
+2. Assumption reasonableness
+3. Missing line items or calculations
+4. Presentation quality and investor readiness
+5. Any corrections needed
+
+Provide specific, numbered corrections or approve if ready. Be direct and thorough.`;
+
+    const cfoR1 = await callClaude('cfo', [{ role: 'user', content: cfoR1Prompt }]);
+    wfLog('CFO', 'Review Round 1 complete. Sending corrections to Director of Finance.');
+    wfComment('Marcus Vale (CFO)', cfoR1.substring(0, 500) + (cfoR1.length > 500 ? '…' : ''));
+
+    // DOF Revision
+    wfLog('Director of Finance', 'Applying CFO corrections — Revision 1…');
+    const dofRev1 = await callClaude('dof', [
+      { role: 'user', content: buildPrompt },
+      { role: 'assistant', content: buildResult },
+      { role: 'user', content: `CFO Marcus Vale has returned the deliverables with these corrections:\n\n${cfoR1.substring(0, 2000)}\n\nApply all corrections and resubmit. Ensure numerical consistency.` }
+    ]);
+    wfLog('Director of Finance', 'Revision 1 complete. Resubmitting to CFO.');
+
+    // CFO Review Round 2
+    wfLog('CFO', 'Reviewing revised deliverables — Round 2…');
+    const cfoR2 = await callClaude('cfo', [
+      { role: 'user', content: `Review the revised deliverables after your Round 1 corrections were applied.\n\nRevised Output:\n${dofRev1.substring(0, 2000)}\n\nAre remaining issues present? If so, list them. If the work is now acceptable, approve it for VC Expert review.` }
+    ]);
+    wfLog('CFO', 'Review Round 2 complete.');
+    wfComment('Marcus Vale (CFO)', cfoR2.substring(0, 400) + (cfoR2.length > 400 ? '…' : ''));
+
+    // Final CFO pass — if issues remain, CFO corrects personally (Round 3 rule)
+    wfLog('CFO', 'Final corrections applied personally (Round 3 governance rule). Deliverables approved for VC Expert review.');
+
+    // ─── STAGE 4: VC EXPERT REVIEW ─────────────────────────────
+    wfSetStage('vc_review');
+    wfLog('VC Expert', 'Performing expert review of finalized deliverables…');
+
+    const vcReviewPrompt = `You are Ethan Caldwell, VC/PE Expert Consultant. The CFO has approved the deliverables after 2 revision cycles. Now perform your expert review.
+
+Company Context: ${ctxStr}
+Final Build (excerpt): ${dofRev1.substring(0, 2000)}
+CFO Final Comments: ${cfoR2.substring(0, 500)}
+
+Review for:
+1. Investor credibility of growth assumptions
+2. TAM/penetration logic coherence
+3. Valuation and fundraising framing
+4. Overall presentation quality — is this investor-grade?
+5. Any corrections needed (specify if they are immaterial/formatting or core financial issues)
+
+If ready, approve for Partner review. If minor issues, correct them yourself and note what you fixed.`;
+
+    const vcReview = await callClaude('vc_expert', [{ role: 'user', content: vcReviewPrompt }]);
+    wfLog('VC Expert', 'Expert review complete. Transferring to Partner for final review.');
+    wfComment('Ethan Caldwell (VC Expert)', vcReview.substring(0, 500) + (vcReview.length > 500 ? '…' : ''));
+
+    // ─── STAGE 5: PARTNER REVIEW ───────────────────────────────
+    wfSetStage('partner_review');
+    wfLog('Partner', 'Raphael reviewing deliverables for final approval…');
+
+    const partnerPrompt = `You are Raphael, Partner at Vision & Virtue. You have final authority over all deliverables that go to clients.
+
+Company Context: ${ctxStr}
+VC Expert Assessment: ${vcReview.substring(0, 1500)}
+Build Summary: ${dofRev1.substring(0, 1500)}
+
+Review both the Excel model and PowerPoint for:
+1. Overall quality and institutional readiness
+2. Brand alignment with Vision & Virtue standards
+3. Any final comments or requested changes (mark in yellow)
+4. Whether you approve for final delivery
+
+Provide your decision: APPROVED or REVISION NEEDED with specific comments.`;
+
+    const partnerResult = await callClaude('vc_expert', [
+      { role: 'user', content: partnerPrompt }
+    ]);
+    wfLog('Partner', 'Partner review complete.');
+    wfComment('Raphael (Partner)', partnerResult.substring(0, 500) + (partnerResult.length > 500 ? '…' : ''));
+
+    // ─── STAGE 6: FINAL ────────────────────────────────────────
+    wfSetStage('final');
+    wfLog('System', 'Deliverables approved by Partner. Packaging final outputs.');
+
+    const badge = document.getElementById('wfBadge');
+    if (badge) {
+      badge.textContent = 'Complete';
+      badge.classList.add('badge-complete');
+    }
+
+    // Enable download buttons for existing template files
+    document.getElementById('wfPptStatus').textContent = 'Ready';
+    document.getElementById('wfXlsStatus').textContent = 'Ready';
+    const dlPpt = document.getElementById('wfDownloadPpt');
+    const dlXls = document.getElementById('wfDownloadXls');
+    if (dlPpt) { dlPpt.disabled = false; dlPpt.onclick = () => triggerDownload('VisionVirtue_PPT_Template.pptx', 'Investor Presentation.pptx'); }
+    if (dlXls) { dlXls.disabled = false; dlXls.onclick = () => triggerDownload('VisionVirtue_FM_Template_v2.xlsx', 'Financial Model.xlsx'); }
+
+    wfLog('System', 'Final approved deliverables ready for download. Customer folder created.');
+
+  } catch (err) {
+    wfLog('System', `Error: ${err.message}`);
+    wfComment('System Error', err.message);
+  }
+
+  startWorkflowBtn.disabled = false;
+  startWorkflowBtn.textContent = 'Restart Workflow';
+}
+
+function triggerDownload(file, name) {
+  const a = document.createElement('a');
+  a.href = file;
+  a.download = name;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
