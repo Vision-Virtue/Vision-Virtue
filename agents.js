@@ -1218,7 +1218,13 @@ function parseModelJson(primary, fallback, ctx) {
 
 // ── Excel Model Generator (ExcelJS) — institutional quality ──────────────
 async function generateExcelModel(d) {
-  const wb = new ExcelJS.Workbook();
+  // Normalise global — ExcelJS CDN may expose as ExcelJS or exceljs
+  const _EJS = (typeof ExcelJS !== 'undefined') ? ExcelJS
+              : (typeof window !== 'undefined' && window.ExcelJS) ? window.ExcelJS
+              : (typeof window !== 'undefined' && window.exceljs) ? window.exceljs
+              : null;
+  if (!_EJS) throw new Error('ExcelJS library failed to load from CDN. Check network and reload.');
+  const wb = new _EJS.Workbook();
   wb.creator = 'Vision & Virtue Agentic Finance Team';
   wb.created = new Date();
 
