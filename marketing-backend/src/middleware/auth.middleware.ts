@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { timingSafeEqual, createHash } from 'crypto';
 import { contentRepository } from '../db/repository';
 import { ApiError } from '../types';
 
@@ -63,7 +64,9 @@ export function requireRaphael(req: Request, res: Response, next: NextFunction):
     return;
   }
 
-  if (passcode !== expectedPasscode) {
+  const a = createHash('sha256').update(passcode).digest();
+  const b = createHash('sha256').update(expectedPasscode).digest();
+  if (!timingSafeEqual(a, b)) {
     res.status(403).json({
       error: {
         code: 'PASSCODE_INVALID',
@@ -91,7 +94,9 @@ export function errorHandler(
 
   console.error('[ERROR]', err);
 
-  const message = err instanceof Error ? err.message : 'An unexpected error occurred';
+  const message = process.env.NODE_ENV === 'production'
+    ? 'An unexpected error occurred'
+    : (err instanceof Error ? err.message : 'An unexpected error occurred');
   res.status(500).json({
     error: {
       code: 'INTERNAL_SERVER_ERROR',

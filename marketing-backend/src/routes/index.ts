@@ -3,7 +3,7 @@ import { contentController } from '../controllers/content.controller';
 import { linkedInController } from '../controllers/linkedin.controller';
 import { authController } from '../controllers/auth.controller';
 import { chatController } from '../controllers/chat.controller';
-import { requireRaphael } from '../middleware/auth.middleware';
+import { requireRaphael, requireLinkedIn } from '../middleware/auth.middleware';
 
 const router = Router();
 
@@ -136,24 +136,28 @@ router.post(
 // Get organization profile (cached or live)
 router.get(
   '/linkedin/profile',
+  requireLinkedIn,
   asyncHandler((req, res) => linkedInController.getProfile(req, res)),
 );
 
 // AI review of the profile
 router.post(
   '/linkedin/review-profile',
+  requireLinkedIn,
   asyncHandler((_req, res) => linkedInController.reviewProfile(_req, res)),
 );
 
 // Update organization profile
 router.put(
   '/linkedin/profile',
+  requireLinkedIn,
   asyncHandler((req, res) => linkedInController.updateProfile(req, res)),
 );
 
 // Get post analytics
 router.get(
   '/linkedin/analytics/:postId',
+  requireLinkedIn,
   asyncHandler((req, res) => linkedInController.getAnalytics(req, res)),
 );
 

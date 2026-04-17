@@ -27,10 +27,12 @@ async function start(): Promise<void> {
     warnings.push('LinkedIn OAuth credentials are not set — LinkedIn features will not work');
   }
   if (!process.env.RAPHAEL_PASSCODE) {
-    warnings.push('RAPHAEL_PASSCODE is not set — using default "raphael2025"');
+    warnings.push('RAPHAEL_PASSCODE is not set — approval endpoint will fail');
+  } else if (process.env.RAPHAEL_PASSCODE === 'raphael2025') {
+    warnings.push('RAPHAEL_PASSCODE is still the default value — change it before going live');
   }
-  if (process.env.SESSION_SECRET === 'change-this-in-production') {
-    warnings.push('SESSION_SECRET is using the default value — change it in production');
+  if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === 'change-this-in-production-please') {
+    warnings.push('SESSION_SECRET is not set or is using the default value — change it in production');
   }
 
   if (warnings.length > 0) {

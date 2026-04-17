@@ -16,6 +16,7 @@ import {
   vpCorrectAnnotationsPrompt,
   AGENT_SYSTEM_PROMPTS,
 } from '../agents/prompts';
+import { BraveSearchService } from './search.service';
 
 const MODEL = 'claude-sonnet-4-6';
 const MAX_TOKENS = 8096;
@@ -105,11 +106,61 @@ export class AIService {
     return content.text;
   }
 
-  async runChiefEconomist(topic: string): Promise<AIResponse> {
-    const prompt = chiefEconomistPrompt(topic);
-    const raw = await this.callClaude(prompt);
-    const parsed = extractJson(raw);
-    return validateAIResponse(parsed, 'economist');
+  async runChiefEconomist(topic: string, searchService?: BraveSearchService): Promise<AIResponse> {
+    const today = new Date().toISOString().split('T')[0];
+    const prompt = chiefEconomistPrompt(topic, today);
+
+    if (!searchService) {
+      const raw = await this.callClaude(prompt);
+      const parsed = extractJson(raw);
+      return validateAIResponse(parsed, 'economist');
+    }
+
+    // Agentic loop: Claude calls web_search tool to fetch live economic data
+    const webSearchTool: Anthropic.Tool = {
+      name: 'web_search',
+      description: 'Search the web for current economic data, central bank decisions, market conditions, inflation figures, and news. Always search before making claims about current conditions.',
+      input_schema: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Specific search query for economic data or news' },
+        },
+        required: ['query'],
+      },
+    };
+
+    const messages: Anthropic.MessageParam[] = [{ role: 'user', content: prompt }];
+    const MAX_SEARCHES = 6;
+    let searches = 0;
+
+    while (true) {
+      const response = await this.client.messages.create({
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        tools: [webSearchTool],
+        messages,
+      });
+
+      if (response.stop_reason === 'tool_use') {
+        const toolUse = response.content.find(c => c.type === 'tool_use') as Anthropic.ToolUseBlock;
+        const query = (toolUse.input as { query: string }).query;
+        searches++;
+        const results = searches <= MAX_SEARCHES
+          ? await searchService.search(query)
+          : 'Search limit reached — complete the brief using available information.';
+
+        messages.push({ role: 'assistant', content: response.content });
+        messages.push({
+          role: 'user',
+          content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: results }],
+        });
+      } else {
+        const textBlock = response.content.find(c => c.type === 'text') as Anthropic.TextBlock | undefined;
+        if (!textBlock) throw new ApiError(500, 'No text in economist response', 'AI_UNEXPECTED_RESPONSE');
+        const parsed = extractJson(textBlock.text);
+        return validateAIResponse(parsed, 'economist');
+      }
+    }
   }
 
   async runMarketingManager(topic: string, brief: EconomistBrief): Promise<AIResponse> {

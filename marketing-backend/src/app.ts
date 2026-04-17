@@ -1,6 +1,8 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import session from 'express-session';
+import helmet from 'helmet';
+import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
 import routes from './routes';
 import { errorHandler } from './middleware/auth.middleware';
@@ -8,6 +10,32 @@ import { errorHandler } from './middleware/auth.middleware';
 dotenv.config();
 
 const app = express();
+
+// ─── Trust Proxy (Render terminates TLS at edge) ──────────────────────────────
+
+app.set('trust proxy', 1);
+
+// ─── Security Headers ─────────────────────────────────────────────────────────
+
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", 'data:', 'https:'],
+        connectSrc: [
+          "'self'",
+          'https://visionvirtuepartnership.com',
+          'https://www.visionvirtuepartnership.com',
+          'https://vision-virtue.github.io',
+        ],
+      },
+    },
+  }),
+);
 
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 
@@ -18,8 +46,6 @@ const allowedOrigins = [
   'https://www.visionvirtuepartnership.com',
   'http://localhost:3000',
   'http://127.0.0.1:3000',
-  'http://localhost:5500',
-  'http://127.0.0.1:5500',
 ];
 
 app.use(
@@ -39,14 +65,51 @@ app.use(
     },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  }),
+);
+
+// ─── Rate Limiting ────────────────────────────────────────────────────────────
+
+// Global: 100 requests per 15 minutes per IP
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: { code: 'RATE_LIMITED', message: 'Too many requests, please try again later.' } },
+  }),
+);
+
+// Stricter limit on auth endpoints (brute-force protection)
+app.use(
+  '/api/auth',
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: { code: 'RATE_LIMITED', message: 'Too many auth requests, please try again later.' } },
+  }),
+);
+
+// Stricter limit on AI chat endpoints (cost protection)
+app.use(
+  '/api/chat',
+  rateLimit({
+    windowMs: 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: { code: 'RATE_LIMITED', message: 'Too many chat requests, please slow down.' } },
   }),
 );
 
 // ─── Body Parsers ─────────────────────────────────────────────────────────────
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 // ─── Session ──────────────────────────────────────────────────────────────────
 
@@ -58,6 +121,7 @@ app.use(
     cookie: {
       secure: process.env.NODE_ENV === 'production',
       httpOnly: true,
+      sameSite: 'lax',
       maxAge: 10 * 60 * 1000, // 10 minutes — just for OAuth flow
     },
   }),
@@ -70,8 +134,8 @@ app.use((req: Request, _res: Response, next: NextFunction) => {
   const { method, path: reqPath, query } = req;
   const queryStr = Object.keys(query).length ? ` ?${new URLSearchParams(query as Record<string, string>).toString()}` : '';
   console.log(`[${new Date().toISOString()}] ${method} ${reqPath}${queryStr}`);
+  void start;
   next();
-  // Note: response logging would require hooking res.on('finish')
 });
 
 // ─── Routes ───────────────────────────────────────────────────────────────────

@@ -4,17 +4,22 @@ import { contentRepository } from '../db/repository';
 import { workflowStateMachine } from '../state-machine/workflow';
 import { AIService } from '../services/ai.service';
 import { LinkedInService } from '../services/linkedin.service';
+import { BraveSearchService } from '../services/search.service';
 import { ApiError, Approval, QAEntry, RaphaelAnnotation } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getAIService(req?: Request): AIService {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-    || (req?.headers?.['x-api-key'] as string | undefined);
+function getAIService(): AIService {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new ApiError(500, 'ANTHROPIC_API_KEY is not configured on the server', 'MISSING_CONFIG');
   }
   return new AIService(new Anthropic({ apiKey }));
+}
+
+function getSearchService(): BraveSearchService | undefined {
+  const key = process.env.BRAVE_SEARCH_API_KEY;
+  return key ? new BraveSearchService(key) : undefined;
 }
 
 function getLinkedInService(): LinkedInService {
@@ -36,6 +41,13 @@ export class ContentController {
     if (!topic || typeof topic !== 'string' || topic.trim().length === 0) {
       res.status(400).json({
         error: { code: 'VALIDATION_ERROR', message: 'topic is required and must be a non-empty string' },
+      });
+      return;
+    }
+
+    if (topic.trim().length > 2000) {
+      res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: 'topic must be 2000 characters or fewer' },
       });
       return;
     }
@@ -74,8 +86,8 @@ export class ContentController {
       return;
     }
 
-    const aiService = getAIService(req);
-    const aiResponse = await aiService.runChiefEconomist(item.topic);
+    const aiService = getAIService();
+    const aiResponse = await aiService.runChiefEconomist(item.topic, getSearchService());
 
     if (!aiResponse.economist_brief) {
       res.status(500).json({ error: { code: 'AI_ERROR', message: 'No economist brief in AI response' } });
@@ -144,7 +156,7 @@ export class ContentController {
       return;
     }
 
-    const aiService = getAIService(req);
+    const aiService = getAIService();
     const aiResponse = await aiService.runMarketingManager(item.topic, item.economist_brief);
 
     if (!aiResponse.marketing_draft) {
@@ -219,7 +231,7 @@ export class ContentController {
       return;
     }
 
-    const aiService = getAIService(req);
+    const aiService = getAIService();
     const aiResponse = await aiService.runVpMarketing(
       item.topic,
       item.economist_brief,
@@ -326,7 +338,7 @@ export class ContentController {
       general: item.vp_review.edits?.general,
     };
 
-    const aiService = getAIService(req);
+    const aiService = getAIService();
     const aiResponse = await aiService.runVpSelfEdit(item.topic, item.marketing_draft, editNotes);
 
     if (!aiResponse.marketing_draft) {
@@ -656,7 +668,7 @@ export class ContentController {
       return;
     }
 
-    const aiService = getAIService(req);
+    const aiService = getAIService();
     const answer = await aiService.askEconomist(
       item.topic,
       item.economist_brief,
@@ -761,7 +773,7 @@ export class ContentController {
       return;
     }
 
-    const aiService = getAIService(req);
+    const aiService = getAIService();
     const aiResponse = await aiService.runVpCorrectAnnotations(
       item.topic,
       item.marketing_draft,

@@ -5,6 +5,10 @@ services:
     rootDir: marketing-backend
     buildCommand: npm install && npm run build
     startCommand: npm start
+    disk:
+      name: vv-marketing-data
+      mountPath: /data
+      sizeGB: 1
     envVars:
       - key: NODE_ENV
         value: production
@@ -17,7 +21,7 @@ services:
       - key: SESSION_SECRET
         generateValue: true
       - key: DB_PATH
-        value: ./data/marketing.db
+        value: /data/marketing.db
       - key: LINKEDIN_CLIENT_ID
         sync: false
       - key: LINKEDIN_CLIENT_SECRET
@@ -27,4 +31,6 @@ services:
       - key: LINKEDIN_ORGANIZATION_ID
         sync: false
       - key: LINKEDIN_PERSON_URN
+        sync: false
+      - key: BRAVE_SEARCH_API_KEY
         sync: false
