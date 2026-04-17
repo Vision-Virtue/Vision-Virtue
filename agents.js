@@ -1805,8 +1805,305 @@ async function generateExcelModel(d, vcData={}) {
 
   ftRow(kpi,32);
 
-  // ── Sheets G–H: to be implemented ───────────────────────────────
-  // (VC Expert Analysis, Working Papers)
+  // ── Section G: Sheet 6 — VC Expert Market Analysis ──────────────
+  // Sections: Market Growth | Penetration vs Model | Enterprise Value / DCF
+  const vc = wb.addWorksheet('VC Expert Analysis');
+  vc.tabColor = {argb:'E7CC59'};
+  setWidths(vc,[34,16,16,16,16,16,20]);
+
+  applyHeader(vc,
+    `${d.companyName}  |  VC Expert Market Analysis`,
+    `Ethan Caldwell — Vision & Virtue  ·  ${vcData.evEstimate || 'EV pending'}  ·  WACC: ${((vcData.wacc||0.18)*100).toFixed(0)}%`);
+
+  // ── G1: Market Growth Analysis ───────────────────────────────────
+  let vr = 3;
+  secRow(vc, vr++, 'MARKET GROWTH ANALYSIS');
+
+  // Year header (7 cols: label + 5 years + notes col)
+  vc.getCell(`A${vr}`).value = ''; vc.getCell(`A${vr}`).fill = fill(NAVY2); vc.getCell(`A${vr}`).border = thin();
+  yr.forEach((y,i) => {
+    const c = vc.getCell(vr, 2+i);
+    c.value = y; c.fill = fill(BLUE); c.font = fnt(true,11,WHITE);
+    c.alignment = {horizontal:'center'}; c.border = thin();
+  });
+  vc.getCell(vr,7).value = 'Notes';
+  vc.getCell(vr,7).fill  = fill(BLUE); vc.getCell(vr,7).font = fnt(true,11,WHITE);
+  vc.getCell(vr,7).alignment = {horizontal:'center'}; vc.getCell(vr,7).border = thin();
+  vc.getRow(vr).height = 20; vr++;
+
+  const mgPct = vcData.marketGrowthPct || [18,22,25,28,30];
+  wr(vc, vr, 'TAM Market Growth Rate (%)',
+    mgPct.map(v => v/100), {pct:true, bold:true});
+  const mgNotes = vc.getCell(vr,7);
+  mgNotes.value = vcData.marketGrowthLogic || 'VC estimate';
+  mgNotes.font  = fnt(false,10,'FF708598',true); mgNotes.border = thin();
+  mgNotes.alignment = {wrapText:true,vertical:'middle'};
+  vc.getRow(vr).height = 32; vr++;
+
+  wr(vc, vr, 'Company Penetration Rate (%)',
+    (vcData.penetrationRates||[0.1,0.3,0.6,1.0,1.5]).map(v=>v/100),
+    {pct:true});
+  const penNotes = vc.getCell(vr,7);
+  penNotes.value = vcData.penetrationLogic || 'Penetration benchmarked vs comparable SaaS';
+  penNotes.font  = fnt(false,10,'FF708598',true); penNotes.border = thin();
+  penNotes.alignment = {wrapText:true,vertical:'middle'};
+  vc.getRow(vr).height = 32; vr++;
+
+  blank(vc, vr++);
+
+  // ── G2: Supporting Case Studies ──────────────────────────────────
+  secRow(vc, vr++, 'SUPPORTING CASE STUDIES  (comparable companies)');
+
+  // Header row
+  ['Company','Key Metric','Relevance to Model'].forEach((h,i) => {
+    const c = vc.getCell(vr, i===0?1:i===1?2:4);
+    if (i===1) vc.mergeCells(vr, 2, vr, 3);
+    if (i===2) vc.mergeCells(vr, 4, vr, 7);
+    c.value = h; c.fill = fill(NAVY2); c.font = fnt(true,10,GOLD);
+    c.alignment = {horizontal:'left',indent:1}; c.border = thin();
+  });
+  vc.getRow(vr).height = 18; vr++;
+
+  const cases = vcData.supportingCases || [];
+  const defaultCases = [
+    {company:'Comparable SaaS A', metric:'ARR growth 3x in Y1→Y2', relevance:'Validates early hyper-growth assumption'},
+    {company:'Comparable SaaS B', metric:'NRR 115% at Series A',    relevance:'Supports expansion revenue model'},
+    {company:'Comparable SaaS C', metric:'CAC payback <18 months',  relevance:'Benchmarks sales efficiency target'},
+  ];
+  const displayCases = cases.length ? cases : defaultCases;
+
+  displayCases.forEach((cs, idx) => {
+    const rowFill = idx % 2 === 0 ? WHITE : LGRAY;
+
+    const nameCell = vc.getCell(vr,1);
+    nameCell.value = cs.company; nameCell.font = fnt(true,10,BLACK);
+    nameCell.fill  = fill(rowFill); nameCell.border = thin();
+    nameCell.alignment = {indent:1};
+
+    vc.mergeCells(vr,2,vr,3);
+    const metCell = vc.getCell(vr,2);
+    metCell.value = cs.metric; metCell.font = fnt(false,10,BLACK);
+    metCell.fill  = fill(rowFill); metCell.border = thin();
+
+    vc.mergeCells(vr,4,vr,7);
+    const relCell = vc.getCell(vr,4);
+    relCell.value = cs.relevance; relCell.font = fnt(false,10,BLACK);
+    relCell.fill  = fill(rowFill); relCell.border = thin();
+    relCell.alignment = {wrapText:true,vertical:'middle'};
+
+    vc.getRow(vr).height = 22; vr++;
+  });
+
+  blank(vc, vr++);
+
+  // ── G3: Penetration vs Model Comparison ──────────────────────────
+  secRow(vc, vr++, 'PENETRATION — VC ESTIMATE vs MODEL');
+
+  yearHdr(vc, vr); vr++;
+
+  const penVC  = vcData.penetrationRates    || [0.1,0.3,0.6,1.0,1.5];
+  const penMdl = d.kpis.penetrationPct || penVC;
+
+  wr(vc, vr++, 'VC Expert Estimate (%)', penVC.map(v=>v/100),  {italic:true, pct:true});
+  wr(vc, vr++, 'Model Penetration (%)',
+    YC.map(c=>`=Inputs!${c}30`),
+    {pct:true});
+  wr(vc, vr++, 'Delta (Model – VC)',
+    YC.map((c,i) => `=Inputs!${c}30-${penVC[i]/100}`),
+    {italic:true, pct:true});
+
+  blank(vc, vr++);
+
+  // ── G4: Enterprise Value & DCF ───────────────────────────────────
+  secRow(vc, vr++, 'ENTERPRISE VALUE & DCF ANALYSIS');
+
+  // DCF inputs block (single-value params in col B)
+  const dcfInputRow = vr;
+  [
+    ['WACC',                   vcData.wacc             || 0.18,  '0.0%'],
+    ['Terminal Growth Rate',   vcData.terminalGrowthRate|| 0.03,  '0.0%'],
+    ['Revenue Multiple (EV/R)',vcData.revenueMultiple   || 8,     '0.0"x"'],
+    ['EV Estimate (narrative)',vcData.evEstimate        || 'n/a', '@'],
+    ['Methodology',            vcData.evMethodology     || 'DCF + Revenue Multiple', '@'],
+  ].forEach(([label, val, fmt], i) => {
+    const row = vr + i;
+    const lc = vc.getCell(`A${row}`);
+    lc.value = label; lc.font = fnt(false,11,BLACK); lc.border = thin();
+    const vc2 = vc.getCell(`B${row}`);
+    vc2.value = val; vc2.numFmt = fmt; vc2.font = fnt(true,11,BLACK);
+    vc2.border = thin(); vc2.alignment = {horizontal:'right'};
+    vc.mergeCells(row,3,row,7);
+  });
+  const WACC_ROW = vr;        // B{WACC_ROW} = WACC
+  const TGROW_ROW = vr + 1;   // B{TGROW_ROW} = terminal growth
+  vr += 5;
+
+  blank(vc, vr++);
+
+  // DCF table
+  secRow(vc, vr++, 'DCF CALCULATION  (Free Cash Flow = EBITDA – CAPEX)');
+
+  // Year header
+  vc.getCell(`A${vr}`).value = 'Line Item';
+  vc.getCell(`A${vr}`).fill  = fill(NAVY2); vc.getCell(`A${vr}`).font = fnt(true,10,GOLD);
+  vc.getCell(`A${vr}`).border = thin();
+  yr.forEach((y,i) => {
+    const c = vc.getCell(vr,2+i);
+    c.value = y; c.fill = fill(BLUE); c.font = fnt(true,11,WHITE);
+    c.alignment = {horizontal:'center'}; c.border = thin();
+  });
+  vc.getCell(vr,7).value = 'Terminal'; vc.getCell(vr,7).fill = fill(NAVY2);
+  vc.getCell(vr,7).font  = fnt(true,11,GOLD); vc.getCell(vr,7).border = thin();
+  vc.getRow(vr).height = 20; vr++;
+
+  const FCF_ROW       = vr;
+  const DISC_ROW      = vr + 1;
+  const PV_FCF_ROW    = vr + 2;
+  const TV_ROW        = vr + 3;
+  const PV_TV_ROW     = vr + 4;
+  const EV_ROW        = vr + 5;
+
+  // FCF = EBITDA – |CAPEX|  (both from respective sheets)
+  wr(vc, FCF_ROW, 'Free Cash Flow ($K)',
+    YC.map(c=>`='P&L'!${c}53-ABS(Inputs!${c}15)`));
+
+  // Discount factor = 1/(1+WACC)^year
+  wr(vc, DISC_ROW, 'Discount Factor',
+    YC.map((_,i)=>`=1/(1+$B$${WACC_ROW})^${i+1}`),
+    {numFmt:'0.000', italic:true});
+
+  // PV of FCF
+  wr(vc, PV_FCF_ROW, 'PV of FCF ($K)',
+    YC.map(c=>`=${c}${FCF_ROW}*${c}${DISC_ROW}`),
+    {bold:true});
+
+  // Terminal value (Gordon Growth in col G, row TV_ROW)
+  // TV = FCF_Y5 * (1+g) / (WACC – g)
+  vc.getCell(`A${TV_ROW}`).value = 'Terminal Value ($K)';
+  vc.getCell(`A${TV_ROW}`).font  = fnt(false,11,BLACK);
+  vc.getCell(`A${TV_ROW}`).border = thin();
+  ['B','C','D','E'].forEach(c => {
+    vc.getCell(`${c}${TV_ROW}`).value = '—';
+    vc.getCell(`${c}${TV_ROW}`).font  = fnt(false,10,'FF708598');
+    vc.getCell(`${c}${TV_ROW}`).border = thin();
+    vc.getCell(`${c}${TV_ROW}`).alignment = {horizontal:'center'};
+  });
+  const tvCell = vc.getCell(`F${TV_ROW}`);
+  tvCell.value  = {formula:`=F${FCF_ROW}*(1+$B$${TGROW_ROW})/($B$${WACC_ROW}-$B$${TGROW_ROW})`};
+  tvCell.numFmt = '#,##0'; tvCell.font = fnt(true,11,BLACK); tvCell.border = thin();
+  tvCell.alignment = {horizontal:'right'};
+  const tvNote = vc.getCell(`G${TV_ROW}`);
+  tvNote.value = {formula:`=F${FCF_ROW}*(1+$B$${TGROW_ROW})/($B$${WACC_ROW}-$B$${TGROW_ROW})`};
+  tvNote.numFmt= '#,##0'; tvNote.font = fnt(true,11,BLACK); tvNote.border = thin();
+  tvNote.alignment = {horizontal:'right'};
+
+  // PV of terminal value
+  vc.getCell(`A${PV_TV_ROW}`).value = 'PV of Terminal Value ($K)';
+  vc.getCell(`A${PV_TV_ROW}`).font  = fnt(false,11,BLACK);
+  vc.getCell(`A${PV_TV_ROW}`).border = thin();
+  ['B','C','D','E'].forEach(c => {
+    vc.getCell(`${c}${PV_TV_ROW}`).value = '—';
+    vc.getCell(`${c}${PV_TV_ROW}`).font  = fnt(false,10,'FF708598');
+    vc.getCell(`${c}${PV_TV_ROW}`).border = thin();
+    vc.getCell(`${c}${PV_TV_ROW}`).alignment = {horizontal:'center'};
+  });
+  const pvTvCell = vc.getCell(`F${PV_TV_ROW}`);
+  pvTvCell.value  = {formula:`=F${TV_ROW}/(1+$B$${WACC_ROW})^5`};
+  pvTvCell.numFmt = '#,##0'; pvTvCell.font = fnt(true,11,BLACK); pvTvCell.border = thin();
+  pvTvCell.alignment = {horizontal:'right'};
+  const pvTvG = vc.getCell(`G${PV_TV_ROW}`);
+  pvTvG.value  = {formula:`=F${TV_ROW}/(1+$B$${WACC_ROW})^5`};
+  pvTvG.numFmt = '#,##0'; pvTvG.font = fnt(true,11,GOLD); pvTvG.fill = fill(NAVY2); pvTvG.border = thin();
+  pvTvG.alignment = {horizontal:'right'};
+
+  // Enterprise Value = Sum PV FCFs + PV TV
+  const evLc = vc.getCell(`A${EV_ROW}`);
+  evLc.value = 'Enterprise Value ($K)'; evLc.font = fnt(true,11,BLACK); evLc.border = thin();
+  evLc.fill  = fill(LGRAY);
+  ['B','C','D','E'].forEach(c => {
+    const cc = vc.getCell(`${c}${EV_ROW}`);
+    cc.value = '—'; cc.font = fnt(false,10,'FF708598'); cc.border = thin();
+    cc.fill  = fill(LGRAY); cc.alignment = {horizontal:'center'};
+  });
+  const evF = vc.getCell(`F${EV_ROW}`);
+  evF.value  = {formula:`=SUM(B${PV_FCF_ROW}:F${PV_FCF_ROW})+F${PV_TV_ROW}`};
+  evF.numFmt = '#,##0'; evF.font = fnt(true,13,GOLD); evF.fill = fill(NAVY);
+  evF.border = thin(); evF.alignment = {horizontal:'right'};
+  const evG = vc.getCell(`G${EV_ROW}`);
+  evG.value  = {formula:`=SUM(B${PV_FCF_ROW}:F${PV_FCF_ROW})+F${PV_TV_ROW}`};
+  evG.numFmt = '"$"#,##0"K"'; evG.font = fnt(true,13,GOLD); evG.fill = fill(NAVY);
+  evG.border = thin(); evG.alignment = {horizontal:'right'};
+
+  vr += 6;
+  blank(vc, vr++);
+  ftRow(vc, vr);
+
+  // ── Section H: Sheet 7 — Working Papers ─────────────────────────
+  // Cost allocation ratios + full assumptions table
+  const wp = wb.addWorksheet('Working Papers');
+  wp.tabColor = {argb:'101F3A'};
+  setWidths(wp,[34,14,14,14,14,14,8]);
+  applyHeader(wp,
+    `${d.companyName}  |  Working Papers & Allocation Detail`,
+    'Cost allocation ratios applied to Inputs totals  ·  Assumptions register');
+
+  yearHdr(wp,3);
+  let wpr = 4;
+
+  // Allocation ratio tables
+  const allMixes = [
+    ['COGS',  8, {'Cloud & Hosting':0.30,'Personnel (CoGS)':0.35,'Support & Success':0.20,'Third-Party Licences':0.15}],
+    ['R&D',   9, {'Engineering Salaries':0.55,'Contractors & Freelancers':0.15,'R&D Tools & Infrastructure':0.12,'QA & Testing':0.10,'IP & Patents':0.08}],
+    ['S&M',  10, {'Marketing & Demand Gen':0.30,'Sales Salaries':0.35,'Commissions & Bonuses':0.15,'Events & Sponsorships':0.10,'Marketing Technology':0.10}],
+    ['G&A',  11, {'Executive & Admin Salaries':0.35,'Legal & Compliance':0.15,'Finance & Accounting':0.15,'Office & Facilities':0.12,'Insurance':0.08,'HR & Recruiting':0.10,'Miscellaneous G&A':0.05}],
+  ];
+
+  for (const [cat, iRow, mix] of allMixes) {
+    secRow(wp, wpr++, `${cat}  —  COST ALLOCATION RATIOS`);
+    for (const [item, pct] of Object.entries(mix)) {
+      wr(wp, wpr, item,
+        YC.map(c=>`=Inputs!${c}${iRow}*${pct}`),
+        {indent:1, vColor:RED});
+      // Ratio label in col G
+      const rc = wp.getCell(`G${wpr}`);
+      rc.value = pct; rc.numFmt = '0%';
+      rc.font  = fnt(false,10,'FF708598',true);
+      rc.alignment = {horizontal:'center'}; rc.border = thin();
+      wpr++;
+    }
+    wr(wp, wpr++, `Total ${cat}`,
+      YC.map(c=>`=Inputs!${c}${iRow}`),
+      {bold:true, vColor:RED, bg:LGRAY, topBorder:true});
+    blank(wp, wpr++);
+  }
+
+  // Assumptions table
+  secRow(wp, wpr++, 'MODEL ASSUMPTIONS REGISTER');
+
+  // Header
+  ['Assumption','Value / Range','Rationale'].forEach((h,i) => {
+    const c = wp.getCell(wpr, i+1);
+    c.value = h; c.fill = fill(BLUE); c.font = fnt(true,11,WHITE); c.border = thin();
+  });
+  wp.getColumn(2).width = 26; wp.getColumn(3).width = 44;
+  vc.getColumn(7).width = 26;
+  wp.getRow(wpr).height = 20; wpr++;
+
+  d.assumptions.forEach((a, idx) => {
+    const row = wpr++;
+    [a.item, a.value, a.rationale].forEach((val,i) => {
+      const c = wp.getCell(row, i+1);
+      c.value = val;
+      c.font  = i===0 ? fnt(true,10,BLACK) : fnt(false,10,BLACK);
+      c.fill  = fill(idx%2===0 ? WHITE : LGRAY);
+      c.border = thin();
+      c.alignment = {wrapText:true, vertical:'middle'};
+    });
+    wp.getRow(row).height = 20;
+  });
+
+  blank(wp, wpr++);
+  ftRow(wp, wpr);
 
   // ── Write to Blob ──────────────────────────────────────────────
   const buffer = await wb.xlsx.writeBuffer();
