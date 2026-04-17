@@ -59,6 +59,20 @@ document.getElementById('resetKeyBtn')?.addEventListener('click', () => {
   setTimeout(() => accessPin.focus(), 50);
 });
 
+// ── Money input formatting ────────────────────────────────────
+function formatMoneyInput(el) {
+  const raw = el.value.replace(/[^\d]/g, '');
+  if (!raw) { el.value = ''; return; }
+  el.value = '$ ' + parseInt(raw, 10).toLocaleString('en-US');
+}
+document.querySelectorAll('.fin-money-input').forEach(el => {
+  el.addEventListener('input', () => formatMoneyInput(el));
+  el.addEventListener('blur', () => {
+    const raw = el.value.replace(/[^\d]/g, '');
+    if (!raw) el.value = '';
+  });
+});
+
 // ── Agent definitions ────────────────────────────────────────
 const AGENTS = {
   cfo: {
@@ -722,8 +736,8 @@ function getCompanyContext() {
     stage:     document.getElementById('ctxStage')?.value || '',
     round:     document.getElementById('ctxRound')?.value || '',
     public:    document.getElementById('ctxPublic')?.value || '',
-    lastRaise: document.getElementById('ctxLastRaise')?.value || '',
-    ev:        document.getElementById('ctxEV')?.value || '',
+    lastRaise: (document.getElementById('ctxLastRaise')?.value || '').replace(/[^\d]/g, ''),
+    ev:        (document.getElementById('ctxEV')?.value || '').replace(/[^\d]/g, ''),
   };
 }
 
