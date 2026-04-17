@@ -44,6 +44,7 @@ interface LinkedInAccountRow {
   refresh_token: string;
   expires_at: number;
   organization_id: string;
+  person_urn: string;
   created_at: string;
 }
 
@@ -224,17 +225,17 @@ export class ContentRepository {
 
   saveLinkedInToken(token: LinkedInAccount): void {
     const db = getDb();
-    // We only ever store one token (the latest connection)
     db.prepare('DELETE FROM linkedin_accounts').run();
     db.prepare(`
-      INSERT INTO linkedin_accounts (id, access_token, refresh_token, expires_at, organization_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO linkedin_accounts (id, access_token, refresh_token, expires_at, organization_id, person_urn, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
       token.id,
       token.access_token,
       token.refresh_token,
       token.expires_at,
       token.organization_id,
+      token.person_urn,
       token.created_at,
     );
   }
@@ -251,6 +252,7 @@ export class ContentRepository {
       refresh_token: row.refresh_token,
       expires_at: row.expires_at,
       organization_id: row.organization_id,
+      person_urn: row.person_urn,
       created_at: row.created_at,
     };
   }

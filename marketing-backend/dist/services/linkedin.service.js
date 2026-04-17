@@ -21,7 +21,10 @@ class LinkedInService {
     }
     // ── OAuth ─────────────────────────────────────────────────────────────────────
     getAuthorizationUrl(state) {
-        const scopes = ['r_organization_social', 'w_organization_social', 'rw_organization_admin'].join(' ');
+        // Using "Share on LinkedIn" (Default Tier — no approval needed).
+        // TODO: add r_organization_social w_organization_social rw_organization_admin
+        //       once LinkedIn approves the Community Management API application.
+        const scopes = ['w_member_social', 'openid', 'profile'].join(' ');
         const params = new URLSearchParams({
             response_type: 'code',
             client_id: this.clientId,
@@ -30,6 +33,18 @@ class LinkedInService {
             scope: scopes,
         });
         return `${LINKEDIN_AUTH_BASE}/authorization?${params.toString()}`;
+    }
+    async getPersonUrn(token) {
+        try {
+            const response = await axios_1.default.get(`${LINKEDIN_API_BASE}/v2/userinfo`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const sub = response.data.sub;
+            return `urn:li:person:${sub}`;
+        }
+        catch (err) {
+            throw this.mapLinkedInError(err, 'Failed to fetch person URN');
+        }
     }
     async exchangeCodeForToken(code) {
         try {
@@ -44,12 +59,14 @@ class LinkedInService {
             });
             const data = response.data;
             const expiresAt = Date.now() + data.expires_in * 1000;
+            const personUrn = await this.getPersonUrn(data.access_token);
             return {
                 id: (0, uuid_1.v4)(),
                 access_token: data.access_token,
                 refresh_token: data.refresh_token || '',
                 expires_at: expiresAt,
                 organization_id: this.organizationId,
+                person_urn: personUrn,
                 created_at: new Date().toISOString(),
             };
         }
@@ -88,10 +105,10 @@ class LinkedInService {
         }
     }
     // ── Posts ─────────────────────────────────────────────────────────────────────
-    async createTextPost(token, text, organizationId) {
+    async createTextPost(token, text, authorUrn) {
         try {
             const payload = {
-                author: `urn:li:organization:${organizationId}`,
+                author: authorUrn,
                 commentary: text,
                 visibility: 'PUBLIC',
                 distribution: {
@@ -120,12 +137,12 @@ class LinkedInService {
             throw this.mapLinkedInError(err, 'Failed to create text post');
         }
     }
-    async createImagePost(token, text, imageUrl, organizationId) {
+    async createImagePost(token, text, imageUrl, authorUrn) {
         try {
             // Step 1: Initialize image upload
             const initResponse = await axios_1.default.post(`${LINKEDIN_API_BASE}/rest/images?action=initializeUpload`, {
                 initializeUploadRequest: {
-                    owner: `urn:li:organization:${organizationId}`,
+                    owner: authorUrn,
                 },
             }, {
                 headers: {
@@ -148,7 +165,7 @@ class LinkedInService {
             });
             // Step 4: Create post with image
             const payload = {
-                author: `urn:li:organization:${organizationId}`,
+                author: authorUrn,
                 commentary: text,
                 visibility: 'PUBLIC',
                 distribution: {
