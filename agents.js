@@ -1112,6 +1112,7 @@ Source File Data: ${fileContent ? fileContent.substring(0, 1000) : 'None'}
 
 CRITICAL RULES:
 - P&L STRUCTURE: If the reference P&L has line items above, map them to the model categories (saasRevenue, otherRevenue, cogsTotal, rdTotal, smTotal, gaTotal). Preserve the spirit of the company's actual structure.
+- P&L LINE ITEMS: Populate pnlSubItems using the company's EXACT line item names from the reference P&L wherever possible (e.g. "Salaries & Benefits", "Subcontractors", "Server Costs"). Map each file line item to the most fitting category. If a file item spans multiple categories (e.g. "Salaries & Benefits" covers all staff), place the dominant use in the correct category. COGS must have EXACTLY 4 items, R&D EXACTLY 5, S&M EXACTLY 5, G&A EXACTLY 7. Percentages within each category must sum to exactly 1.0.
 - ACTUALS: If hasPnL=true and referenceYear is found, set year1IsActual:true and use EXACT reference-year amounts for Year 1 (index [0]).
 - If Year 1 actuals not available, set year1IsActual:false and project from analysis.
 - SALARY RULE: ${salaryRuleStr}
@@ -1135,6 +1136,37 @@ Return ONLY valid JSON. Schema:
     "smTotal":      [num,num,num,num,num],
     "gaTotal":      [num,num,num,num,num],
     "ebitda":       [num,num,num,num,num]
+  },
+  "pnlSubItems": {
+    "cogs": [
+      {"name":"<EXACT name from file or best fit>","pct":0.30},
+      {"name":"<EXACT name from file or best fit>","pct":0.35},
+      {"name":"<EXACT name from file or best fit>","pct":0.20},
+      {"name":"<EXACT name from file or best fit>","pct":0.15}
+    ],
+    "rd": [
+      {"name":"<EXACT name from file or best fit>","pct":0.55},
+      {"name":"<EXACT name from file or best fit>","pct":0.20},
+      {"name":"<EXACT name from file or best fit>","pct":0.12},
+      {"name":"<EXACT name from file or best fit>","pct":0.08},
+      {"name":"<EXACT name from file or best fit>","pct":0.05}
+    ],
+    "sm": [
+      {"name":"<EXACT name from file or best fit>","pct":0.30},
+      {"name":"<EXACT name from file or best fit>","pct":0.35},
+      {"name":"<EXACT name from file or best fit>","pct":0.15},
+      {"name":"<EXACT name from file or best fit>","pct":0.10},
+      {"name":"<EXACT name from file or best fit>","pct":0.10}
+    ],
+    "ga": [
+      {"name":"<EXACT name from file or best fit>","pct":0.35},
+      {"name":"<EXACT name from file or best fit>","pct":0.15},
+      {"name":"<EXACT name from file or best fit>","pct":0.15},
+      {"name":"<EXACT name from file or best fit>","pct":0.12},
+      {"name":"<EXACT name from file or best fit>","pct":0.08},
+      {"name":"<EXACT name from file or best fit>","pct":0.10},
+      {"name":"<EXACT name from file or best fit>","pct":0.05}
+    ]
   },
   "salaries": {
     "departments": [
@@ -1414,6 +1446,56 @@ function parseModelJson(primary, fallback, ctx) {
     rdTotal, smTotal, gaTotal, ebitda, ebitdaMarginPct,
   };
 
+  // P&L sub-item defaults (used when AI doesn't return custom names)
+  const defaultSubItems = {
+    cogs: [
+      {name:'Cloud & Hosting',          pct:0.30},
+      {name:'Personnel (COGS)',          pct:0.35},
+      {name:'Support & Success',         pct:0.20},
+      {name:'Third-Party Licences',      pct:0.15},
+    ],
+    rd: [
+      {name:'Engineering Salaries',      pct:0.55},
+      {name:'Contractors & Freelancers', pct:0.15},
+      {name:'R&D Tools & Infrastructure',pct:0.12},
+      {name:'QA & Testing',              pct:0.10},
+      {name:'IP & Patents',              pct:0.08},
+    ],
+    sm: [
+      {name:'Marketing & Demand Gen',    pct:0.30},
+      {name:'Sales Salaries',            pct:0.35},
+      {name:'Commissions & Bonuses',     pct:0.15},
+      {name:'Events & Sponsorships',     pct:0.10},
+      {name:'Marketing Technology',      pct:0.10},
+    ],
+    ga: [
+      {name:'Executive & Admin Salaries',pct:0.35},
+      {name:'Legal & Compliance',        pct:0.15},
+      {name:'Finance & Accounting',      pct:0.15},
+      {name:'Office & Facilities',       pct:0.12},
+      {name:'Insurance',                 pct:0.08},
+      {name:'HR & Recruiting',           pct:0.10},
+      {name:'Miscellaneous G&A',         pct:0.05},
+    ],
+  };
+  function normSubItems(raw, count, defs) {
+    let items = (Array.isArray(raw) && raw.length) ? raw.map(x => ({
+      name: x.name || defs[0]?.name || 'Other',
+      pct:  typeof x.pct === 'number' ? x.pct : 0,
+    })) : [...defs];
+    while (items.length < count) items.push({name: defs[items.length]?.name || 'Other', pct: 0});
+    items = items.slice(0, count);
+    const tot = items.reduce((s,x) => s + x.pct, 0);
+    if (tot > 0) items = items.map(x => ({...x, pct: Math.round(x.pct / tot * 1000) / 1000}));
+    return items;
+  }
+  const pnlSubItems = {
+    cogs: normSubItems(data.pnlSubItems?.cogs, 4, defaultSubItems.cogs),
+    rd:   normSubItems(data.pnlSubItems?.rd,   5, defaultSubItems.rd),
+    sm:   normSubItems(data.pnlSubItems?.sm,   5, defaultSubItems.sm),
+    ga:   normSubItems(data.pnlSubItems?.ga,   7, defaultSubItems.ga),
+  };
+
   // Cash flow — derive working capital from arDays/apDays if available
   const openingCash = data.cashFlow?.openingCash ?? 1000;
   const arDays      = data.cashFlow?.arDays ?? 45;
@@ -1487,7 +1569,7 @@ function parseModelJson(primary, fallback, ctx) {
 
   return { companyName: company, industry: data.industry || ctx?.industry || '',
     stage: data.stage || ctx?.stage || '', round: data.round || ctx?.round || '',
-    startYear, years, pnl, cashFlow, kpis, assumptions, slides, year1IsActual, salaries };
+    startYear, years, pnl, cashFlow, kpis, assumptions, slides, year1IsActual, salaries, pnlSubItems };
 }
 
 // ── Excel Model Generator (ExcelJS) — institutional quality ──────────────
@@ -1700,12 +1782,11 @@ async function generateExcelModel(d, vcData={}) {
     {bold:true,bg:LGRAY,topBorder:true,bottomBorder:true});
   blank(pnl,14);
 
-  // COGS
+  // COGS — dynamic line items from company files
   secRow(pnl,15,'COST OF GOODS SOLD');
-  wr(pnl,16,'  Cloud & Hosting',           YC.map(c=>`=-Inputs!${c}8*0.30`),{indent:1,vColor:RED});
-  wr(pnl,17,'  Personnel (CoGS)',           YC.map(c=>`=-Inputs!${c}8*0.35`),{indent:1,vColor:RED});
-  wr(pnl,18,'  Support & Success',          YC.map(c=>`=-Inputs!${c}8*0.20`),{indent:1,vColor:RED});
-  wr(pnl,19,'  Third-Party Licences',       YC.map(c=>`=-Inputs!${c}8*0.15`),{indent:1,vColor:RED});
+  d.pnlSubItems.cogs.forEach((item,i) => {
+    wr(pnl,16+i,`  ${item.name}`,YC.map(c=>`=-Inputs!${c}8*${item.pct}`),{indent:1,vColor:RED});
+  });
   wr(pnl,20,'Total COGS',
     YC.map(c=>`=SUM(${c}16:${c}19)`),
     {bold:true,vColor:RED,bg:LGRAY,topBorder:true});
@@ -1719,39 +1800,31 @@ async function generateExcelModel(d, vcData={}) {
     {italic:true,pct:true,bg:LGRAY});
   blank(pnl,24);
 
-  // R&D
+  // R&D — dynamic line items from company files
   secRow(pnl,25,'RESEARCH & DEVELOPMENT');
-  wr(pnl,26,'  Engineering Salaries',       YC.map(c=>`=-Inputs!${c}9*0.55`), {indent:1,vColor:RED});
-  wr(pnl,27,'  Contractors & Freelancers',  YC.map(c=>`=-Inputs!${c}9*0.15`), {indent:1,vColor:RED});
-  wr(pnl,28,'  R&D Tools & Infrastructure', YC.map(c=>`=-Inputs!${c}9*0.12`), {indent:1,vColor:RED});
-  wr(pnl,29,'  QA & Testing',               YC.map(c=>`=-Inputs!${c}9*0.10`), {indent:1,vColor:RED});
-  wr(pnl,30,'  IP & Patents',               YC.map(c=>`=-Inputs!${c}9*0.08`), {indent:1,vColor:RED});
+  d.pnlSubItems.rd.forEach((item,i) => {
+    wr(pnl,26+i,`  ${item.name}`,YC.map(c=>`=-Inputs!${c}9*${item.pct}`),{indent:1,vColor:RED});
+  });
   wr(pnl,31,'Total R&D',
     YC.map(c=>`=SUM(${c}26:${c}30)`),
     {bold:true,vColor:RED,bg:LGRAY,topBorder:true});
   blank(pnl,32);
 
-  // S&M
+  // S&M — dynamic line items from company files
   secRow(pnl,33,'SALES & MARKETING');
-  wr(pnl,34,'  Marketing & Demand Gen',     YC.map(c=>`=-Inputs!${c}10*0.30`),{indent:1,vColor:RED});
-  wr(pnl,35,'  Sales Salaries',             YC.map(c=>`=-Inputs!${c}10*0.35`),{indent:1,vColor:RED});
-  wr(pnl,36,'  Commissions & Bonuses',      YC.map(c=>`=-Inputs!${c}10*0.15`),{indent:1,vColor:RED});
-  wr(pnl,37,'  Events & Sponsorships',      YC.map(c=>`=-Inputs!${c}10*0.10`),{indent:1,vColor:RED});
-  wr(pnl,38,'  Marketing Technology',       YC.map(c=>`=-Inputs!${c}10*0.10`),{indent:1,vColor:RED});
+  d.pnlSubItems.sm.forEach((item,i) => {
+    wr(pnl,34+i,`  ${item.name}`,YC.map(c=>`=-Inputs!${c}10*${item.pct}`),{indent:1,vColor:RED});
+  });
   wr(pnl,39,'Total S&M',
     YC.map(c=>`=SUM(${c}34:${c}38)`),
     {bold:true,vColor:RED,bg:LGRAY,topBorder:true});
   blank(pnl,40);
 
-  // G&A
+  // G&A — dynamic line items from company files
   secRow(pnl,41,'GENERAL & ADMINISTRATIVE');
-  wr(pnl,42,'  Executive & Admin Salaries',  YC.map(c=>`=-Inputs!${c}11*0.35`),{indent:1,vColor:RED});
-  wr(pnl,43,'  Legal & Compliance',          YC.map(c=>`=-Inputs!${c}11*0.15`),{indent:1,vColor:RED});
-  wr(pnl,44,'  Finance & Accounting',        YC.map(c=>`=-Inputs!${c}11*0.15`),{indent:1,vColor:RED});
-  wr(pnl,45,'  Office & Facilities',         YC.map(c=>`=-Inputs!${c}11*0.12`),{indent:1,vColor:RED});
-  wr(pnl,46,'  Insurance',                   YC.map(c=>`=-Inputs!${c}11*0.08`),{indent:1,vColor:RED});
-  wr(pnl,47,'  HR & Recruiting',             YC.map(c=>`=-Inputs!${c}11*0.10`),{indent:1,vColor:RED});
-  wr(pnl,48,'  Miscellaneous G&A',           YC.map(c=>`=-Inputs!${c}11*0.05`),{indent:1,vColor:RED});
+  d.pnlSubItems.ga.forEach((item,i) => {
+    wr(pnl,42+i,`  ${item.name}`,YC.map(c=>`=-Inputs!${c}11*${item.pct}`),{indent:1,vColor:RED});
+  });
   wr(pnl,49,'Total G&A',
     YC.map(c=>`=SUM(${c}42:${c}48)`),
     {bold:true,vColor:RED,bg:LGRAY,topBorder:true});
@@ -2221,12 +2294,13 @@ async function generateExcelModel(d, vcData={}) {
   yearHdr(wp,3);
   let wpr = 4;
 
-  // Allocation ratio tables
+  // Allocation ratio tables — built from dynamic company line items
+  const subItemsToMix = items => Object.fromEntries(items.map(x => [x.name, x.pct]));
   const allMixes = [
-    ['COGS',  8, {'Cloud & Hosting':0.30,'Personnel (CoGS)':0.35,'Support & Success':0.20,'Third-Party Licences':0.15}],
-    ['R&D',   9, {'Engineering Salaries':0.55,'Contractors & Freelancers':0.15,'R&D Tools & Infrastructure':0.12,'QA & Testing':0.10,'IP & Patents':0.08}],
-    ['S&M',  10, {'Marketing & Demand Gen':0.30,'Sales Salaries':0.35,'Commissions & Bonuses':0.15,'Events & Sponsorships':0.10,'Marketing Technology':0.10}],
-    ['G&A',  11, {'Executive & Admin Salaries':0.35,'Legal & Compliance':0.15,'Finance & Accounting':0.15,'Office & Facilities':0.12,'Insurance':0.08,'HR & Recruiting':0.10,'Miscellaneous G&A':0.05}],
+    ['COGS',  8,  subItemsToMix(d.pnlSubItems.cogs)],
+    ['R&D',   9,  subItemsToMix(d.pnlSubItems.rd)],
+    ['S&M',   10, subItemsToMix(d.pnlSubItems.sm)],
+    ['G&A',   11, subItemsToMix(d.pnlSubItems.ga)],
   ];
 
   for (const [cat, iRow, mix] of allMixes) {
