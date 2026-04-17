@@ -911,7 +911,7 @@ After your narrative, return ONLY this JSON block:
 
 If no P&L is found in files, set hasPnL:false and pnlLineItems:[]. The DOF will then construct the P&L from industry benchmarks.`;
 
-    const acResult = await callClaude('ac_controller', [{ role: 'user', content: acPrompt }]);
+    const acResult = await callClaude('asst_controller', [{ role: 'user', content: acPrompt }]);
     wfLog('Assistant Controller', 'Reference P&L extraction complete.');
     wfComment('Assistant Controller', acResult.substring(0, 500) + (acResult.length > 500 ? '…' : ''));
 
