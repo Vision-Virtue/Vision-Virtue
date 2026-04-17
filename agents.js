@@ -842,7 +842,7 @@ async function startFinanceWorkflow() {
     const fileContent = await extractFileContents(uploadedFiles);
     wfLog('System', `Files parsed: ${fileNames || 'none'}.`);
 
-    const acPrompt = `You are the Assistant Controller at Vision & Virtue. Your job is to extract and catalogue all financial and operational data from the uploaded files below.
+    const acPrompt = `You are the Assistant Controller at Vision & Virtue. Your primary task is to reconstruct a reference P&L from the uploaded files and identify the latest year of actuals available.
 
 Company Context: ${ctxStr}
 Uploaded Files: ${fileNames || 'none'}
@@ -851,40 +851,167 @@ Uploaded Files: ${fileNames || 'none'}
 ${fileContent || 'No files uploaded.'}
 --- END ---
 
-Extract and report:
-1. All revenue figures found (by period, product line, geography)
-2. All cost/expense items found (exact line item names from the company's P&L structure)
-3. Headcount by department and average salaries (if available)
-4. Cash, debt, CAPEX figures
-5. Customer count, churn, ARR/MRR if present
-6. Any Year 1 actuals vs. projections
-7. The EXACT P&L line item structure used by this company (e.g. "Salaries & Benefits", "Server Costs", etc.)
+STEP 1 — FIND LATEST ACTUALS YEAR:
+Scan all files for financial statements. Identify the most recent year with actual (not projected/forecast) figures. This becomes the "reference year" and starting point for the 5-year model.
 
-Label each item: [FROM FILE] or [NOT FOUND]. Be precise.`;
+STEP 2 — RECONSTRUCT EXACT P&L STRUCTURE:
+If a P&L or income statement is found, list EVERY line item EXACTLY as it appears in the document — do NOT rename, consolidate, or standardise (e.g. keep "Salaries & Benefits" not "Personnel Costs", keep "Subcontractors" not "External Labour", keep "Capex revenues" verbatim). For each line item record: exact name, amount for the reference year in $K, and its category (revenue / cogs / opex / other).
+
+STEP 3 — EXTRACT OPERATIONAL DATA:
+- Headcount per department (exact figures if found)
+- Average salary per department (if found)
+- Opening cash and debt balances
+- CAPEX amount
+- Customer count, ARR/MRR, churn rate (if found)
+- Payment terms: how long customers take to pay (AR days), how long company takes to pay suppliers (AP days)
+- Prices per unit / revenue per seat or transaction
+- Costs per unit / variable costs
+
+After your narrative, return ONLY this JSON block:
+\`\`\`json
+{
+  "referenceYear": <year as number, or null if not found>,
+  "hasPnL": <true if P&L found in files, false otherwise>,
+  "isActual": <true if reference year figures are actuals, false if projected>,
+  "pnlLineItems": [
+    {"name": "<EXACT name from file>", "amountK": <number in $K>, "category": "<revenue|cogs|opex|other>"}
+  ],
+  "headcountByDept": [
+    {"dept": "<department name>", "headcount": <number>}
+  ],
+  "avgSalaryByDept": [
+    {"dept": "<department name>", "avgSalaryK": <number in $K>}
+  ],
+  "paymentTerms": {"arDays": <number or null>, "apDays": <number or null>},
+  "pricesPerUnit": [{"item": "<name>", "priceK": <number in $K>}],
+  "costsPerUnit": [{"item": "<name>", "costK": <number in $K>}],
+  "cash": <number in $K or null>,
+  "debt": <number in $K or null>,
+  "capex": <number in $K or null>,
+  "customers": <number or null>,
+  "arr": <number in $K or null>,
+  "mrr": <number in $K or null>,
+  "churnPct": <decimal e.g. 0.05 for 5%, or null>
+}
+\`\`\`
+
+If no P&L is found in files, set hasPnL:false and pnlLineItems:[]. The DOF will then construct the P&L from industry benchmarks.`;
 
     const acResult = await callClaude('ac_controller', [{ role: 'user', content: acPrompt }]);
-    wfLog('Assistant Controller', 'Raw data extraction complete.');
+    wfLog('Assistant Controller', 'Reference P&L extraction complete.');
     wfComment('Assistant Controller', acResult.substring(0, 500) + (acResult.length > 500 ? '…' : ''));
+
+    // Parse AC structured JSON
+    let acData = {};
+    const acJsonM = acResult.match(/```json\s*([\s\S]*?)```/);
+    if (acJsonM) { try { acData = JSON.parse(acJsonM[1]); } catch(e) {} }
+    const hasPnL = acData.hasPnL === true;
+    const referenceYear = acData.referenceYear || null;
+    const acLineItems = acData.pnlLineItems || [];
+
+    // ─── STAGE 0.5: CC PRE-BUILD REVIEW ────────────────────────
+    wfLog('Corporate Controller', 'Validating reference P&L and extracting operational data from files…');
+
+    const ccPreBuildPrompt = `You are the Corporate Controller at Vision & Virtue. The Assistant Controller has extracted data from the client's uploaded files. Perform two tasks before the financial model is built.
+
+Company Context: ${ctxStr}
+Uploaded Files: ${fileNames || 'none'}
+Assistant Controller Extraction:
+${acResult.substring(0, 2500)}
+
+--- FILE CONTENTS (for your independent verification) ---
+${fileContent ? fileContent.substring(0, 3000) : 'No files uploaded.'}
+--- END ---
+
+TASK A — VALIDATE REFERENCE P&L COMPLETENESS & ACCURACY:
+Cross-check the Assistant Controller's extracted P&L line items against the raw file contents.
+1. Are all major P&L categories present? (Revenue streams, COGS items, every operating expense category)
+2. Are any line items visible in the files that the AC missed?
+3. Are the amounts consistent with the reference year data in the files?
+4. Flag any items that appear incorrect, duplicated, or need clarification.
+Return your approved list of P&L line items — preserving the EXACT names from the files.
+
+TASK B — EXTRACT OPERATIONAL DATA:
+Search the files carefully for:
+1. Prices per unit / revenue per seat, transaction, or unit sold
+2. Costs per unit / variable costs per unit
+3. Average salary per department (if not already confirmed by AC, or to verify)
+4. Headcount table per department (confirm or refine AC figures)
+5. Payment terms: AR days (how long customers take to pay the company), AP days (how long company takes to pay its suppliers)
+
+After your findings narrative, return ONLY this JSON block:
+\`\`\`json
+{
+  "pnlValidation": {
+    "complete": <true|false>,
+    "missingItems": ["<line item name>"],
+    "issues": ["<description of any discrepancy>"],
+    "approvedLineItems": [
+      {"name": "<EXACT name from file>", "amountK": <number in $K>, "category": "<revenue|cogs|opex|other>", "confirmed": <true|false>}
+    ]
+  },
+  "operationalData": {
+    "pricesPerUnit": [{"item": "<name>", "priceK": <number in $K>}],
+    "costsPerUnit": [{"item": "<name>", "costK": <number in $K>}],
+    "avgSalaryByDept": [{"dept": "<department name>", "avgSalaryK": <number in $K>}],
+    "headcountByDept": [{"dept": "<department name>", "headcount": <number>}],
+    "paymentTerms": {"arDays": <number or null>, "apDays": <number or null>}
+  }
+}
+\`\`\``;
+
+    const ccPreResult = await callClaude('controller', [{ role: 'user', content: ccPreBuildPrompt }]);
+    wfLog('Corporate Controller', 'Pre-build validation complete. Operational data extracted.');
+    wfComment('Corporate Controller', ccPreResult.substring(0, 500) + (ccPreResult.length > 500 ? '…' : ''));
+
+    // Parse CC structured data
+    let ccData = {};
+    const ccJsonM = ccPreResult.match(/```json\s*([\s\S]*?)```/);
+    if (ccJsonM) { try { ccData = JSON.parse(ccJsonM[1]); } catch(e) {} }
+    const ccSalaries    = ccData.operationalData?.avgSalaryByDept  || acData.avgSalaryByDept  || [];
+    const ccHeadcount   = ccData.operationalData?.headcountByDept  || acData.headcountByDept  || [];
+    const ccPayTerms    = ccData.operationalData?.paymentTerms     || acData.paymentTerms     || {};
+    const ccPricesUnit  = ccData.operationalData?.pricesPerUnit    || acData.pricesPerUnit    || [];
+    const ccCostsUnit   = ccData.operationalData?.costsPerUnit     || acData.costsPerUnit     || [];
+    const approvedItems = ccData.pnlValidation?.approvedLineItems  || acLineItems;
+    const refPnlStr     = approvedItems.length
+      ? JSON.stringify(approvedItems, null, 2)
+      : '(No P&L found in uploaded files — DOF to construct from industry benchmarks)';
+
+    // Industry-average salary benchmarks (used when company has actuals P&L but no salary data in files)
+    const industrySalaryBenchmarks = `Engineering: $180K, Sales: $120K, Marketing: $110K, G&A / Finance / HR: $130K, Customer Success: $90K, Operations: $100K, Product: $150K`;
 
     // ─── STAGE 1: ANALYSIS — DOF + VC Expert ───────────────────
     wfSetStage('analysis');
     wfLog('Director of Finance', 'Analyzing extracted data and building financial framework…');
 
-    const analysisPrompt = `You are the Director of Finance at Vision & Virtue. The Assistant Controller has extracted the following raw data from the client's files. Build the financial analysis framework.
+    const analysisPrompt = `You are the Director of Finance at Vision & Virtue. The Assistant Controller and Corporate Controller have extracted and validated data from the client's files. Build the financial analysis framework.
 
 Company Context: ${ctxStr}
-Assistant Controller Data Extraction: ${acResult.substring(0, 2000)}
+Reference Year: ${referenceYear || 'Not identified — use current year'}
+P&L Found in Files: ${hasPnL ? 'YES — use file line items as model structure' : 'NO — construct P&L from industry benchmarks'}
+Reference P&L Line Items (CC-approved, exact names from files):
+${refPnlStr}
+
+Corporate Controller Operational Data:
+- Avg Salary by Dept: ${JSON.stringify(ccSalaries)}
+- Headcount by Dept: ${JSON.stringify(ccHeadcount)}
+- Payment Terms: AR Days = ${ccPayTerms.arDays ?? 'not found'}, AP Days = ${ccPayTerms.apDays ?? 'not found'}
+- Prices per Unit: ${JSON.stringify(ccPricesUnit)}
+- Costs per Unit: ${JSON.stringify(ccCostsUnit)}
+
+Assistant Controller Full Extraction: ${acResult.substring(0, 1500)}
 
 Provide:
-1. Summary of confirmed actuals vs. estimates (flagging each)
-2. The company's actual P&L line item structure (use their exact terminology where found)
-3. Year 1 actuals confirmation — are Year 1 numbers derived from files or assumptions?
-4. 5-year revenue growth logic grounded in actual data
+1. Summary of confirmed actuals vs. estimates (flag each explicitly)
+2. Validate the reference P&L structure — are all key line items captured?
+3. Year 1 actuals confirmation: are Year 1 numbers from files or assumptions?
+4. 5-year revenue growth logic grounded in the actual data and unit economics found
 5. TAM/SAM/SOM with sources
-6. Key metrics: ARPU, CAC, churn, margins, NRR
-7. Recommended salaries by department (headcount × avg salary)
+6. Key metrics: ARPU, CAC, churn, margins, NRR (use file data where available)
+7. Salary recommendations per department — use CC-extracted figures; if unavailable and company has P&L actuals, use industry benchmarks (${industrySalaryBenchmarks})
 
-Flag every assumption. Prioritise numbers from files over estimates.`;
+Flag every assumption. Always prioritise numbers from files over estimates.`;
 
     const analysisResult = await callClaude('dof', [{ role: 'user', content: analysisPrompt }]);
     wfLog('Director of Finance', 'Analysis complete.');
@@ -944,19 +1071,37 @@ After your narrative, return ONLY this JSON block (no other JSON):
     wfSetStage('build');
     wfLog('Director of Finance', 'Building Excel financial model using company P&L structure…');
 
-    const buildPrompt = `You are the Director of Finance building the institutional financial model.
+    // Build salary rule string based on data availability
+    const salaryRuleStr = ccSalaries.length > 0
+      ? `USE the CC-extracted average salaries per department: ${JSON.stringify(ccSalaries)}. Scale headcount from CC/AC data: ${JSON.stringify(ccHeadcount)}.`
+      : hasPnL
+        ? `No salary data found in files, but company HAS a P&L with actuals. Apply industry-average salary benchmarks per department: ${industrySalaryBenchmarks}. Use these as the avgSalaryK values.`
+        : `No salary data found and no actuals P&L. Use your best estimate based on company stage, industry, and geography.`;
+
+    const buildPrompt = `You are the Director of Finance building the institutional 5-year financial model.
 
 Company Context: ${ctxStr}
-Assistant Controller Extraction: ${acResult.substring(0, 1000)}
-DOF Analysis: ${analysisResult.substring(0, 1000)}
-VC Expert Input: ${vcResult.substring(0, 800)}
-Source File Data: ${fileContent ? fileContent.substring(0, 1500) : 'None'}
+Reference Year (actuals base): ${referenceYear || 'current year'}
+P&L in Files: ${hasPnL ? 'YES' : 'NO — construct from industry benchmarks'}
+
+REFERENCE P&L STRUCTURE — use these EXACT line item names as the basis for the model:
+${refPnlStr}
+
+CORPORATE CONTROLLER OPERATIONAL DATA:
+- Payment Terms: AR Days = ${ccPayTerms.arDays ?? 45}, AP Days = ${ccPayTerms.apDays ?? 30}
+- Prices per Unit: ${JSON.stringify(ccPricesUnit)}
+- Costs per Unit: ${JSON.stringify(ccCostsUnit)}
+
+DOF Analysis: ${analysisResult.substring(0, 900)}
+VC Expert Input: ${vcResult.substring(0, 700)}
+Source File Data: ${fileContent ? fileContent.substring(0, 1000) : 'None'}
 
 CRITICAL RULES:
-- Use the company's ACTUAL P&L line item names from the files wherever found
-- If Year 1 actuals are present in the files, set year1IsActual:true and use EXACT numbers for index [0]
-- If Year 1 actuals not found, set year1IsActual:false and calculate from analysis
-- Salaries: use headcount × avg salary per department
+- P&L STRUCTURE: If the reference P&L has line items above, map them to the model categories (saasRevenue, otherRevenue, cogsTotal, rdTotal, smTotal, gaTotal). Preserve the spirit of the company's actual structure.
+- ACTUALS: If hasPnL=true and referenceYear is found, set year1IsActual:true and use EXACT reference-year amounts for Year 1 (index [0]).
+- If Year 1 actuals not available, set year1IsActual:false and project from analysis.
+- SALARY RULE: ${salaryRuleStr}
+- PAYMENT TERMS: Use AR Days = ${ccPayTerms.arDays ?? 45}, AP Days = ${ccPayTerms.apDays ?? 30} (from files; these flow to Cash Flow sheet).
 - All numbers in $K
 
 Return ONLY valid JSON. Schema:
@@ -1035,17 +1180,29 @@ Rules: all numbers in $K (5000 = $5M). startYear = current calendar year. saasRe
     wfSetStage('actuals_review');
     wfLog('Corporate Controller', 'Reviewing Year 1 actuals against model figures…');
 
-    const actualsPrompt = `You are the Corporate Controller. Review the financial model's Year 1 figures against the actual data from the company's files.
+    const actualsPrompt = `You are the Corporate Controller performing a final Year 1 accuracy sign-off on the financial model.
 
-Model Year 1 (from DOF build): ${buildResult.substring(0, 1000)}
-Actual file data (from Assistant Controller): ${acResult.substring(0, 1000)}
+Company Context: ${ctxStr}
+Reference Year: ${referenceYear || 'unknown'}
+P&L Found in Files: ${hasPnL ? 'YES' : 'NO'}
 
-1. Confirm: are Year 1 figures from actual records or projections?
-2. List any Year 1 line items that differ from files and the correct actual values
-3. Approve or flag Year 1 for correction
-4. Note any missing actuals that should be sourced from management accounts
+Reference P&L (CC-approved, exact names from files):
+${refPnlStr}
 
-Be precise. Reference specific numbers.`;
+DOF Model — Year 1 Output (index [0] from each array):
+${buildResult.substring(0, 1200)}
+
+Your pre-build operational findings:
+${ccPreResult.substring(0, 600)}
+
+REVIEW TASKS:
+1. Compare the DOF's Year 1 figures against the reference P&L amounts — list any discrepancies with correct values.
+2. Confirm year1IsActual flag is correctly set (true only if Year 1 = reference year actuals from files).
+3. Verify the salaries used are consistent with the CC-extracted or industry-benchmark figures.
+4. Verify AR days (${ccPayTerms.arDays ?? 'unknown'}) and AP days (${ccPayTerms.apDays ?? 'unknown'}) from files are reflected in the Cash Flow inputs.
+5. Issue a final APPROVED / NEEDS CORRECTION verdict with specific corrections if required.
+
+Be precise. Reference specific line items and numbers.`;
 
     const actualsResult = await callClaude('controller', [{ role: 'user', content: actualsPrompt }]);
     wfLog('Corporate Controller', 'Year 1 actuals review complete.');
