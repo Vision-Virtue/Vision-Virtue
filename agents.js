@@ -819,8 +819,8 @@ async function extractFileContents(files) {
         if (pdfLib) {
           const buf = await file.arrayBuffer();
           const pdf = await pdfLib.getDocument({ data: buf }).promise;
-          const MAX_PAGES = 15;            // first 15 pages — covers financials in most annual reports
-          const MAX_PDF_CHARS = 8000;
+          const MAX_PAGES = 40;
+          const MAX_PDF_CHARS = 25000;
           const numPages = Math.min(pdf.numPages, MAX_PAGES);
           let pdfText = `=== ${file.name} (PDF — ${pdf.numPages} pages, extracting first ${numPages}) ===\n`;
           for (let p = 1; p <= numPages; p++) {
@@ -832,6 +832,47 @@ async function extractFileContents(files) {
           parts.push(pdfText.substring(0, MAX_PDF_CHARS));
         } else {
           parts.push(`=== ${file.name} (PDF) ===\n[PDF.js not loaded — cannot extract text. Use filename as context only.]`);
+        }
+      } else if (['pptx', 'ppt'].includes(ext)) {
+        const JSZipLib = (typeof JSZip !== 'undefined') ? JSZip : null;
+        if (JSZipLib && ext === 'pptx') {
+          const buf = await file.arrayBuffer();
+          const zip = await JSZipLib.loadAsync(buf);
+          const slideFiles = Object.keys(zip.files)
+            .filter(n => /^ppt\/slides\/slide\d+\.xml$/.test(n))
+            .sort((a, b) => {
+              const na = parseInt(a.match(/slide(\d+)/)?.[1] || '0');
+              const nb = parseInt(b.match(/slide(\d+)/)?.[1] || '0');
+              return na - nb;
+            });
+          let pptText = `=== ${file.name} (PowerPoint — ${slideFiles.length} slides) ===\n`;
+          for (const slideName of slideFiles) {
+            const xml = await zip.files[slideName].async('text');
+            const texts = [...xml.matchAll(/<a:t[^>]*>([^<]*)<\/a:t>/g)]
+              .map(m => m[1]).filter(t => t.trim());
+            const slideNum = slideName.match(/slide(\d+)/)?.[1];
+            if (texts.length) pptText += `\n--- Slide ${slideNum} ---\n${texts.join(' ')}`;
+          }
+          parts.push(pptText.substring(0, 20000));
+        } else {
+          parts.push(`=== ${file.name} (PowerPoint) ===\n[JSZip not loaded or .ppt (old format) — cannot extract text. Convert to .pptx and re-upload.]`);
+        }
+      } else if (['docx', 'doc'].includes(ext)) {
+        const JSZipLib = (typeof JSZip !== 'undefined') ? JSZip : null;
+        if (JSZipLib && ext === 'docx') {
+          const buf = await file.arrayBuffer();
+          const zip = await JSZipLib.loadAsync(buf);
+          const docEntry = zip.files['word/document.xml'];
+          if (docEntry) {
+            const xml = await docEntry.async('text');
+            const texts = [...xml.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)]
+              .map(m => m[1]).filter(t => t.trim());
+            parts.push(`=== ${file.name} (Word) ===\n${texts.join(' ').substring(0, 20000)}`);
+          } else {
+            parts.push(`=== ${file.name} (Word) ===\n[Could not locate word/document.xml inside archive]`);
+          }
+        } else {
+          parts.push(`=== ${file.name} (Word) ===\n[JSZip not loaded or .doc (old format) — cannot extract text. Convert to .docx and re-upload.]`);
         }
       } else {
         parts.push(`=== ${file.name} ===\n[Binary or unsupported file type — use filename as context only.]`);
