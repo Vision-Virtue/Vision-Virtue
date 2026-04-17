@@ -12,6 +12,15 @@ function getLinkedInService(): LinkedInService {
   );
 }
 
+// Resolve the correct marketing page URL regardless of which domain FRONTEND_URL points to.
+// GitHub Pages project pages live under /Vision-Virtue/ — plain custom domains do not.
+function marketingUrl(qs: string): string {
+  const base = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+  const needsSubPath = base.includes('github.io') && !base.endsWith('/Vision-Virtue');
+  const page = needsSubPath ? '/Vision-Virtue/marketing.html' : '/marketing.html';
+  return `${base}${page}?${qs}`;
+}
+
 // ─── Auth Controller ──────────────────────────────────────────────────────────
 
 export class AuthController {
@@ -37,10 +46,7 @@ export class AuthController {
     };
 
     if (error) {
-      const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-      res.redirect(
-        `${frontendUrl}/marketing.html?linkedin_error=${encodeURIComponent(error_description || error)}`,
-      );
+      res.redirect(marketingUrl(`linkedin_error=${encodeURIComponent(error_description || error)}`));
       return;
     }
 
@@ -70,8 +76,7 @@ export class AuthController {
 
     contentRepository.saveLinkedInToken(tokenData);
 
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    res.redirect(`${frontendUrl}/marketing.html?linkedin_connected=true`);
+    res.redirect(marketingUrl('linkedin_connected=true'));
   }
 
   // GET /api/auth/status

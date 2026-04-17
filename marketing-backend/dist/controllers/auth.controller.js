@@ -7,6 +7,14 @@ const linkedin_service_1 = require("../services/linkedin.service");
 function getLinkedInService() {
     return new linkedin_service_1.LinkedInService(process.env.LINKEDIN_CLIENT_ID || '', process.env.LINKEDIN_CLIENT_SECRET || '', process.env.LINKEDIN_REDIRECT_URI || '', process.env.LINKEDIN_ORGANIZATION_ID || '');
 }
+// Resolve the correct marketing page URL regardless of which domain FRONTEND_URL points to.
+// GitHub Pages project pages live under /Vision-Virtue/ — plain custom domains do not.
+function marketingUrl(qs) {
+    const base = (process.env.FRONTEND_URL || 'http://localhost:3000').replace(/\/$/, '');
+    const needsSubPath = base.includes('github.io') && !base.endsWith('/Vision-Virtue');
+    const page = needsSubPath ? '/Vision-Virtue/marketing.html' : '/marketing.html';
+    return `${base}${page}?${qs}`;
+}
 // ─── Auth Controller ──────────────────────────────────────────────────────────
 class AuthController {
     // GET /api/auth/linkedin
@@ -22,8 +30,7 @@ class AuthController {
     async linkedInCallback(req, res) {
         const { code, state, error, error_description } = req.query;
         if (error) {
-            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-            res.redirect(`${frontendUrl}/marketing.html?linkedin_error=${encodeURIComponent(error_description || error)}`);
+            res.redirect(marketingUrl(`linkedin_error=${encodeURIComponent(error_description || error)}`));
             return;
         }
         if (!code) {
@@ -45,8 +52,7 @@ class AuthController {
         const linkedInService = getLinkedInService();
         const tokenData = await linkedInService.exchangeCodeForToken(code);
         repository_1.contentRepository.saveLinkedInToken(tokenData);
-        const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-        res.redirect(`${frontendUrl}/marketing.html?linkedin_connected=true`);
+        res.redirect(marketingUrl('linkedin_connected=true'));
     }
     // GET /api/auth/status
     getStatus(_req, res) {
