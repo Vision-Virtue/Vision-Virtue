@@ -475,15 +475,15 @@ function renderAgentContentHTML(key, item) {
     } else {
       const b = item.economist_brief;
       body = `<div class="brief-grid">
-        <div class="brief-field"><div class="brief-label">Summary</div><div class="brief-value">${b.summary || ''}</div></div>
-        <div class="brief-field"><div class="brief-label">Israel Context</div><div class="brief-value">${b.israel_context || ''}</div></div>
-        <div class="brief-field"><div class="brief-label">US Context</div><div class="brief-value">${b.us_context || ''}</div></div>
-        <div class="brief-field"><div class="brief-label">Global Context</div><div class="brief-value">${b.global_context || ''}</div></div>
-        <div class="brief-field"><div class="brief-label">Geopolitical Implications</div><div class="brief-value">${b.geopolitical_implications || ''}</div></div>
-        <div class="brief-field"><div class="brief-label">Central Bank Stance</div><div class="brief-value">${b.central_bank_stance || ''}</div></div>
-        <div class="brief-field"><div class="brief-label">Risks &amp; Uncertainties</div><div class="brief-value">${(b.risks_and_uncertainties || []).join('<br>')}</div></div>
-        <div class="brief-field"><div class="brief-label">Actionable Insights</div><div class="brief-value">${(b.actionable_insights || []).join('<br>')}</div></div>
-        ${b.confidence_level ? `<div class="brief-field"><div class="brief-label">Confidence</div><div class="brief-value">${b.confidence_level}${b.requires_verification ? ' — <em>verification required</em>' : ''}</div></div>` : ''}
+        <div class="brief-field"><div class="brief-label">Summary</div><div class="brief-value">${esc(b.summary || '')}</div></div>
+        <div class="brief-field"><div class="brief-label">Israel Context</div><div class="brief-value">${esc(b.israel_context || '')}</div></div>
+        <div class="brief-field"><div class="brief-label">US Context</div><div class="brief-value">${esc(b.us_context || '')}</div></div>
+        <div class="brief-field"><div class="brief-label">Global Context</div><div class="brief-value">${esc(b.global_context || '')}</div></div>
+        <div class="brief-field"><div class="brief-label">Geopolitical Implications</div><div class="brief-value">${esc(b.geopolitical_implications || '')}</div></div>
+        <div class="brief-field"><div class="brief-label">Central Bank Stance</div><div class="brief-value">${esc(b.central_bank_stance || '')}</div></div>
+        <div class="brief-field"><div class="brief-label">Risks &amp; Uncertainties</div><div class="brief-value">${(b.risks_and_uncertainties || []).map(esc).join('<br>')}</div></div>
+        <div class="brief-field"><div class="brief-label">Actionable Insights</div><div class="brief-value">${(b.actionable_insights || []).map(esc).join('<br>')}</div></div>
+        ${b.confidence_level ? `<div class="brief-field"><div class="brief-label">Confidence</div><div class="brief-value">${esc(b.confidence_level)}${b.requires_verification ? ' — <em>verification required</em>' : ''}</div></div>` : ''}
       </div>`;
     }
   }
@@ -496,16 +496,16 @@ function renderAgentContentHTML(key, item) {
       body = `<div class="draft-grid">
         <div class="draft-panel">
           <div class="draft-lang">🇮🇱 Hebrew</div>
-          <div class="draft-text" dir="rtl">${d.hebrew?.text || ''}</div>
-          <div class="draft-meta">${(d.hebrew?.hashtags || []).join(' ')}</div>
+          <div class="draft-text" dir="rtl">${esc(d.hebrew?.text || '')}</div>
+          <div class="draft-meta">${(d.hebrew?.hashtags || []).map(esc).join(' ')}</div>
         </div>
         <div class="draft-panel">
           <div class="draft-lang">🇺🇸 English</div>
-          <div class="draft-text">${d.english?.text || ''}</div>
-          <div class="draft-meta">${(d.english?.hashtags || []).join(' ')}</div>
+          <div class="draft-text">${esc(d.english?.text || '')}</div>
+          <div class="draft-meta">${(d.english?.hashtags || []).map(esc).join(' ')}</div>
         </div>
       </div>
-      ${d.key_message ? `<div class="brief-field" style="margin-top:1rem"><div class="brief-label">Key Message</div><div class="brief-value">${d.key_message}</div></div>` : ''}`;
+      ${d.key_message ? `<div class="brief-field" style="margin-top:1rem"><div class="brief-label">Key Message</div><div class="brief-value">${esc(d.key_message)}</div></div>` : ''}`;
     }
   }
 
@@ -546,10 +546,10 @@ function renderAgentContentHTML(key, item) {
           <span style="color:var(--gray-400);font-size:12px">Factual: ${r.factual_accuracy_score}/10 · Brand: ${r.brand_alignment_score}/10 · Clarity: ${r.clarity_score}/10 · Risk: <strong>${r.reputational_risk}</strong></span>
         </div>
         <div class="brief-grid">
-          <div class="brief-field"><div class="brief-label">Comments</div><div class="brief-value">${r.comments || ''}</div></div>
-          ${r.edits?.hebrew  ? `<div class="brief-field"><div class="brief-label">🇮🇱 Suggested Edit</div><div class="brief-value">${r.edits.hebrew}</div></div>` : ''}
-          ${r.edits?.english ? `<div class="brief-field"><div class="brief-label">🇺🇸 Suggested Edit</div><div class="brief-value">${r.edits.english}</div></div>` : ''}
-          ${r.edits?.general ? `<div class="brief-field"><div class="brief-label">General Notes</div><div class="brief-value">${r.edits.general}</div></div>` : ''}
+          <div class="brief-field"><div class="brief-label">Comments</div><div class="brief-value">${esc(r.comments || '')}</div></div>
+          ${r.edits?.hebrew  ? `<div class="brief-field"><div class="brief-label">🇮🇱 Suggested Edit</div><div class="brief-value">${esc(r.edits.hebrew)}</div></div>` : ''}
+          ${r.edits?.english ? `<div class="brief-field"><div class="brief-label">🇺🇸 Suggested Edit</div><div class="brief-value">${esc(r.edits.english)}</div></div>` : ''}
+          ${r.edits?.general ? `<div class="brief-field"><div class="brief-label">General Notes</div><div class="brief-value">${esc(r.edits.general)}</div></div>` : ''}
         </div>`;
     }
   }
@@ -603,9 +603,9 @@ function renderAgentContentHTML(key, item) {
     } else if (state === 'APPROVED_FOR_PUBLISHING' || state === 'PUBLISHED') {
       body = `<div class="brief-grid">
         <div class="brief-field"><div class="brief-label">Decision</div><div class="brief-value"><span class="panel-decision decision-approved">APPROVED</span></div></div>
-        <div class="brief-field"><div class="brief-label">Approved By</div><div class="brief-value">${approval?.approved_by || 'Raphael'}</div></div>
-        <div class="brief-field"><div class="brief-label">At</div><div class="brief-value">${fmtDate(approval?.approved_at)}</div></div>
-        ${approval?.notes ? `<div class="brief-field"><div class="brief-label">Notes</div><div class="brief-value">${approval.notes}</div></div>` : ''}
+        <div class="brief-field"><div class="brief-label">Approved By</div><div class="brief-value">${esc(approval?.approved_by || 'Raphael')}</div></div>
+        <div class="brief-field"><div class="brief-label">At</div><div class="brief-value">${esc(fmtDate(approval?.approved_at))}</div></div>
+        ${approval?.notes ? `<div class="brief-field"><div class="brief-label">Notes</div><div class="brief-value">${esc(approval.notes)}</div></div>` : ''}
       </div>
       ${qaEntries.length > 0 ? `<div class="qa-section qa-section-readonly"><div class="qa-section-header"><img class="qa-section-avatar" src="agent_economist.jpg" alt="Dr. Ethan Ross" /><div><div class="qa-section-title">Economist Q&amp;A</div><div class="qa-section-sub">Questions asked before approval</div></div></div>${renderQAHistoryHTML(qaEntries)}</div>` : ''}
       ${state === 'APPROVED_FOR_PUBLISHING' ? `<div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--card-border)"><button class="btn btn-publish" id="publish-btn">Publish to LinkedIn Now</button></div>` : ''}
@@ -613,7 +613,7 @@ function renderAgentContentHTML(key, item) {
     } else if (state === 'REJECTED' && approval) {
       body = `<div class="brief-grid">
         <div class="brief-field"><div class="brief-label">Decision</div><div class="brief-value"><span class="panel-decision decision-reject">REJECTED</span></div></div>
-        ${approval.notes ? `<div class="brief-field"><div class="brief-label">Notes</div><div class="brief-value">${approval.notes}</div></div>` : ''}
+        ${approval.notes ? `<div class="brief-field"><div class="brief-label">Notes</div><div class="brief-value">${esc(approval.notes)}</div></div>` : ''}
       </div>`;
     } else {
       body = `<div class="empty-state" style="padding:24px 0"><p>Content not yet ready for approval.</p></div>`;
@@ -1219,15 +1219,15 @@ function renderLinkedInProfile(profile) {
       <div class="li-profile-header">
         <div class="li-logo">${profile.logoUrl ? `<img src="${profile.logoUrl}" alt="Logo">` : '<div class="li-logo-placeholder">V&amp;V</div>'}</div>
         <div>
-          <div class="li-name">${profile.name || 'Vision & Virtue'}</div>
-          <div class="li-tagline">${profile.tagline || '—'}</div>
+          <div class="li-name">${esc(profile.name || 'Vision & Virtue')}</div>
+          <div class="li-tagline">${esc(profile.tagline || '—')}</div>
         </div>
       </div>
       <div class="brief-grid" style="margin-top:1.5rem">
-        <div class="brief-field"><div class="brief-label">Tagline</div><div class="brief-value">${profile.tagline || '—'}</div></div>
-        <div class="brief-field"><div class="brief-label">Description</div><div class="brief-value">${profile.description || '—'}</div></div>
-        <div class="brief-field"><div class="brief-label">Industry</div><div class="brief-value">${profile.industries?.join(', ') || '—'}</div></div>
-        <div class="brief-field"><div class="brief-label">Website</div><div class="brief-value">${profile.website || '—'}</div></div>
+        <div class="brief-field"><div class="brief-label">Tagline</div><div class="brief-value">${esc(profile.tagline || '—')}</div></div>
+        <div class="brief-field"><div class="brief-label">Description</div><div class="brief-value">${esc(profile.description || '—')}</div></div>
+        <div class="brief-field"><div class="brief-label">Industry</div><div class="brief-value">${esc((profile.industries || []).join(', ') || '—')}</div></div>
+        <div class="brief-field"><div class="brief-label">Website</div><div class="brief-value">${esc(profile.website || '—')}</div></div>
       </div>
     </div>`;
 }

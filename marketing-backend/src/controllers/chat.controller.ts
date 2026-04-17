@@ -5,9 +5,8 @@ import { ApiError } from '../types';
 
 const VALID_AGENTS = ['economist', 'sofia', 'daniel', 'raphael', 'cfo', 'dof', 'controller', 'asst_controller', 'vc_expert'];
 
-function getAIService(req: Request): AIService {
-  const apiKey = process.env.ANTHROPIC_API_KEY
-    || (req.headers?.['x-api-key'] as string | undefined);
+function getAIService(_req?: Request): AIService {
+  const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     throw new ApiError(500, 'ANTHROPIC_API_KEY is not configured on the server', 'MISSING_CONFIG');
   }
@@ -37,6 +36,13 @@ export class ChatController {
       return;
     }
 
+    if (message.trim().length > 4000) {
+      res.status(400).json({
+        error: { code: 'VALIDATION_ERROR', message: 'message must be 4000 characters or fewer' },
+      });
+      return;
+    }
+
     if (!Array.isArray(history)) {
       res.status(400).json({
         error: { code: 'VALIDATION_ERROR', message: 'history must be an array' },
@@ -44,7 +50,7 @@ export class ChatController {
       return;
     }
 
-    const aiService = getAIService(req);
+    const aiService = getAIService();
     const reply = await aiService.directAgentChat(agent, message.trim(), history);
 
     res.json({ success: true, data: { reply, agent } });

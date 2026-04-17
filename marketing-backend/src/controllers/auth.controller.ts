@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { contentRepository } from '../db/repository';
+import { getDb } from '../db/database';
 import { LinkedInService } from '../services/linkedin.service';
 
 function getLinkedInService(): LinkedInService {
@@ -61,7 +62,7 @@ export class AuthController {
     const sessionState = (req.session as unknown as Record<string, unknown>)['oauth_state'] as
       | string
       | undefined;
-    if (sessionState && state && sessionState !== state) {
+    if (!state || !sessionState || sessionState !== state) {
       res.status(400).json({
         error: { code: 'INVALID_STATE', message: 'OAuth state mismatch. Possible CSRF attack.' },
       });
@@ -128,8 +129,7 @@ export class AuthController {
     // Instead, we'll just mark as expired by returning a helpful message
     // The simplest approach: delete by saving a dummy expired token
     // Actually, let's just use a direct DB call
-    const db = require('../db/database').getDb();
-    db.prepare('DELETE FROM linkedin_accounts').run();
+    getDb().prepare('DELETE FROM linkedin_accounts').run();
 
     res.json({ success: true, message: 'LinkedIn disconnected successfully' });
   }

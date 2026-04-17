@@ -2,6 +2,15 @@
    VISION & VIRTUE — Agentic Financial Department
    ============================================================ */
 
+// ── HTML escape ──────────────────────────────────────────────
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
 // ── Access gate ─────────────────────────────────────────────
 const ACCESS_CODE = 'VV2025';   // Change this to your preferred PIN
 
@@ -708,9 +717,9 @@ function renderFileList() {
     const item = document.createElement('div');
     item.className = 'fin-file-item';
     item.innerHTML = `
-      <span class="fin-file-ext ${cls}">${label}</span>
-      <span class="fin-file-name" title="${file.name}">${file.name}</span>
-      <span class="fin-file-size">${fmtSize(file.size)}</span>
+      <span class="fin-file-ext ${cls}">${esc(label)}</span>
+      <span class="fin-file-name" title="${esc(file.name)}">${esc(file.name)}</span>
+      <span class="fin-file-size">${esc(fmtSize(file.size))}</span>
       <button class="fin-file-remove" data-idx="${idx}" title="Remove">&#x2715;</button>
     `;
     fileList.appendChild(item);
@@ -774,7 +783,7 @@ function wfLog(agent, text) {
   const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   const entry = document.createElement('div');
   entry.className = 'wf-log-entry';
-  entry.innerHTML = `<span class="wf-log-time">${time}</span> <span class="wf-log-agent">${agent}</span>: ${text}`;
+  entry.innerHTML = `<span class="wf-log-time">${esc(time)}</span> <span class="wf-log-agent">${esc(agent)}</span>: ${esc(text)}`;
   log.appendChild(entry);
   log.scrollTop = log.scrollHeight;
 }
@@ -786,7 +795,7 @@ function wfComment(agent, text) {
   panel.style.display = 'block';
   const c = document.createElement('div');
   c.className = 'wf-comment';
-  c.innerHTML = `<div class="wf-comment-agent">${agent}</div><div class="wf-comment-text">${text}</div>`;
+  c.innerHTML = `<div class="wf-comment-agent">${esc(agent)}</div><div class="wf-comment-text">${esc(text)}</div>`;
   list.appendChild(c);
 }
 
