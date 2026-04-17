@@ -9,7 +9,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: FRONTEND_URL
-        value: https://vision-virtue.github.io
+        value: https://visionvirtuepartnership.com
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: RAPHAEL_PASSCODE
@@ -17,7 +17,7 @@ services:
       - key: SESSION_SECRET
         generateValue: true
       - key: DB_PATH
-        value: /tmp/marketing.db
+        value: ./data/marketing.db
       - key: LINKEDIN_CLIENT_ID
         sync: false
       - key: LINKEDIN_CLIENT_SECRET

@@ -7,7 +7,7 @@ exports.chatController = exports.ChatController = void 0;
 const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
 const ai_service_1 = require("../services/ai.service");
 const types_1 = require("../types");
-const VALID_AGENTS = ['economist', 'sofia', 'daniel', 'raphael'];
+const VALID_AGENTS = ['economist', 'sofia', 'daniel', 'raphael', 'cfo', 'dof', 'controller', 'asst_controller', 'vc_expert'];
 function getAIService(req) {
     const apiKey = process.env.ANTHROPIC_API_KEY
         || req.headers?.['x-api-key'];
