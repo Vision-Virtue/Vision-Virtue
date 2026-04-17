@@ -38,7 +38,7 @@ export class LinkedInService {
   }
 
   async getPersonUrn(token: string): Promise<string> {
-    // Try /v2/me — works for many apps even without an explicit r_liteprofile scope
+    // Try /v2/me — works when r_liteprofile scope is available
     try {
       const response = await axios.get(`${LINKEDIN_API_BASE}/v2/me`, {
         headers: {
@@ -48,7 +48,22 @@ export class LinkedInService {
       });
       const id = (response.data as { id?: string }).id;
       if (id) return `urn:li:person:${id}`;
-    } catch { /* fall through to env var */ }
+    } catch { /* fall through */ }
+
+    // Try token introspection — returns sub (member ID), works with w_member_social only
+    try {
+      const intro = await axios.post(
+        `${LINKEDIN_AUTH_BASE}/introspectToken`,
+        new URLSearchParams({
+          token,
+          client_id: this.clientId,
+          client_secret: this.clientSecret,
+        }).toString(),
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+      );
+      const sub = (intro.data as { sub?: string }).sub;
+      if (sub) return `urn:li:person:${sub}`;
+    } catch { /* fall through */ }
 
     // Fallback: LINKEDIN_PERSON_URN env var (set manually in Render dashboard)
     const envUrn = process.env.LINKEDIN_PERSON_URN;
