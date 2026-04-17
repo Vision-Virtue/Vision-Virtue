@@ -819,8 +819,8 @@ async function extractFileContents(files) {
         if (pdfLib) {
           const buf = await file.arrayBuffer();
           const pdf = await pdfLib.getDocument({ data: buf }).promise;
-          const MAX_PAGES = 40;
-          const MAX_PDF_CHARS = 25000;
+          const MAX_PAGES = 120;
+          const MAX_PDF_CHARS = 80000;
           const numPages = Math.min(pdf.numPages, MAX_PAGES);
           let pdfText = `=== ${file.name} (PDF — ${pdf.numPages} pages, extracting first ${numPages}) ===\n`;
           for (let p = 1; p <= numPages; p++) {
