@@ -124,8 +124,10 @@ async function checkLinkedInStatus() {
   const el = document.getElementById('linkedin-status');
   try {
     const data = await GET('/auth/status');
-    if (data.connected) {
+    if (data.linkedin_connected) {
       el.innerHTML = `<span class="status-dot dot-connected"></span><span class="status-text">LinkedIn Connected</span>`;
+    } else if (!data.credentials_configured) {
+      el.innerHTML = `<span class="status-dot dot-checking"></span><span class="status-text">Awaiting LinkedIn API Approval</span>`;
     } else {
       el.innerHTML = `<span class="status-dot dot-disconnected"></span><span class="status-text">LinkedIn Disconnected</span>`;
     }
@@ -1141,16 +1143,16 @@ async function renderLinkedIn(area) {
         <p class="view-sub">Manage the official Vision &amp; Virtue LinkedIn company page.</p>
       </div>
       <div style="display:flex;gap:0.75rem">
-        <button class="btn btn-outline" id="connect-li-btn">Connect LinkedIn</button>
+        <button class="btn btn-outline" id="connect-li-btn" disabled>Connect LinkedIn</button>
         <button class="btn btn-secondary" id="review-profile-btn">AI Review Profile</button>
       </div>
     </div>
     <div id="li-content">
-      <div class="loading-state"><div class="spinner"></div><span>Loading profile…</span></div>
+      <div class="loading-state"><div class="spinner"></div><span>Checking LinkedIn status…</span></div>
     </div>`;
 
   document.getElementById('connect-li-btn').onclick = () => {
-    window.open(API_BASE + '/auth/linkedin', '_blank');
+    window.open(API_BASE.replace('/api', '') + '/api/auth/linkedin', '_blank');
   };
 
   document.getElementById('review-profile-btn').onclick = async () => {
@@ -1168,13 +1170,43 @@ async function renderLinkedIn(area) {
   };
 
   try {
-    const profile = await GET('/linkedin/profile');
-    renderLinkedInProfile(profile);
+    const status = await GET('/auth/status');
+    const connectBtn = document.getElementById('connect-li-btn');
+
+    if (status.linkedin_connected) {
+      connectBtn.textContent = 'Re-connect LinkedIn';
+      connectBtn.disabled = false;
+      const profile = await GET('/linkedin/profile');
+      renderLinkedInProfile(profile);
+    } else if (!status.credentials_configured) {
+      connectBtn.disabled = true;
+      connectBtn.title = 'Awaiting LinkedIn API approval';
+      document.getElementById('li-content').innerHTML = `
+        <div class="empty-state">
+          <div style="font-size:2rem;margin-bottom:1rem">⏳</div>
+          <p style="font-weight:600;color:var(--text-primary);margin-bottom:0.5rem">Awaiting LinkedIn Marketing API Approval</p>
+          <p style="font-size:0.85rem;color:var(--text-muted);max-width:480px;margin:0 auto 1rem">
+            An API access request was submitted to LinkedIn for <strong>raphael.h@visionvirtuepartnership.com</strong>.
+            LinkedIn typically reviews applications within 1–5 business days.
+          </p>
+          <p style="font-size:0.8rem;color:var(--text-muted)">
+            Once approved, add your <code>LINKEDIN_CLIENT_ID</code>, <code>LINKEDIN_CLIENT_SECRET</code>, and
+            <code>LINKEDIN_ORGANIZATION_ID</code> in the Render environment variables, then redeploy.
+          </p>
+        </div>`;
+    } else {
+      connectBtn.disabled = false;
+      document.getElementById('li-content').innerHTML = `
+        <div class="empty-state">
+          <p style="font-weight:600;color:var(--text-primary);margin-bottom:0.5rem">LinkedIn Not Connected</p>
+          <p style="font-size:0.85rem;color:var(--text-muted)">Click "Connect LinkedIn" to authorise Vision &amp; Virtue's company page.</p>
+        </div>`;
+    }
   } catch(e) {
     document.getElementById('li-content').innerHTML = `
       <div class="empty-state">
-        <p>${e.message}</p>
-        <p style="font-size:0.8rem;margin-top:0.5rem;color:var(--text-muted)">Connect LinkedIn to view and manage your company page.</p>
+        <p>${esc(e.message)}</p>
+        <p style="font-size:0.8rem;margin-top:0.5rem;color:var(--text-muted)">Backend may still be starting — refresh in a moment.</p>
       </div>`;
   }
 }

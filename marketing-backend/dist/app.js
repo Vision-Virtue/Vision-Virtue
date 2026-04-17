@@ -15,6 +15,8 @@ const app = (0, express_1.default)();
 const allowedOrigins = [
     process.env.FRONTEND_URL || 'http://localhost:3000',
     'https://vision-virtue.github.io',
+    'https://visionvirtuepartnership.com',
+    'https://www.visionvirtuepartnership.com',
     'http://localhost:3000',
     'http://127.0.0.1:3000',
     'http://localhost:5500',

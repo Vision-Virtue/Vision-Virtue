@@ -51,11 +51,13 @@ class AuthController {
     // GET /api/auth/status
     getStatus(_req, res) {
         const token = repository_1.contentRepository.getLinkedInToken();
+        const credentialsConfigured = !!(process.env.LINKEDIN_CLIENT_ID && process.env.LINKEDIN_CLIENT_SECRET);
         if (!token) {
             res.json({
                 success: true,
                 data: {
                     linkedin_connected: false,
+                    credentials_configured: credentialsConfigured,
                     expires_at: null,
                     organization_id: null,
                 },
@@ -67,6 +69,7 @@ class AuthController {
             success: true,
             data: {
                 linkedin_connected: !isExpired,
+                credentials_configured: credentialsConfigured,
                 expires_at: new Date(token.expires_at).toISOString(),
                 organization_id: token.organization_id,
                 token_age_hours: Math.round((Date.now() - new Date(token.created_at).getTime()) / 3600000),
