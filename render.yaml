@@ -28,3 +28,5 @@ services:
         sync: false
       - key: LINKEDIN_PERSON_URN
         sync: false
+      - key: BRAVE_SEARCH_API_KEY
+        sync: false

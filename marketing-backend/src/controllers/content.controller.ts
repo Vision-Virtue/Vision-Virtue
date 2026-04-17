@@ -4,6 +4,7 @@ import { contentRepository } from '../db/repository';
 import { workflowStateMachine } from '../state-machine/workflow';
 import { AIService } from '../services/ai.service';
 import { LinkedInService } from '../services/linkedin.service';
+import { BraveSearchService } from '../services/search.service';
 import { ApiError, Approval, QAEntry, RaphaelAnnotation } from '../types';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -15,6 +16,11 @@ function getAIService(req?: Request): AIService {
     throw new ApiError(500, 'ANTHROPIC_API_KEY is not configured on the server', 'MISSING_CONFIG');
   }
   return new AIService(new Anthropic({ apiKey }));
+}
+
+function getSearchService(): BraveSearchService | undefined {
+  const key = process.env.BRAVE_SEARCH_API_KEY;
+  return key ? new BraveSearchService(key) : undefined;
 }
 
 function getLinkedInService(): LinkedInService {
@@ -75,7 +81,7 @@ export class ContentController {
     }
 
     const aiService = getAIService(req);
-    const aiResponse = await aiService.runChiefEconomist(item.topic);
+    const aiResponse = await aiService.runChiefEconomist(item.topic, getSearchService());
 
     if (!aiResponse.economist_brief) {
       res.status(500).json({ error: { code: 'AI_ERROR', message: 'No economist brief in AI response' } });
