@@ -108,6 +108,7 @@ export class AuthController {
         credentials_configured: credentialsConfigured,
         expires_at: new Date(token.expires_at).toISOString(),
         organization_id: token.organization_id,
+        person_urn: token.person_urn,
         token_age_hours: Math.round((Date.now() - new Date(token.created_at).getTime()) / 3600000),
         is_expired: isExpired,
       },
