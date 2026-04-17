@@ -834,71 +834,132 @@ async function startFinanceWorkflow() {
   wfSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   try {
-    // ─── STAGE 1: ANALYSIS ─────────────────────────────────────
-    wfSetStage('analysis');
-    wfLog('System', 'Workflow initiated. Reading uploaded files…');
+    // ─── STAGE 0: DATA COLLECTION — Assistant Controller ───────
+    wfSetStage('data_collection');
+    wfLog('System', 'Workflow initiated. Assistant Controller extracting raw data from uploaded files…');
     wfLog('System', `Context: ${ctxStr}`);
 
-    // Extract actual content from uploaded files
     const fileContent = await extractFileContents(uploadedFiles);
     wfLog('System', `Files parsed: ${fileNames || 'none'}.`);
 
-    wfLog('Director of Finance', 'Analyzing uploaded materials and extracting financial data…');
-    const analysisPrompt = `You are the Director of Finance at Vision & Virtue Partnership. Analyze the company context and uploaded document contents below. Extract all financial, operational, and commercial data to inform the Excel financial model and investor presentation.
+    const acPrompt = `You are the Assistant Controller at Vision & Virtue. Your job is to extract and catalogue all financial and operational data from the uploaded files below.
 
 Company Context: ${ctxStr}
 Uploaded Files: ${fileNames || 'none'}
 
---- UPLOADED FILE CONTENTS ---
-${fileContent || 'No files uploaded — derive all figures from the structured context and reasonable industry assumptions.'}
---- END FILE CONTENTS ---
+--- FILE CONTENTS ---
+${fileContent || 'No files uploaded.'}
+--- END ---
 
-Based on the above, provide:
-1. A summary of the actual financial data found in the files (revenue, costs, margins, customers, etc.)
-2. Key assumptions for any data not present in the files
-3. The 5-year revenue growth logic (grounded in the actual data where available)
-4. TAM/SAM/SOM estimates
-5. Key metrics to model (ARPU, CAC, churn, margins, NRR, etc.)
-6. Recommended P&L, Cash Flow, and KPI dashboard structure
+Extract and report:
+1. All revenue figures found (by period, product line, geography)
+2. All cost/expense items found (exact line item names from the company's P&L structure)
+3. Headcount by department and average salaries (if available)
+4. Cash, debt, CAPEX figures
+5. Customer count, churn, ARR/MRR if present
+6. Any Year 1 actuals vs. projections
+7. The EXACT P&L line item structure used by this company (e.g. "Salaries & Benefits", "Server Costs", etc.)
 
-Be specific and quantitative. Flag every assumption clearly vs. data taken from the files.`;
+Label each item: [FROM FILE] or [NOT FOUND]. Be precise.`;
 
-    const analysisResult = await callClaude('dof', [{ role: 'user', content: analysisPrompt }]);
-    wfLog('Director of Finance', 'Financial analysis complete. Extracted key data points and assumptions.');
-    wfComment('Nadia Stern (DOF)', analysisResult.substring(0, 500) + (analysisResult.length > 500 ? '…' : ''));
+    const acResult = await callClaude('ac_controller', [{ role: 'user', content: acPrompt }]);
+    wfLog('Assistant Controller', 'Raw data extraction complete.');
+    wfComment('Assistant Controller', acResult.substring(0, 500) + (acResult.length > 500 ? '…' : ''));
 
-    // VC Expert consultation
-    wfLog('VC Expert', 'Reviewing growth assumptions and market sizing…');
-    const vcConsultPrompt = `You are the VC/PE Expert Consultant reviewing the Director of Finance's analysis for investor credibility.
+    // ─── STAGE 1: ANALYSIS — DOF + VC Expert ───────────────────
+    wfSetStage('analysis');
+    wfLog('Director of Finance', 'Analyzing extracted data and building financial framework…');
+
+    const analysisPrompt = `You are the Director of Finance at Vision & Virtue. The Assistant Controller has extracted the following raw data from the client's files. Build the financial analysis framework.
 
 Company Context: ${ctxStr}
-Director of Finance Analysis (excerpt): ${analysisResult.substring(0, 2000)}
+Assistant Controller Data Extraction: ${acResult.substring(0, 2000)}
 
-Provide your expert input on:
-1. Whether revenue growth assumptions are investor-credible for this stage and industry
-2. TAM/SAM/SOM validation or correction
-3. Market penetration pace (is it realistic?)
-4. Key benchmarks this company should hit for the next round
-5. Any red flags or assumptions that need adjustment
+Provide:
+1. Summary of confirmed actuals vs. estimates (flagging each)
+2. The company's actual P&L line item structure (use their exact terminology where found)
+3. Year 1 actuals confirmation — are Year 1 numbers derived from files or assumptions?
+4. 5-year revenue growth logic grounded in actual data
+5. TAM/SAM/SOM with sources
+6. Key metrics: ARPU, CAC, churn, margins, NRR
+7. Recommended salaries by department (headcount × avg salary)
 
-Be specific and quantitative.`;
+Flag every assumption. Prioritise numbers from files over estimates.`;
+
+    const analysisResult = await callClaude('dof', [{ role: 'user', content: analysisPrompt }]);
+    wfLog('Director of Finance', 'Analysis complete.');
+    wfComment('Nadia Stern (DOF)', analysisResult.substring(0, 500) + (analysisResult.length > 500 ? '…' : ''));
+
+    // VC Expert — structured market analysis
+    wfLog('VC Expert', 'Conducting market sizing and credibility review…');
+    const vcConsultPrompt = `You are Ethan Caldwell, VC/PE Expert at Vision & Virtue. Perform an investor-grade market analysis for this company.
+
+Company Context: ${ctxStr}
+DOF Analysis: ${analysisResult.substring(0, 1500)}
+Raw File Data: ${fileContent ? fileContent.substring(0, 800) : 'None'}
+
+Provide:
+1. Market growth rate per year with supporting case studies (comparable public/private companies)
+2. Realistic TAM penetration pace with benchmarks
+3. Enterprise value estimate using revenue multiples and DCF methodology
+4. WACC recommendation for this stage/industry
+5. Red flags and required adjustments
+
+After your narrative, return ONLY this JSON block (no other JSON):
+\`\`\`json
+{
+  "marketGrowthPct":    [num,num,num,num,num],
+  "marketGrowthLogic":  "string",
+  "supportingCases":    [{"company":"string","metric":"string","relevance":"string"}],
+  "penetrationRates":   [num,num,num,num,num],
+  "penetrationLogic":   "string",
+  "wacc":               num,
+  "terminalGrowthRate": num,
+  "evEstimate":         "string",
+  "evMethodology":      "string",
+  "revenueMultiple":    num
+}
+\`\`\``;
 
     const vcResult = await callClaude('vc_expert', [{ role: 'user', content: vcConsultPrompt }]);
-    wfLog('VC Expert', 'Growth assumptions and market sizing reviewed.');
+    wfLog('VC Expert', 'Market analysis complete.');
     wfComment('Ethan Caldwell (VC Expert)', vcResult.substring(0, 500) + (vcResult.length > 500 ? '…' : ''));
+
+    // Parse structured VC data
+    let vcData = {};
+    const vcJsonM = vcResult.match(/```json\s*([\s\S]*?)```/);
+    if (vcJsonM) { try { vcData = JSON.parse(vcJsonM[1]); } catch(e) {} }
+    if (!vcData.marketGrowthPct)  vcData.marketGrowthPct  = [18,22,25,28,30];
+    if (!vcData.penetrationRates) vcData.penetrationRates = [0.1,0.3,0.6,1.0,1.5];
+    if (!vcData.wacc)             vcData.wacc             = 0.18;
+    if (!vcData.terminalGrowthRate) vcData.terminalGrowthRate = 0.03;
+    if (!vcData.evEstimate)       vcData.evEstimate       = 'Pending valuation';
+    if (!vcData.evMethodology)    vcData.evMethodology    = 'Revenue multiple + DCF';
+    if (!vcData.revenueMultiple)  vcData.revenueMultiple  = 8;
+    if (!vcData.supportingCases)  vcData.supportingCases  = [];
+    if (!vcData.marketGrowthLogic) vcData.marketGrowthLogic = 'Market growth based on industry benchmarks.';
+    if (!vcData.penetrationLogic)  vcData.penetrationLogic  = 'Penetration consistent with comparable SaaS companies at this stage.';
 
     // ─── STAGE 2: BUILD ────────────────────────────────────────
     wfSetStage('build');
-    wfLog('Director of Finance', 'Building Excel financial model and PowerPoint presentation…');
+    wfLog('Director of Finance', 'Building Excel financial model using company P&L structure…');
 
-    const buildPrompt = `You are the Director of Finance building the financial deliverables.
+    const buildPrompt = `You are the Director of Finance building the institutional financial model.
 
 Company Context: ${ctxStr}
-Analysis: ${analysisResult.substring(0, 1500)}
-VC Expert Input: ${vcResult.substring(0, 1500)}
-Source Data (from uploaded files, use this to populate real numbers): ${fileContent ? fileContent.substring(0, 2000) : 'None — use assumptions from analysis.'}
+Assistant Controller Extraction: ${acResult.substring(0, 1000)}
+DOF Analysis: ${analysisResult.substring(0, 1000)}
+VC Expert Input: ${vcResult.substring(0, 800)}
+Source File Data: ${fileContent ? fileContent.substring(0, 1500) : 'None'}
 
-IMPORTANT: Return ONLY valid JSON (no markdown fences, no text outside the JSON). Use this exact schema:
+CRITICAL RULES:
+- Use the company's ACTUAL P&L line item names from the files wherever found
+- If Year 1 actuals are present in the files, set year1IsActual:true and use EXACT numbers for index [0]
+- If Year 1 actuals not found, set year1IsActual:false and calculate from analysis
+- Salaries: use headcount × avg salary per department
+- All numbers in $K
+
+Return ONLY valid JSON. Schema:
 
 {
   "companyName": "string",
@@ -906,6 +967,7 @@ IMPORTANT: Return ONLY valid JSON (no markdown fences, no text outside the JSON)
   "stage": "string",
   "round": "string",
   "startYear": 2025,
+  "year1IsActual": false,
   "pnl": {
     "saasRevenue":  [num,num,num,num,num],
     "otherRevenue": [num,num,num,num,num],
@@ -914,6 +976,15 @@ IMPORTANT: Return ONLY valid JSON (no markdown fences, no text outside the JSON)
     "smTotal":      [num,num,num,num,num],
     "gaTotal":      [num,num,num,num,num],
     "ebitda":       [num,num,num,num,num]
+  },
+  "salaries": {
+    "departments": [
+      {"name":"Engineering",     "headcount":[n,n,n,n,n],"avgSalaryK":180},
+      {"name":"Sales",           "headcount":[n,n,n,n,n],"avgSalaryK":120},
+      {"name":"Marketing",       "headcount":[n,n,n,n,n],"avgSalaryK":110},
+      {"name":"G&A",             "headcount":[n,n,n,n,n],"avgSalaryK":130},
+      {"name":"Customer Success","headcount":[n,n,n,n,n],"avgSalaryK":90}
+    ]
   },
   "cashFlow": {
     "openingCash": num,
@@ -957,8 +1028,28 @@ IMPORTANT: Return ONLY valid JSON (no markdown fences, no text outside the JSON)
 Rules: all numbers in $K (5000 = $5M). startYear = current calendar year. saasRevenue+otherRevenue = total revenue. cogsTotal < total revenue. ebitda = (saasRevenue+otherRevenue-cogsTotal) - rdTotal - smTotal - gaTotal. arDays 30-90, apDays 20-60. Provide at least 8 detailed assumptions. Use VC Expert's guidance for growth rates, TAM, and penetration.`;
 
     const buildResult = await callClaude('dof', [{ role: 'user', content: buildPrompt }]);
-    wfLog('Director of Finance', 'Initial build complete. Submitting to CFO for review.');
-    wfComment('Nadia Stern (DOF)', 'Model and deck draft completed. Ready for CFO review.');
+    wfLog('Director of Finance', 'Initial model build complete.');
+    wfComment('Nadia Stern (DOF)', 'Model built using company P&L structure. Submitting for actuals review.');
+
+    // ─── STAGE 2.5: ACTUALS REVIEW — Corporate Controller ──────
+    wfSetStage('actuals_review');
+    wfLog('Corporate Controller', 'Reviewing Year 1 actuals against model figures…');
+
+    const actualsPrompt = `You are the Corporate Controller. Review the financial model's Year 1 figures against the actual data from the company's files.
+
+Model Year 1 (from DOF build): ${buildResult.substring(0, 1000)}
+Actual file data (from Assistant Controller): ${acResult.substring(0, 1000)}
+
+1. Confirm: are Year 1 figures from actual records or projections?
+2. List any Year 1 line items that differ from files and the correct actual values
+3. Approve or flag Year 1 for correction
+4. Note any missing actuals that should be sourced from management accounts
+
+Be precise. Reference specific numbers.`;
+
+    const actualsResult = await callClaude('controller', [{ role: 'user', content: actualsPrompt }]);
+    wfLog('Corporate Controller', 'Year 1 actuals review complete.');
+    wfComment('Corporate Controller', actualsResult.substring(0, 500) + (actualsResult.length > 500 ? '…' : ''));
 
     // ─── STAGE 3: CFO REVIEW ──────────────────────────────────
     wfSetStage('cfo_review');
@@ -1059,7 +1150,7 @@ Provide your decision: APPROVED or REVISION NEEDED with specific comments.`;
     wfLog('System', `Parsed model for "${modelData.companyName}". Generating files…`);
 
     // Generate Excel
-    const xlsBlob = await generateExcelModel(modelData);
+    const xlsBlob = await generateExcelModel(modelData, vcData);
     document.getElementById('wfXlsStatus').textContent = 'Ready';
     const dlXls = document.getElementById('wfDownloadXls');
     if (dlXls) {
@@ -1211,24 +1302,37 @@ function parseModelJson(primary, fallback, ctx) {
 
   const slides = data.slides || {};
 
+  const year1IsActual = data.year1IsActual || false;
+
+  const salaries = data.salaries?.departments?.length ? data.salaries : {
+    departments: [
+      { name:'Engineering',     headcount:[5, 10, 18, 30, 45], avgSalaryK:180 },
+      { name:'Sales',           headcount:[3,  6, 12, 20, 30], avgSalaryK:120 },
+      { name:'Marketing',       headcount:[2,  4,  7, 12, 18], avgSalaryK:110 },
+      { name:'G&A',             headcount:[2,  4,  7, 11, 15], avgSalaryK:130 },
+      { name:'Customer Success',headcount:[2,  4,  8, 14, 22], avgSalaryK:90  },
+    ]
+  };
+
   return { companyName: company, industry: data.industry || ctx?.industry || '',
     stage: data.stage || ctx?.stage || '', round: data.round || ctx?.round || '',
-    startYear, years, pnl, cashFlow, kpis, assumptions, slides };
+    startYear, years, pnl, cashFlow, kpis, assumptions, slides, year1IsActual, salaries };
 }
 
 // ── Excel Model Generator (ExcelJS) — institutional quality ──────────────
-async function generateExcelModel(d) {
-  // Normalise global — ExcelJS CDN may expose as ExcelJS or exceljs
+async function generateExcelModel(d, vcData={}) {
   const _EJS = (typeof ExcelJS !== 'undefined') ? ExcelJS
-              : (typeof window !== 'undefined' && window.ExcelJS) ? window.ExcelJS
-              : (typeof window !== 'undefined' && window.exceljs) ? window.exceljs
-              : null;
+             : (typeof window !== 'undefined' && window.ExcelJS) ? window.ExcelJS
+             : (typeof window !== 'undefined' && window.exceljs) ? window.exceljs
+             : null;
   if (!_EJS) throw new Error('ExcelJS library failed to load from CDN. Check network and reload.');
+
   const wb = new _EJS.Workbook();
   wb.creator = 'Vision & Virtue Agentic Finance Team';
   wb.created = new Date();
 
-  const yr = d.years; // ['2025','2026','2027','2028','2029']
+  const YC = ['B','C','D','E','F'];   // year columns
+  const yr = d.years;                 // ['2025'…'2029']
 
   // V&V palette (ARGB)
   const NAVY  = 'FF0A1628';
@@ -1239,376 +1343,269 @@ async function generateExcelModel(d) {
   const LGRAY = 'FFF0F4FA';
   const MGRAY = 'FFD0D8E8';
   const BLACK = 'FF1A2540';
+  const RED   = 'FF8B0000';
 
-  // ── Sub-item distribution mixes ────────────────────────────────
-  const cogsMix = { 'Cloud & Hosting':0.30, 'Personnel (CoGS)':0.35, 'Support & Success':0.20, 'Third-Party Licences':0.15 };
-  const rdMix   = { 'Engineering Salaries':0.55, 'Contractors & Freelancers':0.15, 'R&D Tools & Infrastructure':0.12, 'QA & Testing':0.10, 'IP & Patents':0.08 };
-  const smMix   = { 'Marketing & Demand Gen':0.30, 'Sales Salaries':0.35, 'Commissions & Bonuses':0.15, 'Events & Sponsorships':0.10, 'Marketing Technology':0.10 };
-  const gaMix   = { 'Executive & Admin Salaries':0.35, 'Legal & Compliance':0.15, 'Finance & Accounting':0.15, 'Office & Facilities':0.12, 'Insurance':0.08, 'HR & Recruiting':0.10, 'Miscellaneous G&A':0.05 };
+  // ── Section A: Style helpers ────────────────────────────────────
+  const fill = a => ({type:'pattern',pattern:'solid',fgColor:{argb:a}});
+  const thin = (a=MGRAY) => { const s={style:'thin',color:{argb:a}}; return {top:s,left:s,bottom:s,right:s}; };
+  const fnt  = (bold,sz,a,italic=false) => ({bold,italic,size:sz,color:{argb:a},name:'Calibri'});
 
-  function distribute(totals, mix) {
-    return Object.fromEntries(
-      Object.entries(mix).map(([k, pct]) => [k, totals.map(v => Math.round(v * pct))])
-    );
+  function setWidths(ws, arr) { arr.forEach((w,i) => { ws.getColumn(i+1).width = w; }); }
+
+  // Title row A1:E1 + gold "V" logo mark in F1
+  function applyHeader(ws, title, sub='') {
+    ws.mergeCells('A1:E1');
+    const t = ws.getCell('A1');
+    t.value = title; t.fill = fill(NAVY); t.font = fnt(true,14,GOLD);
+    t.alignment = {vertical:'middle',horizontal:'left',indent:1};
+    ws.getRow(1).height = 30;
+    const v = ws.getCell('F1');
+    v.value = 'V'; v.fill = fill(GOLD); v.font = fnt(true,20,NAVY);
+    v.alignment = {vertical:'middle',horizontal:'center'}; v.border = thin(GOLD);
+    if (sub) {
+      ws.mergeCells('A2:F2');
+      const s = ws.getCell('A2');
+      s.value = sub; s.fill = fill(NAVY2); s.font = fnt(false,10,'FF708598');
+      s.alignment = {vertical:'middle',horizontal:'left',indent:1};
+      ws.getRow(2).height = 16;
+    }
   }
 
-  const cogsItems = distribute(d.pnl.cogsTotal, cogsMix);
-  const rdItems   = distribute(d.pnl.rdTotal,   rdMix);
-  const smItems   = distribute(d.pnl.smTotal,   smMix);
-  const gaItems   = distribute(d.pnl.gaTotal,   gaMix);
-
-  // ── Shared style helpers ────────────────────────────────────────
-  function hdrFill(argb) { return { type:'pattern', pattern:'solid', fgColor:{argb} }; }
-  function thinBorder() {
-    const s = { style:'thin', color:{argb:MGRAY} };
-    return { top:s, left:s, bottom:s, right:s };
-  }
-  function boldFont(sz=11, argb=BLACK)   { return { bold:true,  size:sz, color:{argb}, name:'Calibri' }; }
-  function normFont(sz=11, argb=BLACK)   { return { bold:false, size:sz, color:{argb}, name:'Calibri' }; }
-  function italFont(sz=10, argb='FF708598') { return { italic:true, size:sz, color:{argb}, name:'Calibri' }; }
-
-  // Apply title row (merged A1:F1)
-  function applyTitle(ws, text, lastCol='F') {
-    ws.mergeCells(`A1:${lastCol}1`);
-    const c = ws.getCell('A1');
-    c.value = text;
-    c.fill  = hdrFill(NAVY);
-    c.font  = { bold:true, size:14, color:{argb:GOLD}, name:'Calibri' };
-    c.alignment = { vertical:'middle', horizontal:'left', indent:1 };
-    ws.getRow(1).height = 28;
-  }
-
-  // Apply sub-title row (merged)
-  function applySubTitle(ws, row, text, lastCol='F') {
-    ws.mergeCells(`A${row}:${lastCol}${row}`);
-    const c = ws.getCell(`A${row}`);
-    c.value = text;
-    c.fill  = hdrFill(NAVY2);
-    c.font  = { bold:true, size:10, color:{argb:GOLD}, name:'Calibri' };
-    c.alignment = { vertical:'middle', horizontal:'left', indent:1 };
-    ws.getRow(row).height = 18;
-  }
-
-  // Write a year-header row (B..F = years)
-  function writeYearHeader(ws, row) {
-    ws.getCell(`A${row}`).value = '';
+  function yearHdr(ws, row) {
+    const lc = ws.getCell(`A${row}`); lc.fill = fill(NAVY2); lc.border = thin();
     yr.forEach((y,i) => {
       const c = ws.getCell(row, 2+i);
-      c.value = y;
-      c.fill  = hdrFill(BLUE);
-      c.font  = boldFont(11, WHITE);
-      c.alignment = { horizontal:'center' };
-      c.border = thinBorder();
+      c.value = y; c.fill = fill(BLUE); c.font = fnt(true,11,WHITE);
+      c.alignment = {horizontal:'center'}; c.border = thin();
     });
     ws.getRow(row).height = 20;
   }
 
-  // Write a data row — label in col A, numbers in B..F
-  function writeRow(ws, row, label, values, opts={}) {
-    const { indent=0, bold=false, italic=false, fillArgb=null,
-            labelArgb=BLACK, valArgb=BLACK, fmt='#,##0', negative=false,
-            pctFmt=false, topBorder=false, bottomBorder=false } = opts;
+  function secRow(ws, row, text) {
+    ws.mergeCells(`A${row}:F${row}`);
+    const c = ws.getCell(`A${row}`);
+    c.value = text; c.fill = fill(NAVY2); c.font = fnt(true,10,GOLD);
+    c.alignment = {vertical:'middle',horizontal:'left',indent:1};
+    ws.getRow(row).height = 18;
+  }
 
+  // Formula-aware row writer. Values starting with '=' are written as Excel formulas.
+  function wr(ws, row, label, vals, o={}) {
+    const {bold=false,italic=false,indent=0,bg=null,numFmt='#,##0',
+           pct=false,vColor=BLACK,lColor=BLACK,
+           topBorder=false,bottomBorder=false} = o;
     const lc = ws.getCell(`A${row}`);
     lc.value = label;
-    lc.font  = bold ? boldFont(11, labelArgb) : italic ? italFont(10) : normFont(11, labelArgb);
-    lc.alignment = { indent };
-    if (fillArgb) lc.fill = hdrFill(fillArgb);
-
-    values.forEach((v, i) => {
+    lc.font  = italic ? fnt(false,10,'FF708598',true) : fnt(bold,11,lColor);
+    lc.alignment = {indent}; if (bg) lc.fill = fill(bg); lc.border = thin();
+    if (topBorder)    lc.border.top    = {style:'medium',color:{argb:GOLD}};
+    if (bottomBorder) lc.border.bottom = {style:'medium',color:{argb:GOLD}};
+    vals.forEach((v,i) => {
       const c = ws.getCell(row, 2+i);
-      c.value = negative ? -Math.abs(v) : v;
-      c.font  = bold ? boldFont(11, valArgb) : normFont(11, valArgb);
-      if (fillArgb) c.fill = hdrFill(fillArgb);
-      c.numFmt = pctFmt ? '0.0%' : fmt;
-      c.alignment = { horizontal:'right' };
-      c.border = thinBorder();
-      if (topBorder)    c.border.top    = { style:'medium', color:{argb:GOLD} };
-      if (bottomBorder) c.border.bottom = { style:'medium', color:{argb:GOLD} };
+      if (typeof v === 'string' && v.startsWith('=')) c.value = {formula:v};
+      else c.value = v;
+      c.font = italic ? fnt(false,10,'FF708598',true) : fnt(bold,11,vColor);
+      if (bg) c.fill = fill(bg);
+      c.numFmt = pct ? '0.0%' : numFmt; c.alignment = {horizontal:'right'};
+      c.border = thin();
+      if (topBorder)    c.border.top    = {style:'medium',color:{argb:GOLD}};
+      if (bottomBorder) c.border.bottom = {style:'medium',color:{argb:GOLD}};
     });
-    // blank / label cell border
-    lc.border = thinBorder();
-    if (topBorder)    lc.border.top    = { style:'medium', color:{argb:GOLD} };
-    if (bottomBorder) lc.border.bottom = { style:'medium', color:{argb:GOLD} };
   }
 
-  function blankRow(ws, row) { ws.getRow(row).height = 6; }
+  function blank(ws, row) { ws.getRow(row).height = 6; }
 
-  function setColWidths(ws, widths) {
-    widths.forEach((w, i) => { ws.getColumn(i+1).width = w; });
+  function ftRow(ws, row) {
+    ws.mergeCells(`A${row}:F${row}`);
+    const c = ws.getCell(`A${row}`);
+    c.value = `${d.companyName}  ·  Vision & Virtue  ·  All figures $K  ·  Source: uploaded files`;
+    c.font = fnt(false,8,'FF708598',true); c.alignment = {horizontal:'center'};
   }
 
-  // ════════════════════════════════════════════════════════════════
-  // SHEET 1 — 5-Year P&L
-  // ════════════════════════════════════════════════════════════════
-  const pnl = wb.addWorksheet('P&L', { views:[{state:'frozen',ySplit:4}] });
-  setColWidths(pnl, [32, 14, 14, 14, 14, 14]);
+  // ── Section B: Sheet 1 — Inputs (Single Source of Truth) ───────
+  // Row map: saas=5, other=6 | cogs=8, rd=9, sm=10, ga=11, ebitda=12
+  //   openCash=14, capex=15, fin=16, tax=17 | arDays=19, apDays=20
+  //   cust=22, arpu=23, cac=24, ltv=25, churn=26, nrr=27, mrr=28, arr=29, pen=30
+  const inp = wb.addWorksheet('Inputs');
+  inp.tabColor = {argb:'E7CC59'};
+  setWidths(inp,[32,14,14,14,14,14]);
+  applyHeader(inp,
+    `${d.companyName}  |  Financial Model Inputs`,
+    `Source: uploaded files  ·  All figures $K  ·  ${d.year1IsActual ? 'Year 1 = ACTUALS' : 'Year 1 = Estimated'}`);
+  yearHdr(inp,3);
 
-  applyTitle(pnl, `${d.companyName}  |  5-Year Income Statement  ($K)`);
+  secRow(inp,4,'REVENUE');
+  wr(inp,5,'SaaS / Subscription Revenue',   d.pnl.saasRevenue,             {bold:true});
+  wr(inp,6,'Other / Professional Services',  d.pnl.otherRevenue);
 
-  pnl.mergeCells('A2:F2');
-  pnl.getCell('A2').value = `${d.industry}  ·  ${d.stage}  ·  ${d.round}`;
-  pnl.getCell('A2').font  = italFont(10, 'FF708598');
-  pnl.getCell('A2').fill  = hdrFill(NAVY2);
-  pnl.getRow(2).height = 16;
+  secRow(inp,7,'COST INPUTS  (sub-items derived via allocation ratios on P&L)');
+  wr(inp,8, 'Total COGS',                    d.pnl.cogsTotal,               {vColor:RED});
+  wr(inp,9, 'Total R&D',                     d.pnl.rdTotal,                 {vColor:RED});
+  wr(inp,10,'Total S&M',                     d.pnl.smTotal,                 {vColor:RED});
+  wr(inp,11,'Total G&A',                     d.pnl.gaTotal,                 {vColor:RED});
+  wr(inp,12,'EBITDA (AI-filed / override)',   d.pnl.ebitda,                  {bold:true});
 
-  blankRow(pnl, 3);
-  writeYearHeader(pnl, 4);
+  secRow(inp,13,'CASH FLOW INPUTS');
+  wr(inp,14,'Opening Cash Balance',    [d.cashFlow.openingCash,'','','','']);
+  wr(inp,15,'CAPEX',                   d.cashFlow.capex.map(v=>-Math.abs(v)), {vColor:RED});
+  wr(inp,16,'Equity / Debt Financing', d.cashFlow.financing);
+  wr(inp,17,'Income Taxes',            d.cashFlow.taxes.map(v=>-Math.abs(v)), {vColor:RED});
 
-  // Revenue
-  applySubTitle(pnl, 5, 'REVENUE');
-  let r = 6;
-  writeRow(pnl, r++, '  SaaS / Subscription Revenue', d.pnl.saasRevenue, {indent:1});
-  writeRow(pnl, r++, '  Other / Professional Services', d.pnl.otherRevenue, {indent:1});
-  writeRow(pnl, r++, 'Total Revenue', d.pnl.revenue,
-    {bold:true, fillArgb:LGRAY, topBorder:true, bottomBorder:true});
+  secRow(inp,18,'WORKING CAPITAL CONSTANTS');
+  ['A19','A20'].forEach((addr,i) => {
+    const lc = inp.getCell(addr);
+    lc.value = i===0 ? 'AR Days (collections cycle)' : 'AP Days (payables cycle)';
+    lc.font = fnt(false,11,BLACK); lc.border = thin();
+  });
+  const arC = inp.getCell('B19'); arC.value = d.cashFlow.arDays;  arC.border = thin(); arC.numFmt='#,##0';
+  const apC = inp.getCell('B20'); apC.value = d.cashFlow.apDays;  apC.border = thin(); apC.numFmt='#,##0';
 
-  blankRow(pnl, r++);
+  secRow(inp,21,'KPI INPUTS');
+  wr(inp,22,'Customers (EOP)',        d.kpis.customers,                  {numFmt:'#,##0'});
+  wr(inp,23,'ARPU ($K / yr)',         d.kpis.arpu);
+  wr(inp,24,'CAC ($K)',               d.kpis.cac);
+  wr(inp,25,'LTV ($K)',               d.kpis.ltv);
+  wr(inp,26,'Churn Rate',             d.kpis.churnPct.map(v=>v/100),     {pct:true});
+  wr(inp,27,'Net Revenue Retention',  d.kpis.nrrPct.map(v=>v/100),       {pct:true});
+  wr(inp,28,'MRR ($K)',               d.kpis.mrr);
+  wr(inp,29,'ARR ($K)',               d.kpis.arr);
+  wr(inp,30,'TAM Penetration',        d.kpis.penetrationPct.map(v=>v/100),{pct:true});
+
+  inp.mergeCells('A31:F31');
+  const tamC = inp.getCell('A31');
+  tamC.value = `TAM: ${d.kpis.tam}`; tamC.fill = fill(LGRAY);
+  tamC.font  = fnt(true,11,BLACK);   tamC.alignment = {indent:1};
+
+  ftRow(inp,33);
+
+  // ── Section C: Sheet 2 — P&L (all derived cells use =formulas) ─
+  // Row map: mktGrow=6, revGrow=7, pen=8 | saas=11, other=12, total=13
+  //   cogsTotal=20 | gp=22, gm%=23 | rdTotal=31 | smTotal=39 | gaTotal=49
+  //   opex=51 | ebitda=53, ebitdaM%=54
+  const pnl = wb.addWorksheet('P&L',{views:[{state:'frozen',ySplit:4}]});
+  pnl.tabColor = {argb:'3D6FCE'};
+  setWidths(pnl,[34,14,14,14,14,14]);
+  applyHeader(pnl,
+    `${d.companyName}  |  5-Year Income Statement  ($K)`,
+    `${d.industry}  ·  ${d.stage}  ·  ${d.round}`);
+
+  blank(pnl,3);
+  yearHdr(pnl,4);
+  // Mark Year 1 green if actuals
+  if (d.year1IsActual) {
+    const ay1 = pnl.getCell('B4');
+    ay1.fill = fill('FF006400'); ay1.font = fnt(true,11,WHITE);
+    ay1.value = `${yr[0]} (A)`;
+  }
+
+  // Growth indicators — above revenue section
+  secRow(pnl,5,'GROWTH INDICATORS');
+  wr(pnl,6,'Market Growth Rate (VC estimate)',
+    (vcData.marketGrowthPct||[18,22,25,28,30]).map(v=>v/100),
+    {italic:true,pct:true});
+  wr(pnl,7,'Company Revenue YoY Growth',
+    YC.map((c,i) => i===0 ? 'n/a'
+      : `=IF('P&L'!${YC[i-1]}13>0,'P&L'!${c}13/'P&L'!${YC[i-1]}13-1,0)`),
+    {italic:true,pct:true});
+  wr(pnl,8,'TAM Penetration',
+    YC.map(c=>`=Inputs!${c}30`),
+    {italic:true,pct:true});
+
+  if (d.year1IsActual) {
+    pnl.mergeCells('A9:F9');
+    const af = pnl.getCell('A9');
+    af.value = `★  ${yr[0]} figures are ACTUALS from uploaded files  ·  ${yr[1]}–${yr[4]} are projections`;
+    af.fill  = fill('FF004D00'); af.font = fnt(true,10,GOLD);
+    af.alignment = {horizontal:'center',vertical:'middle'};
+    pnl.getRow(9).height = 16;
+  } else { blank(pnl,9); }
+
+  // REVENUE
+  secRow(pnl,10,'REVENUE');
+  wr(pnl,11,'  SaaS / Subscription Revenue',  YC.map(c=>`=Inputs!${c}5`),  {indent:1});
+  wr(pnl,12,'  Other / Professional Services', YC.map(c=>`=Inputs!${c}6`),  {indent:1});
+  wr(pnl,13,'Total Revenue',
+    YC.map(c=>`=${c}11+${c}12`),
+    {bold:true,bg:LGRAY,topBorder:true,bottomBorder:true});
+  blank(pnl,14);
 
   // COGS
-  applySubTitle(pnl, r++, 'COST OF GOODS SOLD');
-  for (const [lbl, vals] of Object.entries(cogsItems)) {
-    writeRow(pnl, r++, `  ${lbl}`, vals, {indent:1, negative:true, valArgb:'FF8B0000'});
-  }
-  writeRow(pnl, r++, 'Total COGS', d.pnl.cogsTotal,
-    {bold:true, negative:true, valArgb:'FF8B0000', fillArgb:LGRAY, topBorder:true});
+  secRow(pnl,15,'COST OF GOODS SOLD');
+  wr(pnl,16,'  Cloud & Hosting',           YC.map(c=>`=-Inputs!${c}8*0.30`),{indent:1,vColor:RED});
+  wr(pnl,17,'  Personnel (CoGS)',           YC.map(c=>`=-Inputs!${c}8*0.35`),{indent:1,vColor:RED});
+  wr(pnl,18,'  Support & Success',          YC.map(c=>`=-Inputs!${c}8*0.20`),{indent:1,vColor:RED});
+  wr(pnl,19,'  Third-Party Licences',       YC.map(c=>`=-Inputs!${c}8*0.15`),{indent:1,vColor:RED});
+  wr(pnl,20,'Total COGS',
+    YC.map(c=>`=SUM(${c}16:${c}19)`),
+    {bold:true,vColor:RED,bg:LGRAY,topBorder:true});
+  blank(pnl,21);
 
-  blankRow(pnl, r++);
-
-  // Gross Profit
-  writeRow(pnl, r++, 'Gross Profit', d.pnl.grossProfit,
-    {bold:true, fillArgb:'FFDCE8FF', topBorder:true, bottomBorder:true});
-  writeRow(pnl, r++, 'Gross Margin %', d.pnl.grossMarginPct.map(v=>v/100),
-    {italic:true, pctFmt:true, fillArgb:LGRAY});
-
-  blankRow(pnl, r++);
+  wr(pnl,22,'Gross Profit',
+    YC.map(c=>`=${c}13+${c}20`),
+    {bold:true,bg:'FFDCE8FF',topBorder:true,bottomBorder:true});
+  wr(pnl,23,'Gross Margin %',
+    YC.map(c=>`=IF(${c}13>0,${c}22/${c}13,0)`),
+    {italic:true,pct:true,bg:LGRAY});
+  blank(pnl,24);
 
   // R&D
-  applySubTitle(pnl, r++, 'RESEARCH & DEVELOPMENT');
-  for (const [lbl, vals] of Object.entries(rdItems)) {
-    writeRow(pnl, r++, `  ${lbl}`, vals, {indent:1, negative:true, valArgb:'FF8B0000'});
-  }
-  writeRow(pnl, r++, 'Total R&D', d.pnl.rdTotal,
-    {bold:true, negative:true, valArgb:'FF8B0000', fillArgb:LGRAY, topBorder:true});
-
-  blankRow(pnl, r++);
+  secRow(pnl,25,'RESEARCH & DEVELOPMENT');
+  wr(pnl,26,'  Engineering Salaries',       YC.map(c=>`=-Inputs!${c}9*0.55`), {indent:1,vColor:RED});
+  wr(pnl,27,'  Contractors & Freelancers',  YC.map(c=>`=-Inputs!${c}9*0.15`), {indent:1,vColor:RED});
+  wr(pnl,28,'  R&D Tools & Infrastructure', YC.map(c=>`=-Inputs!${c}9*0.12`), {indent:1,vColor:RED});
+  wr(pnl,29,'  QA & Testing',               YC.map(c=>`=-Inputs!${c}9*0.10`), {indent:1,vColor:RED});
+  wr(pnl,30,'  IP & Patents',               YC.map(c=>`=-Inputs!${c}9*0.08`), {indent:1,vColor:RED});
+  wr(pnl,31,'Total R&D',
+    YC.map(c=>`=SUM(${c}26:${c}30)`),
+    {bold:true,vColor:RED,bg:LGRAY,topBorder:true});
+  blank(pnl,32);
 
   // S&M
-  applySubTitle(pnl, r++, 'SALES & MARKETING');
-  for (const [lbl, vals] of Object.entries(smItems)) {
-    writeRow(pnl, r++, `  ${lbl}`, vals, {indent:1, negative:true, valArgb:'FF8B0000'});
-  }
-  writeRow(pnl, r++, 'Total S&M', d.pnl.smTotal,
-    {bold:true, negative:true, valArgb:'FF8B0000', fillArgb:LGRAY, topBorder:true});
-
-  blankRow(pnl, r++);
+  secRow(pnl,33,'SALES & MARKETING');
+  wr(pnl,34,'  Marketing & Demand Gen',     YC.map(c=>`=-Inputs!${c}10*0.30`),{indent:1,vColor:RED});
+  wr(pnl,35,'  Sales Salaries',             YC.map(c=>`=-Inputs!${c}10*0.35`),{indent:1,vColor:RED});
+  wr(pnl,36,'  Commissions & Bonuses',      YC.map(c=>`=-Inputs!${c}10*0.15`),{indent:1,vColor:RED});
+  wr(pnl,37,'  Events & Sponsorships',      YC.map(c=>`=-Inputs!${c}10*0.10`),{indent:1,vColor:RED});
+  wr(pnl,38,'  Marketing Technology',       YC.map(c=>`=-Inputs!${c}10*0.10`),{indent:1,vColor:RED});
+  wr(pnl,39,'Total S&M',
+    YC.map(c=>`=SUM(${c}34:${c}38)`),
+    {bold:true,vColor:RED,bg:LGRAY,topBorder:true});
+  blank(pnl,40);
 
   // G&A
-  applySubTitle(pnl, r++, 'GENERAL & ADMINISTRATIVE');
-  for (const [lbl, vals] of Object.entries(gaItems)) {
-    writeRow(pnl, r++, `  ${lbl}`, vals, {indent:1, negative:true, valArgb:'FF8B0000'});
-  }
-  writeRow(pnl, r++, 'Total G&A', d.pnl.gaTotal,
-    {bold:true, negative:true, valArgb:'FF8B0000', fillArgb:LGRAY, topBorder:true});
+  secRow(pnl,41,'GENERAL & ADMINISTRATIVE');
+  wr(pnl,42,'  Executive & Admin Salaries',  YC.map(c=>`=-Inputs!${c}11*0.35`),{indent:1,vColor:RED});
+  wr(pnl,43,'  Legal & Compliance',          YC.map(c=>`=-Inputs!${c}11*0.15`),{indent:1,vColor:RED});
+  wr(pnl,44,'  Finance & Accounting',        YC.map(c=>`=-Inputs!${c}11*0.15`),{indent:1,vColor:RED});
+  wr(pnl,45,'  Office & Facilities',         YC.map(c=>`=-Inputs!${c}11*0.12`),{indent:1,vColor:RED});
+  wr(pnl,46,'  Insurance',                   YC.map(c=>`=-Inputs!${c}11*0.08`),{indent:1,vColor:RED});
+  wr(pnl,47,'  HR & Recruiting',             YC.map(c=>`=-Inputs!${c}11*0.10`),{indent:1,vColor:RED});
+  wr(pnl,48,'  Miscellaneous G&A',           YC.map(c=>`=-Inputs!${c}11*0.05`),{indent:1,vColor:RED});
+  wr(pnl,49,'Total G&A',
+    YC.map(c=>`=SUM(${c}42:${c}48)`),
+    {bold:true,vColor:RED,bg:LGRAY,topBorder:true});
+  blank(pnl,50);
 
-  blankRow(pnl, r++);
+  wr(pnl,51,'Total Operating Expenses',
+    YC.map(c=>`=${c}31+${c}39+${c}49`),
+    {bold:true,vColor:RED,bg:LGRAY,topBorder:true,bottomBorder:true});
+  blank(pnl,52);
 
-  // Total OpEx & EBITDA
-  const totalOpEx = d.pnl.rdTotal.map((v,i) => v + d.pnl.smTotal[i] + d.pnl.gaTotal[i]);
-  writeRow(pnl, r++, 'Total Operating Expenses', totalOpEx,
-    {bold:true, negative:true, valArgb:'FF8B0000', fillArgb:LGRAY, topBorder:true, bottomBorder:true});
-  blankRow(pnl, r++);
-  writeRow(pnl, r++, 'EBITDA', d.pnl.ebitda,
-    {bold:true, fillArgb:'FFD6F5E2', topBorder:true, bottomBorder:true,
-     valArgb: d.pnl.ebitda.some(v=>v<0) ? 'FF8B0000' : 'FF006400'});
-  writeRow(pnl, r++, 'EBITDA Margin %', d.pnl.ebitdaMarginPct.map(v=>v/100),
-    {italic:true, pctFmt:true, fillArgb:LGRAY});
+  wr(pnl,53,'EBITDA',
+    YC.map(c=>`=${c}22+${c}31+${c}39+${c}49`),
+    {bold:true,bg:'FFD6F5E2',topBorder:true,bottomBorder:true});
+  wr(pnl,54,'EBITDA Margin %',
+    YC.map(c=>`=IF(${c}13>0,${c}53/${c}13,0)`),
+    {italic:true,pct:true,bg:LGRAY});
 
-  pnl.getCell(`A${r}`).value = 'All figures in $K  ·  Generated by Vision & Virtue Agentic Finance Team';
-  pnl.getCell(`A${r}`).font  = italFont(9, 'FF708598');
+  ftRow(pnl,56);
 
-  // ════════════════════════════════════════════════════════════════
-  // SHEET 2 — Cash Flow Statement
-  // ════════════════════════════════════════════════════════════════
-  const cf = wb.addWorksheet('Cash Flow', { views:[{state:'frozen',ySplit:4}] });
-  setColWidths(cf, [32, 14, 14, 14, 14, 14]);
-
-  applyTitle(cf, `${d.companyName}  |  5-Year Cash Flow Statement  ($K)`);
-  cf.mergeCells('A2:F2');
-  cf.getCell('A2').value = `AR Days: ${d.cashFlow.arDays}  ·  AP Days: ${d.cashFlow.apDays}  ·  Opening Cash: $${d.cashFlow.openingCash}K`;
-  cf.getCell('A2').font  = italFont(10, 'FF708598');
-  cf.getCell('A2').fill  = hdrFill(NAVY2);
-  cf.getRow(2).height = 16;
-
-  blankRow(cf, 3);
-  writeYearHeader(cf, 4);
-
-  let cr = 5;
-  applySubTitle(cf, cr++, 'OPERATING CASH FLOW');
-  writeRow(cf, cr++, 'Opening Cash Balance', d.cashFlow.openingBalances, {bold:true});
-  writeRow(cf, cr++, 'EBITDA', d.cashFlow.ebitda, {indent:1});
-  writeRow(cf, cr++, '  ΔAR (Accounts Receivable)', d.cashFlow.wcChanges.map(v => {
-    // AR portion only (negative = cash out, positive = cash in)
-    return Math.round(v * (d.cashFlow.arDays / (d.cashFlow.arDays + d.cashFlow.apDays || 1)));
-  }), {indent:2, italic:true});
-  writeRow(cf, cr++, '  ΔAP (Accounts Payable)', d.cashFlow.wcChanges.map(v => {
-    return Math.round(v * (d.cashFlow.apDays / (d.cashFlow.arDays + d.cashFlow.apDays || 1)));
-  }), {indent:2, italic:true});
-  writeRow(cf, cr++, 'Net Working Capital Change', d.cashFlow.wcChanges, {indent:1, italic:true});
-  blankRow(cf, cr++);
-
-  applySubTitle(cf, cr++, 'INVESTING ACTIVITIES');
-  writeRow(cf, cr++, 'Capital Expenditure (CAPEX)', d.cashFlow.capex,
-    {indent:1, negative:true, valArgb:'FF8B0000'});
-  blankRow(cf, cr++);
-
-  applySubTitle(cf, cr++, 'FINANCING ACTIVITIES');
-  writeRow(cf, cr++, 'Equity / Debt Raised', d.cashFlow.financing, {indent:1});
-  writeRow(cf, cr++, 'Taxes Paid', d.cashFlow.taxes,
-    {indent:1, negative:true, valArgb:'FF8B0000'});
-  blankRow(cf, cr++);
-
-  writeRow(cf, cr++, 'Net Cash Movement', d.cashFlow.netCash,
-    {bold:true, fillArgb:LGRAY, topBorder:true, bottomBorder:true});
-  writeRow(cf, cr++, 'Closing Cash Balance', d.cashFlow.closingBalances,
-    {bold:true, fillArgb:'FFD6F5E2', topBorder:true, bottomBorder:true});
-
-  cf.getCell(`A${cr}`).value = 'All figures in $K  ·  Generated by Vision & Virtue Agentic Finance Team';
-  cf.getCell(`A${cr}`).font  = italFont(9, 'FF708598');
-
-  // ════════════════════════════════════════════════════════════════
-  // SHEET 3 — KPI Dashboard
-  // ════════════════════════════════════════════════════════════════
-  const kpi = wb.addWorksheet('KPI Dashboard', { views:[{state:'frozen',ySplit:4}] });
-  setColWidths(kpi, [32, 14, 14, 14, 14, 14]);
-
-  applyTitle(kpi, `${d.companyName}  |  KPI Dashboard  ($K unless noted)`);
-  kpi.mergeCells('A2:F2');
-  kpi.getCell('A2').value = `TAM: ${d.kpis.tam}`;
-  kpi.getCell('A2').font  = italFont(10, 'FF708598');
-  kpi.getCell('A2').fill  = hdrFill(NAVY2);
-  kpi.getRow(2).height = 16;
-
-  blankRow(kpi, 3);
-  writeYearHeader(kpi, 4);
-
-  let kr = 5;
-  applySubTitle(kpi, kr++, 'UNIT ECONOMICS');
-  writeRow(kpi, kr++, 'Customers',         d.kpis.customers, {fmt:'#,##0'});
-  writeRow(kpi, kr++, 'ARPU ($K / yr)',     d.kpis.arpu);
-  writeRow(kpi, kr++, 'CAC ($K)',           d.kpis.cac);
-  writeRow(kpi, kr++, 'LTV ($K)',           d.kpis.ltv);
-  writeRow(kpi, kr++, 'LTV / CAC Ratio',
-    d.kpis.ltv.map((v,i) => d.kpis.cac[i] ? +(v/d.kpis.cac[i]).toFixed(1) : 0),
-    {bold:true, fillArgb:'FFDCE8FF', fmt:'0.0x'});
-  writeRow(kpi, kr++, 'Churn Rate (%)',     d.kpis.churnPct.map(v=>v/100), {pctFmt:true});
-  blankRow(kpi, kr++);
-
-  applySubTitle(kpi, kr++, 'SAAS METRICS');
-  writeRow(kpi, kr++, 'ARR ($K)',  d.kpis.arr);
-  writeRow(kpi, kr++, 'MRR ($K)',  d.kpis.mrr);
-  writeRow(kpi, kr++, 'NRR (%)',   d.kpis.nrrPct.map(v=>v/100), {pctFmt:true, bold:true, fillArgb:'FFD6F5E2'});
-  blankRow(kpi, kr++);
-
-  applySubTitle(kpi, kr++, 'GROWTH METRICS');
-  const rrGrowth = d.pnl.revenue.map((v,i)=> i===0 ? null : (d.pnl.revenue[i-1] ? +((v/d.pnl.revenue[i-1]-1)*100).toFixed(1) : null));
-  const arrGrowth = d.kpis.arr.map((v,i)=> i===0 ? null : (d.kpis.arr[i-1] ? +((v/d.kpis.arr[i-1]-1)*100).toFixed(1) : null));
-  writeRow(kpi, kr++, 'Revenue YoY Growth (%)',
-    rrGrowth.map(v=>v==null?'n/a':v/100), {pctFmt:true});
-  writeRow(kpi, kr++, 'ARR YoY Growth (%)',
-    arrGrowth.map(v=>v==null?'n/a':v/100), {pctFmt:true});
-  writeRow(kpi, kr++, 'Gross Margin (%)',
-    d.pnl.grossMarginPct.map(v=>v/100), {pctFmt:true});
-  writeRow(kpi, kr++, 'EBITDA Margin (%)',
-    d.pnl.ebitdaMarginPct.map(v=>v/100), {pctFmt:true, bold:true, fillArgb:LGRAY});
-  blankRow(kpi, kr++);
-
-  applySubTitle(kpi, kr++, 'MARKET METRICS');
-  writeRow(kpi, kr++, 'TAM Penetration (%)',
-    d.kpis.penetrationPct.map(v=>v/100), {pctFmt:true});
-  writeRow(kpi, kr++, 'Revenue / Employee ($K)',
-    d.pnl.revenue.map((v,i)=> d.kpis.customers[i] ? Math.round(v/(d.kpis.customers[i]*0.5)) : 0));
-
-  kpi.getCell(`A${kr}`).value = 'Generated by Vision & Virtue Agentic Finance Team';
-  kpi.getCell(`A${kr}`).font  = italFont(9, 'FF708598');
-
-  // ════════════════════════════════════════════════════════════════
-  // SHEET 4 — Assumptions & Working Papers
-  // ════════════════════════════════════════════════════════════════
-  const asm = wb.addWorksheet('Assumptions');
-  setColWidths(asm, [30, 28, 40]);
-
-  applyTitle(asm, `${d.companyName}  |  Model Assumptions & Working Papers`, 'C');
-
-  asm.mergeCells('A2:C2');
-  asm.getCell('A2').value = 'All material assumptions driving the financial model';
-  asm.getCell('A2').font  = italFont(10, 'FF708598');
-  asm.getCell('A2').fill  = hdrFill(NAVY2);
-  asm.getRow(2).height = 16;
-
-  blankRow(asm, 3);
-
-  // Header row
-  ['Assumption', 'Value / Range', 'Rationale'].forEach((h, i) => {
-    const c = asm.getCell(4, i+1);
-    c.value = h;
-    c.fill  = hdrFill(BLUE);
-    c.font  = boldFont(11, WHITE);
-    c.alignment = { horizontal: i===0 ? 'left' : 'center' };
-    c.border = thinBorder();
-  });
-  asm.getRow(4).height = 20;
-
-  let ar = 5;
-  d.assumptions.forEach((a, idx) => {
-    const row = asm.getRow(ar);
-    row.height = 18;
-    const cells = [a.item, a.value, a.rationale];
-    cells.forEach((val, i) => {
-      const c = asm.getCell(ar, i+1);
-      c.value = val;
-      c.font  = i === 0 ? boldFont(10) : normFont(10);
-      c.fill  = hdrFill(idx % 2 === 0 ? WHITE : LGRAY);
-      c.border = thinBorder();
-      c.alignment = { wrapText:true, vertical:'middle' };
-    });
-    ar++;
-  });
-
-  blankRow(asm, ar++);
-
-  // Working paper: cost allocation ratios
-  applySubTitle(asm, ar++, 'COST ALLOCATION RATIOS (Working Paper)', 'C');
-  const ratioHdr = asm.getRow(ar++);
-  ['Category', 'Sub-Line Item', '% of Total Category'].forEach((h, i) => {
-    const c = asm.getCell(ar-1, i+1);
-    c.value = h;
-    c.fill  = hdrFill(NAVY2);
-    c.font  = boldFont(10, GOLD);
-    c.border = thinBorder();
-  });
-  const allMixes = [['COGS', cogsMix], ['R&D', rdMix], ['S&M', smMix], ['G&A', gaMix]];
-  allMixes.forEach(([cat, mix]) => {
-    Object.entries(mix).forEach(([item, pct], idx) => {
-      const c1 = asm.getCell(ar, 1); c1.value = idx === 0 ? cat : '';
-      const c2 = asm.getCell(ar, 2); c2.value = item;
-      const c3 = asm.getCell(ar, 3); c3.value = pct;
-      c3.numFmt = '0%';
-      [c1,c2,c3].forEach(c => {
-        c.fill   = hdrFill(ar % 2 === 0 ? WHITE : LGRAY);
-        c.font   = normFont(10);
-        c.border = thinBorder();
-      });
-      ar++;
-    });
-  });
-
-  asm.getCell(`A${ar}`).value = 'Generated by Vision & Virtue Agentic Finance Team';
-  asm.getCell(`A${ar}`).font  = italFont(9, 'FF708598');
+  // ── Sheets D–H: to be implemented ──────────────────────────────
+  // (Salaries, Cash Flow, KPI Dashboard, VC Expert Analysis, Working Papers)
 
   // ── Write to Blob ──────────────────────────────────────────────
   const buffer = await wb.xlsx.writeBuffer();
-  return new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  return new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
 }
 
 // ── PPTX Investor Deck Generator (PptxGenJS) — 12 slides ─────────────────
