@@ -20,9 +20,10 @@ export class LinkedInService {
   // ── OAuth ─────────────────────────────────────────────────────────────────────
 
   getAuthorizationUrl(state: string): string {
-    const scopes = ['r_organization_social', 'w_organization_social', 'rw_organization_admin'].join(
-      ' ',
-    );
+    // Using "Share on LinkedIn" (Default Tier — no approval needed).
+    // TODO: add r_organization_social w_organization_social rw_organization_admin
+    //       once LinkedIn approves the Community Management API application.
+    const scopes = ['w_member_social', 'openid', 'profile'].join(' ');
 
     const params = new URLSearchParams({
       response_type: 'code',
@@ -33,6 +34,18 @@ export class LinkedInService {
     });
 
     return `${LINKEDIN_AUTH_BASE}/authorization?${params.toString()}`;
+  }
+
+  async getPersonUrn(token: string): Promise<string> {
+    try {
+      const response = await axios.get(`${LINKEDIN_API_BASE}/v2/userinfo`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const sub = (response.data as { sub: string }).sub;
+      return `urn:li:person:${sub}`;
+    } catch (err) {
+      throw this.mapLinkedInError(err, 'Failed to fetch person URN');
+    }
   }
 
   async exchangeCodeForToken(code: string): Promise<LinkedInAccount> {
@@ -55,10 +68,10 @@ export class LinkedInService {
         access_token: string;
         expires_in: number;
         refresh_token?: string;
-        refresh_token_expires_in?: number;
       };
 
       const expiresAt = Date.now() + data.expires_in * 1000;
+      const personUrn = await this.getPersonUrn(data.access_token);
 
       return {
         id: uuidv4(),
@@ -66,6 +79,7 @@ export class LinkedInService {
         refresh_token: data.refresh_token || '',
         expires_at: expiresAt,
         organization_id: this.organizationId,
+        person_urn: personUrn,
         created_at: new Date().toISOString(),
       };
     } catch (err) {
@@ -116,11 +130,11 @@ export class LinkedInService {
   async createTextPost(
     token: string,
     text: string,
-    organizationId: string,
+    authorUrn: string,  // urn:li:person:X (personal) or urn:li:organization:X (org page)
   ): Promise<{ postId: string }> {
     try {
       const payload = {
-        author: `urn:li:organization:${organizationId}`,
+        author: authorUrn,
         commentary: text,
         visibility: 'PUBLIC',
         distribution: {
@@ -157,7 +171,7 @@ export class LinkedInService {
     token: string,
     text: string,
     imageUrl: string,
-    organizationId: string,
+    authorUrn: string,  // urn:li:person:X (personal) or urn:li:organization:X (org page)
   ): Promise<{ postId: string }> {
     try {
       // Step 1: Initialize image upload
@@ -165,7 +179,7 @@ export class LinkedInService {
         `${LINKEDIN_API_BASE}/rest/images?action=initializeUpload`,
         {
           initializeUploadRequest: {
-            owner: `urn:li:organization:${organizationId}`,
+            owner: authorUrn,
           },
         },
         {
@@ -198,7 +212,7 @@ export class LinkedInService {
 
       // Step 4: Create post with image
       const payload = {
-        author: `urn:li:organization:${organizationId}`,
+        author: authorUrn,
         commentary: text,
         visibility: 'PUBLIC',
         distribution: {

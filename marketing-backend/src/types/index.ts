@@ -169,6 +169,7 @@ export interface LinkedInAccount {
   refresh_token: string;
   expires_at: number;
   organization_id: string;
+  person_urn: string;      // urn:li:person:{sub} — used for personal posting (Share on LinkedIn)
   created_at: string;
 }
 

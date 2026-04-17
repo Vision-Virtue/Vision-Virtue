@@ -140,12 +140,11 @@ class ContentRepository {
     // ── LinkedIn Token ────────────────────────────────────────────────────────────
     saveLinkedInToken(token) {
         const db = (0, database_1.getDb)();
-        // We only ever store one token (the latest connection)
         db.prepare('DELETE FROM linkedin_accounts').run();
         db.prepare(`
-      INSERT INTO linkedin_accounts (id, access_token, refresh_token, expires_at, organization_id, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(token.id, token.access_token, token.refresh_token, token.expires_at, token.organization_id, token.created_at);
+      INSERT INTO linkedin_accounts (id, access_token, refresh_token, expires_at, organization_id, person_urn, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `).run(token.id, token.access_token, token.refresh_token, token.expires_at, token.organization_id, token.person_urn, token.created_at);
     }
     getLinkedInToken() {
         const db = (0, database_1.getDb)();
@@ -160,6 +159,7 @@ class ContentRepository {
             refresh_token: row.refresh_token,
             expires_at: row.expires_at,
             organization_id: row.organization_id,
+            person_urn: row.person_urn,
             created_at: row.created_at,
         };
     }

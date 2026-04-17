@@ -391,27 +391,33 @@ class ContentController {
             return;
         }
         const linkedInService = getLinkedInService();
-        const orgId = token.organization_id || process.env.LINKEDIN_ORGANIZATION_ID || '';
+        // Use personal posting (Share on LinkedIn — available now) until LinkedIn
+        // approves the Community Management API. Then switch to:
+        //   urn:li:organization:${token.organization_id || process.env.LINKEDIN_ORGANIZATION_ID}
+        const authorUrn = token.person_urn ||
+            (token.organization_id ? `urn:li:organization:${token.organization_id}` : '');
+        if (!authorUrn) {
+            res.status(400).json({
+                error: { code: 'NO_AUTHOR_URN', message: 'LinkedIn account has no person URN — please reconnect LinkedIn.' },
+            });
+            return;
+        }
         const errors = [];
         let hebrewPostId;
         let englishPostId;
-        // Build Hebrew post text with hashtags
         const hebrewDraft = item.marketing_draft.hebrew;
         const hebrewText = `${hebrewDraft.text}\n\n${hebrewDraft.hashtags.join(' ')}`;
-        // Build English post text with hashtags
         const englishDraft = item.marketing_draft.english;
         const englishText = `${englishDraft.text}\n\n${englishDraft.hashtags.join(' ')}`;
-        // Publish Hebrew post
         try {
-            const result = await linkedInService.createTextPost(token.access_token, hebrewText, orgId);
+            const result = await linkedInService.createTextPost(token.access_token, hebrewText, authorUrn);
             hebrewPostId = result.postId;
         }
         catch (err) {
             errors.push(`Hebrew post failed: ${err.message}`);
         }
-        // Publish English post
         try {
-            const result = await linkedInService.createTextPost(token.access_token, englishText, orgId);
+            const result = await linkedInService.createTextPost(token.access_token, englishText, authorUrn);
             englishPostId = result.postId;
         }
         catch (err) {
@@ -422,7 +428,7 @@ class ContentController {
             english_post_id: englishPostId,
             published_at: new Date().toISOString(),
             platform: 'linkedin',
-            organization_id: orgId,
+            organization_id: authorUrn,
             errors: errors.length > 0 ? errors : undefined,
         };
         let updatedItem = repository_1.contentRepository.update(id, { publish_result: publishResult });

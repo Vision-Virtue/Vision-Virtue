@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { AIService } from '../services/ai.service';
 import { ApiError } from '../types';
 
-const VALID_AGENTS = ['economist', 'sofia', 'daniel', 'raphael'];
+const VALID_AGENTS = ['economist', 'sofia', 'daniel', 'raphael', 'cfo', 'dof', 'controller', 'asst_controller', 'vc_expert'];
 
 function getAIService(req: Request): AIService {
   const apiKey = process.env.ANTHROPIC_API_KEY

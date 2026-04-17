@@ -64,7 +64,8 @@ function initializeSchema(database: Database.Database): void {
       access_token    TEXT NOT NULL,
       refresh_token   TEXT NOT NULL DEFAULT '',
       expires_at      INTEGER NOT NULL,
-      organization_id TEXT NOT NULL,
+      organization_id TEXT NOT NULL DEFAULT '',
+      person_urn      TEXT NOT NULL DEFAULT '',
       created_at      TEXT NOT NULL
     );
 
@@ -78,9 +79,10 @@ function initializeSchema(database: Database.Database): void {
   // Migrations — add new columns to existing tables
   try {
     database.exec(`ALTER TABLE content_items ADD COLUMN qa_history TEXT NOT NULL DEFAULT '[]'`);
-  } catch {
-    // Column already exists — safe to ignore
-  }
+  } catch { /* already exists */ }
+  try {
+    database.exec(`ALTER TABLE linkedin_accounts ADD COLUMN person_urn TEXT NOT NULL DEFAULT ''`);
+  } catch { /* already exists */ }
 
   console.log('[DB] Schema initialized successfully');
 }
