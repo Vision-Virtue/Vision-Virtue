@@ -21,10 +21,11 @@ class LinkedInService {
     }
     // ── OAuth ─────────────────────────────────────────────────────────────────────
     getAuthorizationUrl(state) {
-        // Using "Share on LinkedIn" (Default Tier — no approval needed).
+        // Share on LinkedIn — Default Tier, no approval needed.
+        // w_member_social is the only scope required for posting as the authenticated member.
         // TODO: add r_organization_social w_organization_social rw_organization_admin
         //       once LinkedIn approves the Community Management API application.
-        const scopes = ['w_member_social', 'openid', 'profile'].join(' ');
+        const scopes = ['w_member_social'].join(' ');
         const params = new URLSearchParams({
             response_type: 'code',
             client_id: this.clientId,
@@ -35,16 +36,24 @@ class LinkedInService {
         return `${LINKEDIN_AUTH_BASE}/authorization?${params.toString()}`;
     }
     async getPersonUrn(token) {
+        // Try /v2/me — works for many apps even without an explicit r_liteprofile scope
         try {
-            const response = await axios_1.default.get(`${LINKEDIN_API_BASE}/v2/userinfo`, {
-                headers: { Authorization: `Bearer ${token}` },
+            const response = await axios_1.default.get(`${LINKEDIN_API_BASE}/v2/me`, {
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    'X-Restli-Protocol-Version': '2.0.0',
+                },
             });
-            const sub = response.data.sub;
-            return `urn:li:person:${sub}`;
+            const id = response.data.id;
+            if (id)
+                return `urn:li:person:${id}`;
         }
-        catch (err) {
-            throw this.mapLinkedInError(err, 'Failed to fetch person URN');
-        }
+        catch { /* fall through to env var */ }
+        // Fallback: LINKEDIN_PERSON_URN env var (set manually in Render dashboard)
+        const envUrn = process.env.LINKEDIN_PERSON_URN;
+        if (envUrn)
+            return envUrn;
+        throw this.mapLinkedInError(new Error('Could not determine LinkedIn person URN. Set LINKEDIN_PERSON_URN in Render env vars.'), 'getPersonUrn');
     }
     async exchangeCodeForToken(code) {
         try {

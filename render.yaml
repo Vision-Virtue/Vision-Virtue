@@ -26,3 +26,5 @@ services:
         value: https://vv-marketing-api.onrender.com/api/auth/linkedin/callback
       - key: LINKEDIN_ORGANIZATION_ID
         sync: false
+      - key: LINKEDIN_PERSON_URN
+        sync: false
