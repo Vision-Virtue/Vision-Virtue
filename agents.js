@@ -1171,7 +1171,7 @@ Source File Data: ${fileContent ? fileContent.substring(0, 1000) : 'None'}
 
 CRITICAL RULES:
 - P&L STRUCTURE: If the reference P&L has line items above, map them to the model categories (saasRevenue, otherRevenue, cogsTotal, rdTotal, smTotal, gaTotal). Preserve the spirit of the company's actual structure.
-- P&L LINE ITEMS: Populate pnlSubItems using the company's EXACT line item names from the reference P&L wherever possible (e.g. "Salaries & Benefits", "Subcontractors", "Server Costs"). Map each file line item to the most fitting category. If a file item spans multiple categories (e.g. "Salaries & Benefits" covers all staff), place the dominant use in the correct category. COGS must have EXACTLY 4 items, R&D EXACTLY 5, S&M EXACTLY 5, G&A EXACTLY 7. Percentages within each category must sum to exactly 1.0.
+- P&L LINE ITEMS: Populate pnlSubItems using the company's EXACT line item names from the reference P&L wherever possible (e.g. "Salaries & Benefits", "Subcontractors", "Server Costs"). Map each file line item to the most fitting category. If a file item spans multiple categories (e.g. "Salaries & Benefits" covers all staff), place the dominant use in the correct category. COGS must have EXACTLY 4 items, R&D EXACTLY 5, S&M EXACTLY 5, G&A EXACTLY 7. Percentages within each category must sum to exactly 1.0. For each sub-item also provide val1 = the Year-1 actual dollar value in $K (if year1IsActual=true: derive from actual file amounts; otherwise: cogsTotal[0] × pct, etc.). val1 is used as a frozen actual in the Excel Year-1 column.
 - ACTUALS: If hasPnL=true and referenceYear is found, set year1IsActual:true and use EXACT reference-year amounts for Year 1 (index [0]).
 - If Year 1 actuals not available, set year1IsActual:false and project from analysis.
 - SALARY RULE: ${salaryRuleStr}
@@ -1198,33 +1198,33 @@ Return ONLY valid JSON. Schema:
   },
   "pnlSubItems": {
     "cogs": [
-      {"name":"<EXACT name from file or best fit>","pct":0.30},
-      {"name":"<EXACT name from file or best fit>","pct":0.35},
-      {"name":"<EXACT name from file or best fit>","pct":0.20},
-      {"name":"<EXACT name from file or best fit>","pct":0.15}
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.30},
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.35},
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.20},
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.15}
     ],
     "rd": [
-      {"name":"<EXACT name from file or best fit>","pct":0.55},
-      {"name":"<EXACT name from file or best fit>","pct":0.20},
-      {"name":"<EXACT name from file or best fit>","pct":0.12},
-      {"name":"<EXACT name from file or best fit>","pct":0.08},
-      {"name":"<EXACT name from file or best fit>","pct":0.05}
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.55},
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.20},
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.12},
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.08},
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.05}
     ],
     "sm": [
-      {"name":"<EXACT name from file or best fit>","pct":0.30},
-      {"name":"<EXACT name from file or best fit>","pct":0.35},
-      {"name":"<EXACT name from file or best fit>","pct":0.15},
-      {"name":"<EXACT name from file or best fit>","pct":0.10},
-      {"name":"<EXACT name from file or best fit>","pct":0.10}
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.30},
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.35},
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.15},
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.10},
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.10}
     ],
     "ga": [
-      {"name":"<EXACT name from file or best fit>","pct":0.35},
-      {"name":"<EXACT name from file or best fit>","pct":0.15},
-      {"name":"<EXACT name from file or best fit>","pct":0.15},
-      {"name":"<EXACT name from file or best fit>","pct":0.12},
-      {"name":"<EXACT name from file or best fit>","pct":0.08},
-      {"name":"<EXACT name from file or best fit>","pct":0.10},
-      {"name":"<EXACT name from file or best fit>","pct":0.05}
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.35},
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.15},
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.15},
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.12},
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.08},
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.10},
+      {"name":"<EXACT name from file or best fit>","val1":<yr1 $K>,"pct":0.05}
     ]
   },
   "salaries": {
@@ -1540,9 +1540,10 @@ function parseModelJson(primary, fallback, ctx) {
   function normSubItems(raw, count, defs) {
     let items = (Array.isArray(raw) && raw.length) ? raw.map(x => ({
       name: x.name || defs[0]?.name || 'Other',
-      pct:  typeof x.pct === 'number' ? x.pct : 0,
-    })) : [...defs];
-    while (items.length < count) items.push({name: defs[items.length]?.name || 'Other', pct: 0});
+      pct:  typeof x.pct  === 'number' ? x.pct  : 0,
+      val1: typeof x.val1 === 'number' ? x.val1 : null,
+    })) : defs.map(d => ({...d, val1: null}));
+    while (items.length < count) items.push({name: defs[items.length]?.name || 'Other', pct: 0, val1: null});
     items = items.slice(0, count);
     const tot = items.reduce((s,x) => s + x.pct, 0);
     if (tot > 0) items = items.map(x => ({...x, pct: Math.round(x.pct / tot * 1000) / 1000}));
@@ -1554,6 +1555,15 @@ function parseModelJson(primary, fallback, ctx) {
     sm:   normSubItems(data.pnlSubItems?.sm,   5, defaultSubItems.sm),
     ga:   normSubItems(data.pnlSubItems?.ga,   7, defaultSubItems.ga),
   };
+  // Fill in val1 from year-1 totals if the AI didn't provide explicit values
+  const yr1Totals = {cogs: cogsTotal[0], rd: rdTotal[0], sm: smTotal[0], ga: gaTotal[0]};
+  Object.keys(pnlSubItems).forEach(cat => {
+    const t1 = yr1Totals[cat] || 0;
+    pnlSubItems[cat] = pnlSubItems[cat].map(item => ({
+      ...item,
+      val1: (typeof item.val1 === 'number') ? item.val1 : Math.round(t1 * item.pct),
+    }));
+  });
 
   // Cash flow — derive working capital from arDays/apDays if available
   const openingCash = data.cashFlow?.openingCash ?? 1000;
@@ -1734,8 +1744,76 @@ async function generateExcelModel(d, vcData={}) {
     c.font = fnt(false,8,'FF708598',true); c.alignment = {horizontal:'center'};
   }
 
-  // ── Section B: Sheet 1 — Inputs (Single Source of Truth) ───────
-  // Row map: saas=5, other=6 | cogs=8, rd=9, sm=10, ga=11, ebitda=12
+  // ── Section B0: Drivers sheet — editable YoY growth assumptions ────────────
+  // Row layout mirrors Inputs exactly (same row numbers) so that Inputs formulas
+  // can reference Drivers!Cnn for the Year-2 growth rate of any row nn.
+  // Yellow cells = editable by the user. Year 1 column = "BASE" (read-only anchor).
+  const drv = wb.addWorksheet('Drivers');
+  drv.tabColor = {argb:'FFE7CC59'};
+  setWidths(drv,[34,16,14,14,14,14]);
+  applyHeader(drv,
+    `${d.companyName}  |  Projection Growth Drivers`,
+    `Edit YELLOW cells to reprojection Years 2–5  ·  Year 1 = ${d.year1IsActual?'ACTUALS (locked)':'base estimates (locked)'}`);
+  {
+    const lhdr = drv.getCell('A3'); lhdr.fill = fill(NAVY2); lhdr.border = thin();
+    const bBase = drv.getCell('B3');
+    bBase.value = `${yr[0]} BASE`; bBase.fill = fill('FF145214');
+    bBase.font = fnt(true,11,WHITE); bBase.alignment = {horizontal:'center'}; bBase.border = thin();
+    for (let i = 1; i < 5; i++) {
+      const c = drv.getCell(3, 2+i);
+      c.value = `${yr[i]} growth`; c.fill = fill(BLUE); c.font = fnt(true,11,WHITE);
+      c.alignment = {horizontal:'center'}; c.border = thin();
+    }
+    drv.getRow(3).height = 20;
+  }
+
+  // Helpers
+  function impGrowths(vals) {
+    // Returns ['—', g2, g3, g4, g5] from a 5-year absolute-value array
+    return vals.map((v,i) => {
+      if (i === 0) return '—';
+      const prev = vals[i-1];
+      return (prev && prev !== 0) ? Math.round((v/prev-1)*10000)/10000 : 0.20;
+    });
+  }
+
+  // Write growth row to Drivers AND return Inputs formula array
+  // [Y1_hard, =B{r}*(1+Drivers!C{r}), =C{r}*(1+Drivers!D{r}), ...]
+  function drvLine(absVals, r, label, inpOpts={}) {
+    const g = impGrowths(absVals);
+    const drvVals = ['—', g[1], g[2], g[3], g[4]];
+    wr(drv, r, label, drvVals, {pct:true, bg:'FFFFF4CE', ...inpOpts});
+    return [
+      absVals[0],
+      `=B${r}*(1+Drivers!C${r})`,
+      `=C${r}*(1+Drivers!D${r})`,
+      `=D${r}*(1+Drivers!E${r})`,
+      `=E${r}*(1+Drivers!F${r})`,
+    ];
+  }
+
+  // Drivers section headers (same rows as Inputs)
+  secRow(drv,4,'REVENUE GROWTH DRIVERS  (edit yellow to change Year 2–5)');
+  secRow(drv,7,'COST GROWTH DRIVERS');
+  secRow(drv,13,'CASH FLOW DRIVERS');
+  secRow(drv,18,'WORKING CAPITAL — edit in Inputs sheet');
+  secRow(drv,21,'KPI GROWTH DRIVERS');
+  // Placeholder notes for non-growth rows
+  [[12,'EBITDA — formula in Inputs: Revenue − COGS − R&D − S&M − G&A'],
+   [14,'Opening Cash — edit directly in Inputs sheet'],
+   [16,'Financing — edit directly in Inputs sheet'],
+   [17,'Taxes — edit directly in Inputs sheet'],
+   [26,'Churn Rate — edit absolute values in Inputs sheet'],
+   [27,'NRR — edit absolute values in Inputs sheet'],
+   [30,'TAM Penetration — edit absolute values in Inputs sheet'],
+  ].forEach(([r, note]) => {
+    const lc = drv.getCell(`A${r}`); lc.value = note;
+    lc.font = fnt(false,10,'FF708598',true); lc.border = thin();
+  });
+  ftRow(drv, 35);
+
+  // ── Section B: Sheet 2 — Inputs (Year 1 = hard actuals; Years 2–5 = formulas) ─
+  // Row map: saas=5, other=6 | cogs=8, rd=9, sm=10, ga=11, ebitda=12(formula)
   //   openCash=14, capex=15, fin=16, tax=17 | arDays=19, apDays=20
   //   cust=22, arpu=23, cac=24, ltv=25, churn=26, nrr=27, mrr=28, arr=29, pen=30
   const inp = wb.addWorksheet('Inputs');
@@ -1743,23 +1821,45 @@ async function generateExcelModel(d, vcData={}) {
   setWidths(inp,[32,14,14,14,14,14]);
   applyHeader(inp,
     `${d.companyName}  |  Financial Model Inputs`,
-    `Source: uploaded files  ·  All figures $K  ·  ${d.year1IsActual ? 'Year 1 = ACTUALS' : 'Year 1 = Estimated'}`);
+    `Year 1 = ${d.year1IsActual?'ACTUALS from files (frozen)':'base estimates'}  ·  Years 2–5 = formula-driven via Drivers sheet  ·  All figures $K`);
   yearHdr(inp,3);
+  if (d.year1IsActual) {
+    const b3 = inp.getCell('B3'); b3.fill = fill('FF004D00'); b3.value = `${yr[0]} (A)`;
+  }
 
   secRow(inp,4,'REVENUE');
-  wr(inp,5,'SaaS / Subscription Revenue',   d.pnl.saasRevenue,             {bold:true});
-  wr(inp,6,'Other / Professional Services',  d.pnl.otherRevenue);
+  const saasVals  = drvLine(d.pnl.saasRevenue, 5, 'SaaS Revenue Growth %');
+  wr(inp,5,'SaaS / Subscription Revenue', saasVals, {bold:true});
+  const otherVals = drvLine(d.pnl.otherRevenue, 6, 'Other Revenue Growth %');
+  wr(inp,6,'Other / Professional Services', otherVals);
 
-  secRow(inp,7,'COST INPUTS  (sub-items derived via allocation ratios on P&L)');
-  wr(inp,8, 'Total COGS',                    d.pnl.cogsTotal,               {vColor:RED});
-  wr(inp,9, 'Total R&D',                     d.pnl.rdTotal,                 {vColor:RED});
-  wr(inp,10,'Total S&M',                     d.pnl.smTotal,                 {vColor:RED});
-  wr(inp,11,'Total G&A',                     d.pnl.gaTotal,                 {vColor:RED});
-  wr(inp,12,'EBITDA (AI-filed / override)',   d.pnl.ebitda,                  {bold:true});
+  secRow(inp,7,'COST INPUTS  (P&L sub-items derived via allocation % on this sheet)');
+  const cogsVals = drvLine(d.pnl.cogsTotal, 8, 'Total COGS Growth %');
+  wr(inp,8, 'Total COGS', cogsVals, {vColor:RED});
+  const rdVals = drvLine(d.pnl.rdTotal, 9, 'Total R&D Growth %');
+  wr(inp,9, 'Total R&D', rdVals, {vColor:RED});
+  const smVals = drvLine(d.pnl.smTotal, 10, 'Total S&M Growth %');
+  wr(inp,10,'Total S&M', smVals, {vColor:RED});
+  const gaVals = drvLine(d.pnl.gaTotal, 11, 'Total G&A Growth %');
+  wr(inp,11,'Total G&A', gaVals, {vColor:RED});
+  // EBITDA — formula for all years (derived from revenue / cost rows above)
+  wr(inp,12,'EBITDA (derived)',
+    YC.map(c=>`=${c}5+${c}6-${c}8-${c}9-${c}10-${c}11`),
+    {bold:true});
 
   secRow(inp,13,'CASH FLOW INPUTS');
-  wr(inp,14,'Opening Cash Balance',    [d.cashFlow.openingCash,'','','','']);
-  wr(inp,15,'CAPEX',                   d.cashFlow.capex.map(v=>-Math.abs(v)), {vColor:RED});
+  wr(inp,14,'Opening Cash Balance', [d.cashFlow.openingCash,'','','','']);
+  // CAPEX: Y1 = hard negative; Y2-5 = formula (negative × growth = more negative = more capex)
+  const capexAbs = d.cashFlow.capex.map(v=>Math.abs(v));
+  const capexGrowths = impGrowths(capexAbs);
+  wr(drv, 15, 'CAPEX Growth %', ['—',...capexGrowths.slice(1)], {pct:true, bg:'FFFFF4CE'});
+  wr(inp,15,'CAPEX', [
+    -capexAbs[0],
+    `=B15*(1+Drivers!C15)`,
+    `=C15*(1+Drivers!D15)`,
+    `=D15*(1+Drivers!E15)`,
+    `=E15*(1+Drivers!F15)`,
+  ], {vColor:RED});
   wr(inp,16,'Equity / Debt Financing', d.cashFlow.financing);
   wr(inp,17,'Income Taxes',            d.cashFlow.taxes.map(v=>-Math.abs(v)), {vColor:RED});
 
@@ -1773,15 +1873,21 @@ async function generateExcelModel(d, vcData={}) {
   const apC = inp.getCell('B20'); apC.value = d.cashFlow.apDays;  apC.border = thin(); apC.numFmt='#,##0';
 
   secRow(inp,21,'KPI INPUTS');
-  wr(inp,22,'Customers (EOP)',        d.kpis.customers,                  {numFmt:'#,##0'});
-  wr(inp,23,'ARPU ($K / yr)',         d.kpis.arpu);
-  wr(inp,24,'CAC ($K)',               d.kpis.cac);
-  wr(inp,25,'LTV ($K)',               d.kpis.ltv);
-  wr(inp,26,'Churn Rate',             d.kpis.churnPct.map(v=>v/100),     {pct:true});
-  wr(inp,27,'Net Revenue Retention',  d.kpis.nrrPct.map(v=>v/100),       {pct:true});
-  wr(inp,28,'MRR ($K)',               d.kpis.mrr);
-  wr(inp,29,'ARR ($K)',               d.kpis.arr);
-  wr(inp,30,'TAM Penetration',        d.kpis.penetrationPct.map(v=>v/100),{pct:true});
+  const custVals = drvLine(d.kpis.customers, 22, 'Customer Growth %');
+  wr(inp,22,'Customers (EOP)', custVals, {numFmt:'#,##0'});
+  const arpuVals = drvLine(d.kpis.arpu, 23, 'ARPU Growth %');
+  wr(inp,23,'ARPU ($K / yr)', arpuVals);
+  const cacVals = drvLine(d.kpis.cac, 24, 'CAC Change %');
+  wr(inp,24,'CAC ($K)', cacVals);
+  const ltvVals = drvLine(d.kpis.ltv, 25, 'LTV Change %');
+  wr(inp,25,'LTV ($K)', ltvVals);
+  wr(inp,26,'Churn Rate',            d.kpis.churnPct.map(v=>v/100),      {pct:true});
+  wr(inp,27,'Net Revenue Retention', d.kpis.nrrPct.map(v=>v/100),        {pct:true});
+  const mrrVals = drvLine(d.kpis.mrr, 28, 'MRR Growth %');
+  wr(inp,28,'MRR ($K)', mrrVals);
+  const arrVals = drvLine(d.kpis.arr, 29, 'ARR Growth %');
+  wr(inp,29,'ARR ($K)', arrVals);
+  wr(inp,30,'TAM Penetration',       d.kpis.penetrationPct.map(v=>v/100), {pct:true});
 
   inp.mergeCells('A31:F31');
   const tamC = inp.getCell('A31');
@@ -1841,10 +1947,17 @@ async function generateExcelModel(d, vcData={}) {
     {bold:true,bg:LGRAY,topBorder:true,bottomBorder:true});
   blank(pnl,14);
 
-  // COGS — dynamic line items from company files
+  // Sub-item cell builder: Year 1 = frozen actual (val1); Years 2-5 = formula
+  function subItemVals(item, inpRow) {
+    return YC.map((c,i) => i === 0
+      ? -Math.abs(item.val1 || 0)                   // Year 1: hard actual from file
+      : `=-Inputs!${c}${inpRow}*${item.pct}`);       // Years 2-5: formula
+  }
+
+  // COGS — dynamic line items from company files (Year 1 actuals, Years 2-5 formulas)
   secRow(pnl,15,'COST OF GOODS SOLD');
   d.pnlSubItems.cogs.forEach((item,i) => {
-    wr(pnl,16+i,`  ${item.name}`,YC.map(c=>`=-Inputs!${c}8*${item.pct}`),{indent:1,vColor:RED});
+    wr(pnl,16+i,`  ${item.name}`, subItemVals(item, 8), {indent:1,vColor:RED});
   });
   wr(pnl,20,'Total COGS',
     YC.map(c=>`=SUM(${c}16:${c}19)`),
@@ -1862,7 +1975,7 @@ async function generateExcelModel(d, vcData={}) {
   // R&D — dynamic line items from company files
   secRow(pnl,25,'RESEARCH & DEVELOPMENT');
   d.pnlSubItems.rd.forEach((item,i) => {
-    wr(pnl,26+i,`  ${item.name}`,YC.map(c=>`=-Inputs!${c}9*${item.pct}`),{indent:1,vColor:RED});
+    wr(pnl,26+i,`  ${item.name}`, subItemVals(item, 9), {indent:1,vColor:RED});
   });
   wr(pnl,31,'Total R&D',
     YC.map(c=>`=SUM(${c}26:${c}30)`),
@@ -1872,7 +1985,7 @@ async function generateExcelModel(d, vcData={}) {
   // S&M — dynamic line items from company files
   secRow(pnl,33,'SALES & MARKETING');
   d.pnlSubItems.sm.forEach((item,i) => {
-    wr(pnl,34+i,`  ${item.name}`,YC.map(c=>`=-Inputs!${c}10*${item.pct}`),{indent:1,vColor:RED});
+    wr(pnl,34+i,`  ${item.name}`, subItemVals(item, 10), {indent:1,vColor:RED});
   });
   wr(pnl,39,'Total S&M',
     YC.map(c=>`=SUM(${c}34:${c}38)`),
@@ -1882,7 +1995,7 @@ async function generateExcelModel(d, vcData={}) {
   // G&A — dynamic line items from company files
   secRow(pnl,41,'GENERAL & ADMINISTRATIVE');
   d.pnlSubItems.ga.forEach((item,i) => {
-    wr(pnl,42+i,`  ${item.name}`,YC.map(c=>`=-Inputs!${c}11*${item.pct}`),{indent:1,vColor:RED});
+    wr(pnl,42+i,`  ${item.name}`, subItemVals(item, 11), {indent:1,vColor:RED});
   });
   wr(pnl,49,'Total G&A',
     YC.map(c=>`=SUM(${c}42:${c}48)`),
