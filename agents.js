@@ -813,8 +813,26 @@ async function extractFileContents(files) {
         const text = await file.text();
         parts.push(`=== ${file.name} ===\n${text.substring(0, MAX_CHARS)}`);
       } else if (ext === 'pdf') {
-        // Cannot parse PDF client-side without extra library — flag it
-        parts.push(`=== ${file.name} (PDF) ===\n[PDF content not extractable in browser. Use filename and any context clues from this file's name to inform assumptions.]`);
+        const pdfLib = (typeof pdfjsLib !== 'undefined') ? pdfjsLib
+                     : (typeof window !== 'undefined' && window.pdfjsLib) ? window.pdfjsLib
+                     : null;
+        if (pdfLib) {
+          const buf = await file.arrayBuffer();
+          const pdf = await pdfLib.getDocument({ data: buf }).promise;
+          const MAX_PAGES = 15;            // first 15 pages — covers financials in most annual reports
+          const MAX_PDF_CHARS = 8000;
+          const numPages = Math.min(pdf.numPages, MAX_PAGES);
+          let pdfText = `=== ${file.name} (PDF — ${pdf.numPages} pages, extracting first ${numPages}) ===\n`;
+          for (let p = 1; p <= numPages; p++) {
+            const page = await pdf.getPage(p);
+            const tc   = await page.getTextContent();
+            const pageText = tc.items.map(item => item.str).join(' ').replace(/\s+/g, ' ').trim();
+            if (pageText) pdfText += `\n--- Page ${p} ---\n${pageText}`;
+          }
+          parts.push(pdfText.substring(0, MAX_PDF_CHARS));
+        } else {
+          parts.push(`=== ${file.name} (PDF) ===\n[PDF.js not loaded — cannot extract text. Use filename as context only.]`);
+        }
       } else {
         parts.push(`=== ${file.name} ===\n[Binary or unsupported file type — use filename as context only.]`);
       }
