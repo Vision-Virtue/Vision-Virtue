@@ -1600,8 +1600,213 @@ async function generateExcelModel(d, vcData={}) {
 
   ftRow(pnl,56);
 
-  // ── Sheets D–H: to be implemented ──────────────────────────────
-  // (Salaries, Cash Flow, KPI Dashboard, VC Expert Analysis, Working Papers)
+  // ── Section D: Sheet 3 — Salaries ──────────────────────────────
+  // Each department: headcount row + avg salary row + total cost formula row
+  // Total cost col = =headcount * avgSalaryK  (formula per year column)
+  const sal = wb.addWorksheet('Salaries');
+  sal.tabColor = {argb:'E7CC59'};
+  setWidths(sal,[32,14,14,14,14,14]);
+  applyHeader(sal,
+    `${d.companyName}  |  Salary Planning ($K)`,
+    'Headcount × Avg Annual Salary  ·  Totals feed into P&L cost line items');
+  yearHdr(sal,3);
+
+  let salR = 4;
+  const depts = d.salaries.departments;
+
+  // Track total salary cost rows for grand-total formula
+  const salTotalRows = [];
+
+  depts.forEach(dept => {
+    secRow(sal, salR, dept.name.toUpperCase());
+    const hcRow    = salR + 1;   // headcount
+    const avgRow   = salR + 2;   // avg salary
+    const totalRow = salR + 3;   // total cost = headcount × avg
+
+    wr(sal, hcRow,   'Headcount (EOP)',        dept.headcount,             {numFmt:'#,##0'});
+    // Avg salary is a single constant — put same value across all years (editable)
+    wr(sal, avgRow,  'Avg Annual Salary ($K)', YC.map(() => dept.avgSalaryK));
+    wr(sal, totalRow, `Total ${dept.name} Salary Cost`,
+      YC.map(c => `=${c}${hcRow}*${c}${avgRow}`),
+      {bold:true, bg:LGRAY, topBorder:true});
+
+    salTotalRows.push(totalRow);
+    salR += 5;   // section + 3 data rows + 1 blank
+    blank(sal, salR - 1);
+  });
+
+  // Company-wide totals
+  secRow(sal, salR, 'COMPANY TOTALS');
+  wr(sal, salR + 1, 'Total Headcount',
+    YC.map(c => `=SUM(${salTotalRows.map(r => {
+      // headcount is totalRow-2
+      const hcR = r - 2;
+      return `${c}${hcR}`;
+    }).join(',')})`),
+    {bold:true, numFmt:'#,##0'});
+  wr(sal, salR + 2, 'Total Salary Cost ($K)',
+    YC.map(c => `=SUM(${salTotalRows.map(r => `${c}${r}`).join(',')})`),
+    {bold:true, bg:'FFD6F5E2', topBorder:true, bottomBorder:true});
+
+  ftRow(sal, salR + 4);
+
+  // ── Section E: Sheet 4 — Cash Flow ──────────────────────────────
+  // Row map: open=6, ebitda=7, dAR=8, dAP=9, wc=10
+  //   capex=13 | fin=16, tax=17 | net=19, close=20
+  // CF refs P&L rows: ebitda='P&L'!B53, cogs='P&L'!B20, rev='P&L'!B13
+  const cfs = wb.addWorksheet('Cash Flow',{views:[{state:'frozen',ySplit:4}]});
+  cfs.tabColor = {argb:'3D6FCE'};
+  setWidths(cfs,[34,14,14,14,14,14]);
+  applyHeader(cfs,
+    `${d.companyName}  |  5-Year Cash Flow Statement  ($K)`,
+    `AR Days: ${d.cashFlow.arDays}  ·  AP Days: ${d.cashFlow.apDays}  ·  Opening Cash: $${d.cashFlow.openingCash}K`);
+
+  blank(cfs,3);
+  yearHdr(cfs,4);
+
+  secRow(cfs,5,'OPERATING CASH FLOW');
+
+  // Opening balance: Y1 = Inputs!B14; Y2–Y5 = prior year closing (row 20)
+  wr(cfs,6,'Opening Cash Balance',
+    YC.map((c,i) => i===0 ? `=Inputs!$B$14` : `=${YC[i-1]}20`),
+    {bold:true});
+
+  // EBITDA from P&L
+  wr(cfs,7,'EBITDA',
+    YC.map(c=>`='P&L'!${c}53`),
+    {indent:1});
+
+  // ΔAR = -(arDays/365) × change in Revenue
+  // Y1: full AR build = -(arDays/365) × Revenue
+  // Y2+: incremental change only
+  wr(cfs,8,'  ΔAR (Accounts Receivable)',
+    YC.map((c,i) => i===0
+      ? `=-(Inputs!$B$19/365)*'P&L'!${c}13`
+      : `=-(Inputs!$B$19/365)*('P&L'!${c}13-'P&L'!${YC[i-1]}13)`),
+    {indent:2, italic:true});
+
+  // ΔAP = (apDays/365) × change in COGS (absolute)
+  wr(cfs,9,'  ΔAP (Accounts Payable)',
+    YC.map((c,i) => i===0
+      ? `=(Inputs!$B$20/365)*ABS('P&L'!${c}20)`
+      : `=(Inputs!$B$20/365)*(ABS('P&L'!${c}20)-ABS('P&L'!${YC[i-1]}20))`),
+    {indent:2, italic:true});
+
+  wr(cfs,10,'Net Working Capital Change',
+    YC.map(c=>`=${c}8+${c}9`),
+    {bold:true, bg:LGRAY, topBorder:true});
+
+  blank(cfs,11);
+  secRow(cfs,12,'INVESTING ACTIVITIES');
+  wr(cfs,13,'Capital Expenditure (CAPEX)',
+    YC.map(c=>`=Inputs!${c}15`),
+    {indent:1, vColor:RED});
+
+  blank(cfs,14);
+  secRow(cfs,15,'FINANCING ACTIVITIES');
+  wr(cfs,16,'Equity / Debt Raised',
+    YC.map(c=>`=Inputs!${c}16`),
+    {indent:1});
+  wr(cfs,17,'Income Taxes',
+    YC.map(c=>`=Inputs!${c}17`),
+    {indent:1, vColor:RED});
+
+  blank(cfs,18);
+  wr(cfs,19,'Net Cash Movement',
+    YC.map(c=>`=${c}7+${c}10+${c}13+${c}16+${c}17`),
+    {bold:true, bg:LGRAY, topBorder:true, bottomBorder:true});
+  wr(cfs,20,'Closing Cash Balance',
+    YC.map(c=>`=${c}6+${c}19`),
+    {bold:true, bg:'FFD6F5E2', topBorder:true, bottomBorder:true});
+
+  ftRow(cfs,22);
+
+  // ── Section F: Sheet 5 — KPI Dashboard ──────────────────────────
+  // Uses data bars for visual "chart feel" within cells.
+  // Cross-references: P&L rows 13,23,53,54 | CF row 20 | Inputs rows 22-30
+  const kpi = wb.addWorksheet('KPI Dashboard',{views:[{state:'frozen',ySplit:4}]});
+  kpi.tabColor = {argb:'3D6FCE'};
+  setWidths(kpi,[32,14,14,14,14,14]);
+  applyHeader(kpi,
+    `${d.companyName}  |  KPI Dashboard`,
+    `TAM: ${d.kpis.tam}  ·  All figures $K unless noted`);
+
+  blank(kpi,3);
+  yearHdr(kpi,4);
+
+  // UNIT ECONOMICS
+  secRow(kpi,5,'UNIT ECONOMICS');
+  wr(kpi,6, 'Customers (EOP)',     YC.map(c=>`=Inputs!${c}22`),{numFmt:'#,##0'});
+  wr(kpi,7, 'ARPU ($K / yr)',      YC.map(c=>`=Inputs!${c}23`));
+  wr(kpi,8, 'CAC ($K)',            YC.map(c=>`=Inputs!${c}24`));
+  wr(kpi,9, 'LTV ($K)',            YC.map(c=>`=Inputs!${c}25`));
+  wr(kpi,10,'LTV / CAC Ratio',
+    YC.map(c=>`=IF(${c}8>0,${c}9/${c}8,0)`),
+    {bold:true, bg:'FFDCE8FF', numFmt:'0.0"x"'});
+  wr(kpi,11,'Churn Rate',          YC.map(c=>`=Inputs!${c}26`),{pct:true});
+  wr(kpi,12,'Months to Recover CAC',
+    YC.map(c=>`=IF(${c}7>0,${c}8/(${c}7/12),0)`),
+    {italic:true, numFmt:'0.0'});
+  blank(kpi,13);
+
+  // SAAS METRICS
+  secRow(kpi,14,'SAAS METRICS');
+  wr(kpi,15,'ARR ($K)',            YC.map(c=>`=Inputs!${c}29`));
+  wr(kpi,16,'MRR ($K)',            YC.map(c=>`=Inputs!${c}28`));
+  wr(kpi,17,'Net Revenue Retention',
+    YC.map(c=>`=Inputs!${c}27`),
+    {bold:true, bg:'FFD6F5E2', pct:true});
+  blank(kpi,18);
+
+  // GROWTH METRICS
+  secRow(kpi,19,'GROWTH METRICS');
+  wr(kpi,20,'Revenue ($K)',        YC.map(c=>`='P&L'!${c}13`));
+  wr(kpi,21,'Revenue YoY Growth',
+    YC.map((c,i) => i===0 ? 'n/a'
+      : `=IF('P&L'!${YC[i-1]}13>0,'P&L'!${c}13/'P&L'!${YC[i-1]}13-1,0)`),
+    {pct:true});
+  wr(kpi,22,'ARR YoY Growth',
+    YC.map((c,i) => i===0 ? 'n/a'
+      : `=IF(Inputs!${YC[i-1]}29>0,Inputs!${c}29/Inputs!${YC[i-1]}29-1,0)`),
+    {pct:true});
+  wr(kpi,23,'Gross Margin',        YC.map(c=>`='P&L'!${c}23`),{pct:true});
+  wr(kpi,24,'EBITDA Margin',
+    YC.map(c=>`='P&L'!${c}54`),
+    {bold:true, bg:LGRAY, pct:true});
+  blank(kpi,25);
+
+  // MARKET METRICS
+  secRow(kpi,26,'MARKET METRICS');
+  wr(kpi,27,'TAM Penetration',     YC.map(c=>`=Inputs!${c}30`),{pct:true});
+  wr(kpi,28,'Closing Cash ($K)',   YC.map(c=>`='Cash Flow'!${c}20`));
+  wr(kpi,29,'Revenue CAGR (Y1→Y5)',
+    ['n/a','n/a','n/a','n/a',
+      `=IF('P&L'!B13>0,('P&L'!F13/'P&L'!B13)^(1/4)-1,0)`],
+    {bold:true, bg:'FFDCE8FF', pct:true});
+  blank(kpi,30);
+
+  // Data bars — visual "chart" effect on key rows
+  [
+    { ref:'B20:F20', color:BLUE  },   // Revenue
+    { ref:'B15:F15', color:'FF3D9FCE' }, // ARR
+    { ref:'B28:F28', color:'FF005500' }, // Cash
+  ].forEach(({ref, color}) => {
+    kpi.addConditionalFormatting({
+      ref,
+      rules:[{
+        type:'dataBar',
+        minLength:0, maxLength:100,
+        cfvo:[{type:'min'},{type:'max'}],
+        color:{argb:color},
+        showValue:true,
+      }]
+    });
+  });
+
+  ftRow(kpi,32);
+
+  // ── Sheets G–H: to be implemented ───────────────────────────────
+  // (VC Expert Analysis, Working Papers)
 
   // ── Write to Blob ──────────────────────────────────────────────
   const buffer = await wb.xlsx.writeBuffer();
