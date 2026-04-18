@@ -13,7 +13,6 @@ const mobileAuthBtn = document.getElementById('mobileAuthBtn');
 const apOverlay  = document.getElementById('apOverlay');
 const apClose    = document.getElementById('apClose');
 const apPin      = document.getElementById('apPin');
-const apKey      = document.getElementById('apKey');
 const apEnterBtn = document.getElementById('apEnterBtn');
 const apError    = document.getElementById('apError');
 
@@ -73,7 +72,6 @@ function openGate() {
   apOverlay.classList.add('open');
   apOverlay.setAttribute('aria-hidden', 'false');
   apPin.value = '';
-  apKey.value = '';
   apError.textContent = '';
   setTimeout(() => apPin.focus(), 50);
 }
@@ -92,17 +90,10 @@ apOverlay.addEventListener('click', (e) => {
 // ── Authenticate (server-side PIN check) ─────────────────────
 async function tryAuth() {
   const pin = apPin.value.trim();
-  const key = apKey.value.trim();
 
   if (!pin) {
     apError.textContent = 'Please enter an access code.';
     apPin.focus();
-    return;
-  }
-
-  if (key && !key.startsWith('sk-ant-')) {
-    apError.textContent = 'API key must start with sk-ant- (or leave it blank).';
-    apKey.select();
     return;
   }
 
@@ -126,7 +117,6 @@ async function tryAuth() {
 
     const target = apEnterBtn.dataset.target;
     sessionStorage.setItem('vv_auth', '1');
-    if (key) sessionStorage.setItem('vv_key', key);
     closeGate();
     window.location.href = target === 'marketing' ? 'marketing.html' : 'agents.html';
   } catch {
