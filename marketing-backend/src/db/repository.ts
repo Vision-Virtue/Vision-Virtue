@@ -233,7 +233,7 @@ export class ContentRepository {
     `).run(
       token.id,
       encryptToken(token.access_token),
-      token.refresh_token ? encryptToken(token.refresh_token) : null,
+      token.refresh_token ? encryptToken(token.refresh_token) : '',
       token.expires_at,
       token.organization_id,
       token.person_urn,
