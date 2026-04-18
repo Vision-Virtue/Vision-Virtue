@@ -1176,7 +1176,7 @@ async function renderLinkedIn(area) {
       document.getElementById('li-content').innerHTML = `
         <div class="panel-body" style="background:var(--surface);border-radius:10px;padding:1.5rem">
           <h3 style="margin-bottom:1rem;color:var(--text-primary)">AI Profile Review</h3>
-          <div class="brief-value" style="white-space:pre-wrap">${result.review || JSON.stringify(result, null, 2)}</div>
+          <div class="brief-value" style="white-space:pre-wrap">${esc(result.review || JSON.stringify(result, null, 2))}</div>
         </div>`;
     } catch(e) { toast(e.message, 'error'); }
     setLoading(btn, false, 'AI Review Profile');
@@ -1230,7 +1230,7 @@ function renderLinkedInProfile(profile) {
   el.innerHTML = `
     <div class="li-profile-card">
       <div class="li-profile-header">
-        <div class="li-logo">${profile.logoUrl ? `<img src="${profile.logoUrl}" alt="Logo">` : '<div class="li-logo-placeholder">V&amp;V</div>'}</div>
+        <div class="li-logo">${profile.logoUrl && /^https:\/\//.test(profile.logoUrl) ? `<img src="${esc(profile.logoUrl)}" alt="Logo">` : '<div class="li-logo-placeholder">V&amp;V</div>'}</div>
         <div>
           <div class="li-name">${esc(profile.name || 'Vision & Virtue')}</div>
           <div class="li-tagline">${esc(profile.tagline || '—')}</div>
