@@ -1,7 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { contentController } from '../controllers/content.controller';
 import { linkedInController } from '../controllers/linkedin.controller';
-import { authController } from '../controllers/auth.controller';
+import { authController, verifyPin } from '../controllers/auth.controller';
 import { chatController } from '../controllers/chat.controller';
 import { requireRaphael, requireLinkedIn } from '../middleware/auth.middleware';
 
@@ -31,6 +31,8 @@ router.get('/health', (_req: Request, res: Response) => {
 // ─── Auth Routes ──────────────────────────────────────────────────────────────
 
 router.get('/auth/status', (_req: Request, res: Response) => authController.getStatus(_req, res));
+
+router.post('/auth/verify-pin', asyncHandler(async (req, res) => { verifyPin(req, res); }));
 
 router.get('/auth/linkedin', (req: Request, res: Response) =>
   authController.startLinkedInAuth(req, res),
@@ -100,15 +102,17 @@ router.post(
   asyncHandler((req, res) => contentController.reject(req, res)),
 );
 
-// Ask the Economist a question (available during Raphael approval review)
+// Ask the Economist a question (Raphael only — requires passcode)
 router.post(
   '/content/:id/ask-economist',
+  requireRaphael,
   asyncHandler((req, res) => contentController.askEconomist(req, res)),
 );
 
-// Raphael returns annotated posts to VP for corrections
+// Raphael returns annotated posts to VP for corrections (requires passcode)
 router.post(
   '/content/:id/return-to-vp',
+  requireRaphael,
   asyncHandler((req, res) => contentController.returnToVp(req, res)),
 );
 

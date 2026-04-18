@@ -18,6 +18,8 @@ services:
         sync: false
       - key: RAPHAEL_PASSCODE
         sync: false
+      - key: ACCESS_CODE
+        sync: false
       - key: SESSION_SECRET
         generateValue: true
       - key: DB_PATH

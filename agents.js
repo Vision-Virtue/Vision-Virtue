@@ -12,7 +12,7 @@ function esc(s) {
 }
 
 // ── Access gate ─────────────────────────────────────────────
-const ACCESS_CODE = 'VV2025';   // Change this to your preferred PIN
+const BACKEND_URL = 'https://vv-marketing-api.onrender.com';
 
 const accessGate   = document.getElementById('accessGate');
 const agentsApp    = document.getElementById('agentsApp');
@@ -21,28 +21,49 @@ const accessApiKey = document.getElementById('accessApiKey');
 const accessBtn    = document.getElementById('accessBtn');
 const gateError    = document.getElementById('gateError');
 
-function tryAccess() {
+async function tryAccess() {
   const pin = accessPin.value.trim();
   const key = accessApiKey.value.trim();
 
-  if (pin !== ACCESS_CODE) {
-    gateError.textContent = 'Incorrect access code. Try again.';
-    accessPin.value = '';
+  if (!pin) {
+    gateError.textContent = 'Please enter an access code.';
     accessPin.focus();
     return;
   }
-  // API key is optional — the backend uses its own key. A user key is accepted
-  // as a fallback and stored if provided.
+
   if (key && !key.startsWith('sk-ant-')) {
     gateError.textContent = 'API key must start with sk-ant- (or leave it blank).';
     accessApiKey.focus();
     return;
   }
 
-  sessionStorage.setItem('vv_auth', '1');
-  if (key) sessionStorage.setItem('vv_key', key);
-  accessGate.style.display = 'none';
-  agentsApp.style.display  = 'block';
+  accessBtn.disabled = true;
+  gateError.textContent = '';
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/auth/verify-pin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin }),
+    });
+    const data = await res.json();
+
+    if (!data.valid) {
+      gateError.textContent = 'Incorrect access code. Try again.';
+      accessPin.value = '';
+      accessPin.focus();
+      return;
+    }
+
+    sessionStorage.setItem('vv_auth', '1');
+    if (key) sessionStorage.setItem('vv_key', key);
+    accessGate.style.display = 'none';
+    agentsApp.style.display  = 'block';
+  } catch {
+    gateError.textContent = 'Could not reach server. Please try again.';
+  } finally {
+    accessBtn.disabled = false;
+  }
 }
 
 // Auto-pass if already authenticated this session
