@@ -23,6 +23,22 @@ const MAX_TOKENS = 8096;
 
 // ─── JSON Extraction Helper ───────────────────────────────────────────────────
 
+function findMatchingBrace(str: string, start: number): number {
+  let depth = 0;
+  let inString = false;
+  let escape = false;
+  for (let i = start; i < str.length; i++) {
+    const ch = str[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') depth++;
+    else if (ch === '}') { depth--; if (depth === 0) return i; }
+  }
+  return -1;
+}
+
 function extractJson(raw: string): unknown {
   // Strip markdown code fences if present
   const fenceMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
@@ -31,20 +47,22 @@ function extractJson(raw: string): unknown {
   try {
     return JSON.parse(jsonString);
   } catch {
-    // Try to find the first { ... } block
+    // Find the first { and its matching closing } using proper bracket counting
     const firstBrace = jsonString.indexOf('{');
-    const lastBrace = jsonString.lastIndexOf('}');
-    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-      const extracted = jsonString.slice(firstBrace, lastBrace + 1);
-      try {
-        return JSON.parse(extracted);
-      } catch (e2) {
-        throw new ApiError(
-          500,
-          `Failed to parse AI response JSON: ${(e2 as Error).message}`,
-          'AI_PARSE_ERROR',
-          { raw: jsonString.slice(0, 500) },
-        );
+    if (firstBrace !== -1) {
+      const matchingBrace = findMatchingBrace(jsonString, firstBrace);
+      if (matchingBrace !== -1) {
+        const extracted = jsonString.slice(firstBrace, matchingBrace + 1);
+        try {
+          return JSON.parse(extracted);
+        } catch (e2) {
+          throw new ApiError(
+            500,
+            `Failed to parse AI response JSON: ${(e2 as Error).message}`,
+            'AI_PARSE_ERROR',
+            { raw: jsonString.slice(0, 500) },
+          );
+        }
       }
     }
     throw new ApiError(500, 'AI response contained no valid JSON', 'AI_PARSE_ERROR', {
