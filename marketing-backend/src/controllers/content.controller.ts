@@ -570,9 +570,12 @@ export class ContentController {
     const englishDraft = item.marketing_draft.english;
     const englishText = `${englishDraft.text}\n\n${englishDraft.hashtags.join(' ')}`;
 
+    console.log(`[PUBLISH] authorUrn: ${authorUrn}`);
+
     try {
       const result = await linkedInService.createTextPost(token.access_token, hebrewText, authorUrn);
       hebrewPostId = result.postId;
+      console.log(`[PUBLISH] Hebrew post ID: ${hebrewPostId}`);
     } catch (err) {
       errors.push(`Hebrew post failed: ${(err as Error).message}`);
     }
@@ -580,6 +583,7 @@ export class ContentController {
     try {
       const result = await linkedInService.createTextPost(token.access_token, englishText, authorUrn);
       englishPostId = result.postId;
+      console.log(`[PUBLISH] English post ID: ${englishPostId}`);
     } catch (err) {
       errors.push(`English post failed: ${(err as Error).message}`);
     }
