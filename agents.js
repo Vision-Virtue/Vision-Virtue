@@ -883,7 +883,7 @@ async function extractFileContents(files) {
             const slideNum = slideName.match(/slide(\d+)/)?.[1];
             if (texts.length) pptText += `\n--- Slide ${slideNum} ---\n${texts.join(' ')}`;
           }
-          parts.push(pptText.substring(0, 20000));
+          parts.push(pptText.substring(0, 10000));
         } else {
           parts.push(`=== ${file.name} (PowerPoint) ===\n[JSZip not loaded or .ppt (old format) — cannot extract text. Convert to .pptx and re-upload.]`);
         }
@@ -897,7 +897,7 @@ async function extractFileContents(files) {
             const xml = await docEntry.async('text');
             const texts = [...xml.matchAll(/<w:t[^>]*>([^<]*)<\/w:t>/g)]
               .map(m => m[1]).filter(t => t.trim());
-            parts.push(`=== ${file.name} (Word) ===\n${texts.join(' ').substring(0, 20000)}`);
+            parts.push(`=== ${file.name} (Word) ===\n${texts.join(' ').substring(0, 10000)}`);
           } else {
             parts.push(`=== ${file.name} (Word) ===\n[Could not locate word/document.xml inside archive]`);
           }

@@ -225,8 +225,12 @@ export class LinkedInService {
         }
       ).value;
 
-      // Step 2: Fetch image data from URL
-      const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+      // Step 2: Fetch image data from URL (SSRF guard: https only)
+      const parsedUrl = new URL(imageUrl);
+      if (parsedUrl.protocol !== 'https:') {
+        throw new ApiError(400, 'Image URL must use HTTPS', 'INVALID_URL');
+      }
+      const imageResponse = await axios.get(imageUrl, { responseType: 'arraybuffer', maxRedirects: 3 });
       const imageBuffer = Buffer.from(imageResponse.data as ArrayBuffer);
 
       // Step 3: Upload image binary
@@ -280,8 +284,12 @@ export class LinkedInService {
   async uploadMediaAsset(token: string, filePath: string): Promise<string> {
     try {
       const absolutePath = path.resolve(filePath);
+      const uploadDir = path.resolve(process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads'));
+      if (!absolutePath.startsWith(uploadDir + path.sep)) {
+        throw new ApiError(400, 'Invalid file path', 'INVALID_PATH');
+      }
       if (!fs.existsSync(absolutePath)) {
-        throw new ApiError(400, `File not found: ${filePath}`, 'FILE_NOT_FOUND');
+        throw new ApiError(400, 'File not found', 'FILE_NOT_FOUND');
       }
 
       // Initialize upload

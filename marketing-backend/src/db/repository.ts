@@ -1,5 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getDb } from './database';
+import { encryptToken, decryptToken } from '../utils/crypto';
 import {
   ContentItem,
   AuditLog,
@@ -231,8 +232,8 @@ export class ContentRepository {
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `).run(
       token.id,
-      token.access_token,
-      token.refresh_token,
+      encryptToken(token.access_token),
+      token.refresh_token ? encryptToken(token.refresh_token) : null,
       token.expires_at,
       token.organization_id,
       token.person_urn,
@@ -248,8 +249,8 @@ export class ContentRepository {
     if (!row) return null;
     return {
       id: row.id,
-      access_token: row.access_token,
-      refresh_token: row.refresh_token,
+      access_token: decryptToken(row.access_token),
+      refresh_token: row.refresh_token ? decryptToken(row.refresh_token) : row.refresh_token,
       expires_at: row.expires_at,
       organization_id: row.organization_id,
       person_urn: row.person_urn,
