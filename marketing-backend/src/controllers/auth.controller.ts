@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
+import { timingSafeEqual, createHash } from 'crypto';
 import { contentRepository } from '../db/repository';
 import { getDb } from '../db/database';
 import { LinkedInService } from '../services/linkedin.service';
@@ -136,3 +137,25 @@ export class AuthController {
 }
 
 export const authController = new AuthController();
+
+// POST /api/auth/verify-pin
+export function verifyPin(req: Request, res: Response): void {
+  const { pin } = req.body as { pin?: string };
+  const expected = process.env.ACCESS_CODE;
+
+  if (!expected) {
+    res.status(500).json({ error: { code: 'NOT_CONFIGURED', message: 'Access code not configured on server' } });
+    return;
+  }
+
+  if (!pin || typeof pin !== 'string') {
+    res.status(400).json({ valid: false });
+    return;
+  }
+
+  const a = createHash('sha256').update(pin).digest();
+  const b = createHash('sha256').update(expected).digest();
+  const valid = timingSafeEqual(a, b);
+
+  res.json({ valid });
+}

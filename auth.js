@@ -2,7 +2,7 @@
    VISION & VIRTUE — Authorized Personnel Nav + Access Gate
    ============================================================ */
 
-const ACCESS_CODE = 'VV2025';
+const BACKEND = 'https://vv-marketing-api.onrender.com';
 
 // ── Elements ──────────────────────────────────────────────────
 const authMenuBtn   = document.getElementById('authMenuBtn');
@@ -89,27 +89,51 @@ apOverlay.addEventListener('click', (e) => {
   if (e.target === apOverlay) closeGate();
 });
 
-// ── Authenticate ──────────────────────────────────────────────
-function tryAuth() {
+// ── Authenticate (server-side PIN check) ─────────────────────
+async function tryAuth() {
   const pin = apPin.value.trim();
   const key = apKey.value.trim();
 
-  if (pin !== ACCESS_CODE) {
-    apError.textContent = 'Incorrect access code.';
-    apPin.select();
+  if (!pin) {
+    apError.textContent = 'Please enter an access code.';
+    apPin.focus();
     return;
   }
-  if (!key.startsWith('sk-ant-')) {
-    apError.textContent = 'Enter a valid Claude API key (sk-ant-...).';
+
+  if (key && !key.startsWith('sk-ant-')) {
+    apError.textContent = 'API key must start with sk-ant- (or leave it blank).';
     apKey.select();
     return;
   }
 
-  const target = apEnterBtn.dataset.target;
-  sessionStorage.setItem('vv_auth', '1');
-  sessionStorage.setItem('vv_key', key);
-  closeGate();
-  window.location.href = target === 'marketing' ? 'marketing.html' : 'agents.html';
+  apEnterBtn.disabled = true;
+  apError.textContent = '';
+
+  try {
+    const res = await fetch(`${BACKEND}/api/auth/verify-pin`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pin }),
+    });
+    const data = await res.json();
+
+    if (!data.valid) {
+      apError.textContent = 'Incorrect access code. Try again.';
+      apPin.value = '';
+      apPin.focus();
+      return;
+    }
+
+    const target = apEnterBtn.dataset.target;
+    sessionStorage.setItem('vv_auth', '1');
+    if (key) sessionStorage.setItem('vv_key', key);
+    closeGate();
+    window.location.href = target === 'marketing' ? 'marketing.html' : 'agents.html';
+  } catch {
+    apError.textContent = 'Could not reach server. Please try again.';
+  } finally {
+    apEnterBtn.disabled = false;
+  }
 }
 
 apEnterBtn.addEventListener('click', tryAuth);

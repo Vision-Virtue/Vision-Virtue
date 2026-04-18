@@ -4,7 +4,7 @@
    ============================================================ */
 
 // ── Configuration ─────────────────────────────────────────────
-const API_BASE = (window.VV_MARKETING_API || localStorage.getItem('vv_marketing_api') || 'https://vv-marketing-api.onrender.com') + '/api';
+const API_BASE = (window.VV_MARKETING_API || 'https://vv-marketing-api.onrender.com') + '/api';
 
 // ── State ──────────────────────────────────────────────────────
 let currentView = 'pipeline';
@@ -16,6 +16,7 @@ let pipelineRunning = false;
 let currentPipelineStep = null;
 let raphaelAnnotations = [];
 let annAbortCtrl = null;
+let _raphaelPasscode = null; // cached in-session after first entry
 let currentChatAgent = null;
 const chatHistories = { economist: [], sofia: [], daniel: [], raphael: [] };
 
@@ -683,6 +684,13 @@ function bindPanelActions(item) {
   }
 }
 
+function getRaphaelPasscode() {
+  if (_raphaelPasscode) return _raphaelPasscode;
+  const pc = prompt('Enter your Raphael passcode to continue:');
+  if (pc) _raphaelPasscode = pc;
+  return pc;
+}
+
 function bindQAForm(item) {
   const btn   = document.getElementById('qa-send-btn');
   const input = document.getElementById('qa-question-input');
@@ -692,11 +700,14 @@ function bindQAForm(item) {
     const q = input.value.trim();
     if (!q) { input.focus(); return; }
 
+    const passcode = getRaphaelPasscode();
+    if (!passcode) return;
+
     setLoading(btn, true, 'Asking…');
     input.disabled = true;
 
     try {
-      const updated = await POST(`/content/${item.id}/ask-economist`, { question: q });
+      const updated = await POST(`/content/${item.id}/ask-economist`, { question: q, passcode });
       currentItem = updated;
       // Only refresh the Q&A history container — preserves annotation DOM
       const historyContainer = document.getElementById('qa-history-container');
@@ -811,10 +822,12 @@ function bindReturnToVp(item) {
   if (!btn) return;
   btn.onclick = async () => {
     if (raphaelAnnotations.length === 0) { toast('Mark at least one correction first.', 'error'); return; }
+    const passcode = getRaphaelPasscode();
+    if (!passcode) return;
     const count = raphaelAnnotations.length;
     setLoading(btn, true);
     try {
-      currentItem = await POST(`/content/${item.id}/return-to-vp`, { annotations: raphaelAnnotations });
+      currentItem = await POST(`/content/${item.id}/return-to-vp`, { annotations: raphaelAnnotations, passcode });
       raphaelAnnotations = [];
       if (annAbortCtrl) { annAbortCtrl.abort(); annAbortCtrl = null; }
       document.getElementById('ann-toolbar').style.display = 'none';
@@ -1261,8 +1274,7 @@ function renderSettings(area) {
     <div class="settings-grid">
       <div class="settings-card">
         <div class="settings-label">Backend API URL</div>
-        <input class="form-input" id="api-url-input" value="${API_BASE.replace('/api','')}" style="margin-top:0.5rem"/>
-        <button class="btn btn-secondary" style="margin-top:0.75rem" id="save-api-url">Save & Reload</button>
+        <input class="form-input" value="${esc(API_BASE.replace('/api',''))}" style="margin-top:0.5rem" readonly/>
       </div>
       <div class="settings-card">
         <div class="settings-label">LinkedIn Organization</div>
@@ -1274,11 +1286,6 @@ function renderSettings(area) {
         <div id="health-info" class="brief-value" style="margin-top:0.5rem">Checking…</div>
       </div>
     </div>`;
-
-  document.getElementById('save-api-url').onclick = () => {
-    localStorage.setItem('vv_marketing_api', document.getElementById('api-url-input').value);
-    window.location.reload();
-  };
 
   GET('/health').then(h => {
     document.getElementById('health-info').textContent = `Backend v${h.version} — OK (${h.timestamp})`;
@@ -1359,6 +1366,7 @@ document.getElementById('confirm-raphael-btn').onclick = async () => {
   try {
     const endpoint = raphaelAction === 'approve' ? 'approve' : 'reject';
     currentItem = await POST(`/content/${currentItem.id}/${endpoint}`, { passcode, notes });
+    _raphaelPasscode = passcode; // cache for ask-economist / return-to-vp in this session
     closeRaphaelModal();
     toast(raphaelAction === 'approve' ? 'Content approved for publishing.' : 'Content rejected.', 'success');
     renderDetail(document.getElementById('content-area'));

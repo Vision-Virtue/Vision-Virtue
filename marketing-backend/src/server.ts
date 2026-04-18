@@ -26,6 +26,9 @@ async function start(): Promise<void> {
   if (!process.env.LINKEDIN_CLIENT_ID || !process.env.LINKEDIN_CLIENT_SECRET) {
     warnings.push('LinkedIn OAuth credentials are not set — LinkedIn features will not work');
   }
+  if (!process.env.ACCESS_CODE) {
+    warnings.push('ACCESS_CODE is not set — the authorized personnel PIN gate will fail');
+  }
   if (!process.env.RAPHAEL_PASSCODE) {
     warnings.push('RAPHAEL_PASSCODE is not set — approval endpoint will fail');
   } else if (process.env.RAPHAEL_PASSCODE === 'raphael2025') {
