@@ -40,12 +40,12 @@ app.use(
 // ─── CORS ─────────────────────────────────────────────────────────────────────
 
 const allowedOrigins = [
-  process.env.FRONTEND_URL || 'http://localhost:3000',
   'https://vision-virtue.github.io',
   'https://visionvirtuepartnership.com',
   'https://www.visionvirtuepartnership.com',
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
+  ...(process.env.NODE_ENV !== 'production'
+    ? ['http://localhost:3000', 'http://127.0.0.1:3000']
+    : []),
 ];
 
 app.use(
