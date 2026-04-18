@@ -54,12 +54,10 @@ const WORKFLOW_STEPS = [
 
 // ── API helpers ────────────────────────────────────────────────
 async function api(method, path, body) {
-  const apiKey = sessionStorage.getItem('vv_key') || '';
   const opts = {
     method,
     headers: {
       'Content-Type': 'application/json',
-      'X-API-Key': apiKey,
     },
   };
   if (body) opts.body = JSON.stringify(body);
