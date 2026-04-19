@@ -935,7 +935,7 @@ async function renderDetail(area) {
   }
 
   const showStart  = item.state === 'IDEA_IDENTIFIED' && !pipelineRunning;
-  const showResume = ['RETURNED_FOR_REVISION', 'DRAFT_READY', 'UNDER_VP_REVIEW'].includes(item.state) && !pipelineRunning;
+  const showResume = ['ECONOMIST_BRIEF_READY', 'RETURNED_FOR_REVISION', 'DRAFT_READY', 'UNDER_VP_REVIEW'].includes(item.state) && !pipelineRunning;
 
   area.innerHTML = `
     <div class="detail-header-row">
