@@ -577,6 +577,7 @@ export class ContentController {
       hebrewPostId = result.postId;
       console.log(`[PUBLISH] Hebrew post ID: ${hebrewPostId}`);
     } catch (err) {
+      console.error(`[PUBLISH ERROR] Hebrew post failed:`, err);
       errors.push(`Hebrew post failed: ${(err as Error).message}`);
     }
 
@@ -585,6 +586,7 @@ export class ContentController {
       englishPostId = result.postId;
       console.log(`[PUBLISH] English post ID: ${englishPostId}`);
     } catch (err) {
+      console.error(`[PUBLISH ERROR] English post failed:`, err);
       errors.push(`English post failed: ${(err as Error).message}`);
     }
 
