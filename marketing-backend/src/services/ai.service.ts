@@ -104,24 +104,33 @@ function validateAIResponse(parsed: unknown, expectedStage: AIResponse['stage'])
 export class AIService {
   constructor(private readonly client: Anthropic) {}
 
+  private mapAnthropicError(err: unknown, context: string): ApiError {
+    if (err instanceof ApiError) return err;
+    const e = err as { status?: number; error?: { error?: { message?: string } }; message?: string };
+    const status = e.status ?? 500;
+    const msg = e.error?.error?.message ?? (err instanceof Error ? err.message : String(err));
+    if (status === 401) return new ApiError(502, `Anthropic API key is invalid or revoked. ${msg}`, 'AI_AUTH_ERROR');
+    if (status === 429) return new ApiError(429, `Anthropic rate limit or credit balance too low. ${msg}`, 'AI_RATE_LIMITED');
+    if (status === 529) return new ApiError(503, `Anthropic API is overloaded. Please retry in a moment.`, 'AI_OVERLOADED');
+    return new ApiError(502, `${context}: ${msg}`, 'AI_API_ERROR');
+  }
+
   private async callClaude(prompt: string): Promise<string> {
-    const response = await this.client.messages.create({
-      model: MODEL,
-      max_tokens: MAX_TOKENS,
-      messages: [
-        {
-          role: 'user',
-          content: prompt,
-        },
-      ],
-    });
+    try {
+      const response = await this.client.messages.create({
+        model: MODEL,
+        max_tokens: MAX_TOKENS,
+        messages: [{ role: 'user', content: prompt }],
+      });
 
-    const content = response.content[0];
-    if (content.type !== 'text') {
-      throw new ApiError(500, 'Unexpected response type from Claude', 'AI_UNEXPECTED_RESPONSE');
+      const content = response.content[0];
+      if (content.type !== 'text') {
+        throw new ApiError(500, 'Unexpected response type from Claude', 'AI_UNEXPECTED_RESPONSE');
+      }
+      return content.text;
+    } catch (err) {
+      throw this.mapAnthropicError(err, 'Claude API call failed');
     }
-
-    return content.text;
   }
 
   async runChiefEconomist(topic: string, searchService?: BraveSearchService): Promise<AIResponse> {
@@ -149,15 +158,26 @@ export class AIService {
 
     const messages: Anthropic.MessageParam[] = [{ role: 'user', content: prompt }];
     const MAX_SEARCHES = 6;
+    const MAX_LOOP_MS = 120_000; // 2-minute total cap to avoid Render request timeout
     let searches = 0;
+    const loopStart = Date.now();
 
     while (true) {
-      const response = await this.client.messages.create({
-        model: MODEL,
-        max_tokens: MAX_TOKENS,
-        tools: [webSearchTool],
-        messages,
-      });
+      if (Date.now() - loopStart > MAX_LOOP_MS) {
+        throw new ApiError(504, 'Economist research timed out — please try again. If this repeats, reduce the topic complexity.', 'AI_TIMEOUT');
+      }
+
+      let response: Anthropic.Message;
+      try {
+        response = await this.client.messages.create({
+          model: MODEL,
+          max_tokens: MAX_TOKENS,
+          tools: [webSearchTool],
+          messages,
+        });
+      } catch (err) {
+        throw this.mapAnthropicError(err, 'Economist Claude call failed');
+      }
 
       if (response.stop_reason === 'tool_use') {
         const toolUse = response.content.find(c => c.type === 'tool_use') as Anthropic.ToolUseBlock;
@@ -245,16 +265,20 @@ export class AIService {
       ...history.map(h => ({ role: h.role, content: h.content })),
       { role: 'user' as const, content: message },
     ];
-    const response = await this.client.messages.create({
-      model: MODEL,
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages,
-    });
-    const content = response.content[0];
-    if (content.type !== 'text') {
-      throw new ApiError(500, 'Unexpected response type from Claude', 'AI_UNEXPECTED_RESPONSE');
+    try {
+      const response = await this.client.messages.create({
+        model: MODEL,
+        max_tokens: 1024,
+        system: systemPrompt,
+        messages,
+      });
+      const content = response.content[0];
+      if (content.type !== 'text') {
+        throw new ApiError(500, 'Unexpected response type from Claude', 'AI_UNEXPECTED_RESPONSE');
+      }
+      return content.text.trim();
+    } catch (err) {
+      throw this.mapAnthropicError(err, 'Agent chat failed');
     }
-    return content.text.trim();
   }
 }
