@@ -160,29 +160,30 @@ export class LinkedInService {
     authorUrn: string,  // urn:li:person:X (personal) or urn:li:organization:X (org page)
   ): Promise<{ postId: string }> {
     try {
+      // Use /v2/ugcPosts — stable endpoint for Share on LinkedIn,
+      // does not require a versioned LinkedIn-Version header.
       const payload = {
         author: authorUrn,
-        commentary: text,
-        visibility: 'PUBLIC',
-        distribution: {
-          feedDistribution: 'MAIN_FEED',
-          targetEntities: [],
-          thirdPartyDistributionChannels: [],
-        },
         lifecycleState: 'PUBLISHED',
-        isReshareDisabledByAuthor: false,
+        specificContent: {
+          'com.linkedin.ugc.ShareContent': {
+            shareCommentary: { text },
+            shareMediaCategory: 'NONE',
+          },
+        },
+        visibility: {
+          'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC',
+        },
       };
 
-      const response = await axios.post(`${LINKEDIN_API_BASE}/rest/posts`, payload, {
+      const response = await axios.post(`${LINKEDIN_API_BASE}/v2/ugcPosts`, payload, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
           'X-Restli-Protocol-Version': '2.0.0',
-          'LinkedIn-Version': '202412',
         },
       });
 
-      // LinkedIn returns the post ID in the x-restli-id header or response body
       const postId =
         (response.headers['x-restli-id'] as string) ||
         (response.data as { id?: string })?.id ||
@@ -201,12 +202,19 @@ export class LinkedInService {
     authorUrn: string,  // urn:li:person:X (personal) or urn:li:organization:X (org page)
   ): Promise<{ postId: string }> {
     try {
-      // Step 1: Initialize image upload
-      const initResponse = await axios.post(
-        `${LINKEDIN_API_BASE}/rest/images?action=initializeUpload`,
+      // Step 1: Register image upload via v2 assets API (no LinkedIn-Version header)
+      const registerResponse = await axios.post(
+        `${LINKEDIN_API_BASE}/v2/assets?action=registerUpload`,
         {
-          initializeUploadRequest: {
+          registerUploadRequest: {
+            recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
             owner: authorUrn,
+            serviceRelationships: [
+              {
+                relationshipType: 'OWNER',
+                identifier: 'urn:li:userGeneratedContent',
+              },
+            ],
           },
         },
         {
@@ -214,16 +222,25 @@ export class LinkedInService {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
             'X-Restli-Protocol-Version': '2.0.0',
-            'LinkedIn-Version': '202412',
           },
         },
       );
 
-      const { uploadUrl, image } = (
-        initResponse.data as {
-          value: { uploadUrl: string; image: string };
-        }
-      ).value;
+      const registerData = registerResponse.data as {
+        value: {
+          uploadMechanism: {
+            'com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest': {
+              uploadUrl: string;
+            };
+          };
+          asset: string;
+        };
+      };
+      const uploadUrl =
+        registerData.value.uploadMechanism[
+          'com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'
+        ].uploadUrl;
+      const assetUrn = registerData.value.asset;
 
       // Step 2: Fetch image data from URL (SSRF guard: https only)
       const parsedUrl = new URL(imageUrl);
@@ -241,32 +258,34 @@ export class LinkedInService {
         },
       });
 
-      // Step 4: Create post with image
+      // Step 4: Create UGC post referencing the uploaded asset
       const payload = {
         author: authorUrn,
-        commentary: text,
-        visibility: 'PUBLIC',
-        distribution: {
-          feedDistribution: 'MAIN_FEED',
-          targetEntities: [],
-          thirdPartyDistributionChannels: [],
-        },
-        content: {
-          media: {
-            title: 'Vision & Virtue',
-            id: image,
+        lifecycleState: 'PUBLISHED',
+        specificContent: {
+          'com.linkedin.ugc.ShareContent': {
+            shareCommentary: { text },
+            shareMediaCategory: 'IMAGE',
+            media: [
+              {
+                status: 'READY',
+                description: { text: 'Vision & Virtue' },
+                media: assetUrn,
+                title: { text: 'Vision & Virtue' },
+              },
+            ],
           },
         },
-        lifecycleState: 'PUBLISHED',
-        isReshareDisabledByAuthor: false,
+        visibility: {
+          'com.linkedin.ugc.MemberNetworkVisibility': 'PUBLIC',
+        },
       };
 
-      const postResponse = await axios.post(`${LINKEDIN_API_BASE}/rest/posts`, payload, {
+      const postResponse = await axios.post(`${LINKEDIN_API_BASE}/v2/ugcPosts`, payload, {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
           'X-Restli-Protocol-Version': '2.0.0',
-          'LinkedIn-Version': '202412',
         },
       });
 
@@ -292,12 +311,19 @@ export class LinkedInService {
         throw new ApiError(400, 'File not found', 'FILE_NOT_FOUND');
       }
 
-      // Initialize upload
-      const initResponse = await axios.post(
-        `${LINKEDIN_API_BASE}/rest/images?action=initializeUpload`,
+      // Register upload via v2 assets API
+      const registerResponse = await axios.post(
+        `${LINKEDIN_API_BASE}/v2/assets?action=registerUpload`,
         {
-          initializeUploadRequest: {
+          registerUploadRequest: {
+            recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
             owner: `urn:li:organization:${this.organizationId}`,
+            serviceRelationships: [
+              {
+                relationshipType: 'OWNER',
+                identifier: 'urn:li:userGeneratedContent',
+              },
+            ],
           },
         },
         {
@@ -305,16 +331,25 @@ export class LinkedInService {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
             'X-Restli-Protocol-Version': '2.0.0',
-            'LinkedIn-Version': '202412',
           },
         },
       );
 
-      const { uploadUrl, image: assetUrn } = (
-        initResponse.data as {
-          value: { uploadUrl: string; image: string };
-        }
-      ).value;
+      const registerData = registerResponse.data as {
+        value: {
+          uploadMechanism: {
+            'com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest': {
+              uploadUrl: string;
+            };
+          };
+          asset: string;
+        };
+      };
+      const uploadUrl =
+        registerData.value.uploadMechanism[
+          'com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'
+        ].uploadUrl;
+      const assetUrn = registerData.value.asset;
 
       // Upload binary
       const fileBuffer = fs.readFileSync(absolutePath);
@@ -335,12 +370,11 @@ export class LinkedInService {
   async getPostAnalytics(token: string, postId: string): Promise<unknown> {
     try {
       const response = await axios.get(
-        `${LINKEDIN_API_BASE}/rest/organizationalEntityShareStatistics?q=organizationalEntity&organizationalEntity=urn:li:organization:${this.organizationId}&shares=List(${encodeURIComponent(postId)})`,
+        `${LINKEDIN_API_BASE}/v2/organizationalEntityShareStatistics?q=organizationalEntity&organizationalEntity=urn:li:organization:${this.organizationId}&shares=List(${encodeURIComponent(postId)})`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
             'X-Restli-Protocol-Version': '2.0.0',
-            'LinkedIn-Version': '202412',
           },
         },
       );
