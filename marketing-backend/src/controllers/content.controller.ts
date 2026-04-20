@@ -599,6 +599,10 @@ export class ContentController {
       errors: errors.length > 0 ? errors : undefined,
     };
 
+    console.log(`[PUBLISH RESULT] hebrew=${hebrewPostId ?? 'FAILED'} english=${englishPostId ?? 'FAILED'} errors=${JSON.stringify(errors)}`);
+    if (hebrewPostId) console.log(`[PUBLISH LINK] https://www.linkedin.com/feed/update/${encodeURIComponent(hebrewPostId)}/`);
+    if (englishPostId) console.log(`[PUBLISH LINK] https://www.linkedin.com/feed/update/${encodeURIComponent(englishPostId)}/`);
+
     let updatedItem = contentRepository.update(id, { publish_result: publishResult });
     updatedItem = workflowStateMachine.transition(
       updatedItem,
