@@ -548,6 +548,23 @@ export class ContentController {
 
     const linkedInService = getLinkedInService();
 
+    // Log token introspection to verify scopes and sub
+    try {
+      const intro = await (await import('axios')).default.post(
+        'https://www.linkedin.com/oauth/v2/introspectToken',
+        new URLSearchParams({
+          token: token.access_token,
+          client_id: process.env.LINKEDIN_CLIENT_ID || '',
+          client_secret: process.env.LINKEDIN_CLIENT_SECRET || '',
+        }).toString(),
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+      );
+      const d = intro.data as Record<string, unknown>;
+      console.log(`[TOKEN] active=${d['active']} scope="${d['scope']}" sub="${d['sub']}" client_id="${d['client_id']}"`);
+    } catch (e) {
+      console.warn('[TOKEN] introspection failed:', (e as Error).message);
+    }
+
     // Use personal posting (Share on LinkedIn — available now) until LinkedIn
     // approves the Community Management API. Then switch to:
     //   urn:li:organization:${token.organization_id || process.env.LINKEDIN_ORGANIZATION_ID}
