@@ -874,14 +874,24 @@ async function runFullPipeline(id) {
 
   try {
     if (it.state === 'IDEA_IDENTIFIED') {
-      activating('economist', 'Dr. Ethan Ross is analyzing the topic…');
-      it = await POST(`/content/${id}/economist-brief`);
+      activating('economist', 'Dr. Ethan Ross is analyzing the topic… (may take 30–60 seconds)');
+      try {
+        it = await POST(`/content/${id}/economist-brief`);
+      } catch (e) {
+        toast(`Chief Economist failed: ${e.message}`, 'error');
+        throw e;
+      }
       selectedAgent = 'economist';
     }
     while (revisions < MAX_REVISIONS) {
       if (it.state === 'ECONOMIST_BRIEF_READY' || it.state === 'RETURNED_FOR_REVISION') {
         activating('sofia', `Sofia Chen is drafting${revisions > 0 ? ' (revision ' + revisions + ')' : ''}…`);
-        it = await POST(`/content/${id}/marketing-draft`);
+        try {
+          it = await POST(`/content/${id}/marketing-draft`);
+        } catch (e) {
+          toast(`Marketing Manager failed: ${e.message}`, 'error');
+          throw e;
+        }
         selectedAgent = 'sofia';
       }
       if (it.state === 'DRAFT_READY' || it.state === 'UNDER_VP_REVIEW') {
