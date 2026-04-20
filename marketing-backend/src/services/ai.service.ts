@@ -159,14 +159,18 @@ export class AIService {
     };
 
     const messages: Anthropic.MessageParam[] = [{ role: 'user', content: prompt }];
-    const MAX_SEARCHES = 6;
-    const MAX_LOOP_MS = 120_000; // 2-minute total cap to avoid Render request timeout
+    const MAX_SEARCHES = 3; // reduced from 6 to stay well under Render's request window
+    const MAX_LOOP_MS = 80_000; // 80-second cap; fall back to plain call if exceeded
     let searches = 0;
     const loopStart = Date.now();
 
     while (true) {
       if (Date.now() - loopStart > MAX_LOOP_MS) {
-        throw new ApiError(504, 'Economist research timed out — please try again. If this repeats, reduce the topic complexity.', 'AI_TIMEOUT');
+        // Web-search loop is taking too long — fall back to plain Claude call
+        console.warn('[AI] Economist agentic loop timed out, falling back to plain call');
+        const raw = await this.callClaude(prompt);
+        const parsed = extractJson(raw);
+        return validateAIResponse(parsed, 'economist');
       }
 
       let response: Anthropic.Message;
