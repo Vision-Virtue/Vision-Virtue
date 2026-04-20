@@ -1012,7 +1012,23 @@ function bindDetailActions(item) {
     setLoading(publishBtn, true);
     try {
       currentItem = await POST(`/content/${item.id}/publish`);
-      toast('Successfully published to LinkedIn!', 'success');
+      const pr = currentItem.publish_result;
+      if (pr?.errors?.length) {
+        toast(`Published with errors: ${pr.errors.join('; ')}`, 'error');
+      } else {
+        const hebrewLink = pr?.hebrew_post_id
+          ? `<a href="https://www.linkedin.com/feed/update/${encodeURIComponent(pr.hebrew_post_id)}/" target="_blank" style="color:#fff;text-decoration:underline">View Hebrew post</a>`
+          : '';
+        const englishLink = pr?.english_post_id
+          ? `<a href="https://www.linkedin.com/feed/update/${encodeURIComponent(pr.english_post_id)}/" target="_blank" style="color:#fff;text-decoration:underline">View English post</a>`
+          : '';
+        const links = [hebrewLink, englishLink].filter(Boolean).join(' · ');
+        const el = document.createElement('div');
+        el.className = 'toast toast-success toast-visible';
+        el.innerHTML = `Published to LinkedIn! ${links ? '— ' + links : ''}`;
+        document.getElementById('toast-container').appendChild(el);
+        setTimeout(() => { el.classList.remove('toast-visible'); setTimeout(() => el.remove(), 300); }, 8000);
+      }
       renderDetail(document.getElementById('content-area'));
     } catch (e) { toast(e.message, 'error'); setLoading(publishBtn, false, 'Publish to LinkedIn Now'); }
   };
