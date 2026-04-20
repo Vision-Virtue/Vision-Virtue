@@ -77,6 +77,7 @@ function validateAIResponse(parsed: unknown, expectedStage: AIResponse['stage'])
   }
 
   const obj = parsed as Record<string, unknown>;
+  console.log(`[AI] validateAIResponse stage=${expectedStage} keys=${Object.keys(obj).join(',')}`);
 
   // Accept if required data field is present, even if stage is missing or mismatched
   const hasEconomistBrief = !!obj['economist_brief'];
@@ -84,13 +85,13 @@ function validateAIResponse(parsed: unknown, expectedStage: AIResponse['stage'])
   const hasVpReview = !!obj['vp_review'];
 
   if (expectedStage === 'economist' && !hasEconomistBrief) {
-    throw new ApiError(500, 'AI response missing economist_brief', 'AI_MISSING_FIELD');
+    throw new ApiError(500, `AI response missing economist_brief. Keys present: ${Object.keys(obj).join(', ')}`, 'AI_MISSING_FIELD');
   }
   if (expectedStage === 'draft' && !hasMarketingDraft) {
-    throw new ApiError(500, 'AI response missing marketing_draft', 'AI_MISSING_FIELD');
+    throw new ApiError(500, `AI response missing marketing_draft. Keys present: ${Object.keys(obj).join(', ')}`, 'AI_MISSING_FIELD');
   }
   if (expectedStage === 'review' && !hasVpReview) {
-    throw new ApiError(500, 'AI response missing vp_review', 'AI_MISSING_FIELD');
+    throw new ApiError(500, `AI response missing vp_review. Keys present: ${Object.keys(obj).join(', ')}`, 'AI_MISSING_FIELD');
   }
 
   // Normalise missing stage field so downstream code isn't broken
@@ -141,6 +142,7 @@ export class AIService {
 
     if (!searchService) {
       const raw = await this.callClaude(prompt);
+      console.log(`[AI] economist raw (first 300): ${raw.slice(0, 300)}`);
       const parsed = extractJson(raw);
       return validateAIResponse(parsed, 'economist');
     }
@@ -169,6 +171,7 @@ export class AIService {
         // Web-search loop is taking too long — fall back to plain Claude call
         console.warn('[AI] Economist agentic loop timed out, falling back to plain call');
         const raw = await this.callClaude(prompt);
+        console.log(`[AI] economist fallback raw (first 300): ${raw.slice(0, 300)}`);
         const parsed = extractJson(raw);
         return validateAIResponse(parsed, 'economist');
       }
