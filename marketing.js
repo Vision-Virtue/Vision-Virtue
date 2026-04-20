@@ -919,10 +919,12 @@ async function runFullPipeline(id) {
         selectedAgent = 'daniel';
         break;
       }
+      // Unexpected state — surface it so the user knows what happened
+      toast(`Pipeline stopped unexpectedly at state: ${it.state || '(unknown)'}. Check Render logs.`, 'error');
       break;
     }
   } catch (e) {
-    toast(e.message, 'error');
+    toast(e.message || 'Pipeline failed unexpectedly — check Render logs.', 'error');
   } finally {
     pipelineRunning = false;
     currentPipelineStep = null;
