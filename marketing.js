@@ -608,7 +608,19 @@ function renderAgentContentHTML(key, item) {
       </div>
       ${qaEntries.length > 0 ? `<div class="qa-section qa-section-readonly"><div class="qa-section-header"><img class="qa-section-avatar" src="agent_economist.jpg" alt="Dr. Ethan Ross" /><div><div class="qa-section-title">Economist Q&amp;A</div><div class="qa-section-sub">Questions asked before approval</div></div></div>${renderQAHistoryHTML(qaEntries)}</div>` : ''}
       ${state === 'APPROVED_FOR_PUBLISHING' ? `<div style="margin-top:1.5rem;padding-top:1.25rem;border-top:1px solid var(--card-border)"><button class="btn btn-publish" id="publish-btn">Publish to LinkedIn Now</button></div>` : ''}
-      ${state === 'PUBLISHED' && publish_result ? `<div class="brief-field" style="margin-top:1rem"><div class="brief-label">Published At</div><div class="brief-value">${fmtDate(publish_result.published_at)}</div></div>` : ''}`;
+      ${state === 'PUBLISHED' && publish_result ? `
+        <div class="brief-field" style="margin-top:1rem">
+          <div class="brief-label">Published At</div>
+          <div class="brief-value">${fmtDate(publish_result.published_at)}</div>
+        </div>
+        ${publish_result.errors?.length ? `
+          <div class="brief-field" style="margin-top:0.75rem">
+            <div class="brief-label" style="color:var(--error)">Publish Errors</div>
+            <div class="brief-value" style="color:var(--error)">${publish_result.errors.map(e => esc(e)).join('<br>')}</div>
+          </div>
+          <button class="btn btn-secondary" id="retry-publish-btn" style="margin-top:0.75rem">↺ Retry Publish</button>
+        ` : ''}
+      ` : ''}`;
     } else if (state === 'REJECTED' && approval) {
       body = `<div class="brief-grid">
         <div class="brief-field"><div class="brief-label">Decision</div><div class="brief-value"><span class="panel-decision decision-reject">REJECTED</span></div></div>
@@ -1043,6 +1055,16 @@ function bindDetailActions(item) {
       }
       renderDetail(document.getElementById('content-area'));
     } catch (e) { toast(e.message, 'error'); setLoading(publishBtn, false, 'Publish to LinkedIn Now'); }
+  };
+
+  const retryBtn = $('retry-publish-btn');
+  if (retryBtn) retryBtn.onclick = async () => {
+    setLoading(retryBtn, true);
+    try {
+      currentItem = await POST(`/content/${item.id}/reset-for-publish`);
+      renderDetail(document.getElementById('content-area'));
+      toast('Ready to retry — click Publish to LinkedIn Now.', 'success');
+    } catch (e) { toast(e.message, 'error'); setLoading(retryBtn, false, '↺ Retry Publish'); }
   };
 }
 function renderAuditList(history) {

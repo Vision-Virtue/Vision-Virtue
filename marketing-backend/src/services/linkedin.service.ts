@@ -20,11 +20,10 @@ export class LinkedInService {
   // ── OAuth ─────────────────────────────────────────────────────────────────────
 
   getAuthorizationUrl(state: string): string {
-    // Share on LinkedIn — Default Tier, no approval needed.
-    // w_member_social is the only scope required for posting as the authenticated member.
-    // TODO: add r_organization_social w_organization_social rw_organization_admin
-    //       once LinkedIn approves the Community Management API application.
-    const scopes = ['w_member_social'].join(' ');
+    // openid + profile: "Sign In with LinkedIn using OpenID Connect" (Default Tier, no approval)
+    // w_member_social:  "Share on LinkedIn" (Default Tier, no approval)
+    // Together they let us get the correct member sub from /v2/userinfo for posting.
+    const scopes = ['openid', 'profile', 'w_member_social'].join(' ');
 
     const params = new URLSearchParams({
       response_type: 'code',
@@ -38,7 +37,20 @@ export class LinkedInService {
   }
 
   async getPersonUrn(token: string): Promise<string> {
-    // Try /v2/me — works when r_liteprofile scope is available
+    // /v2/userinfo (OIDC) — returns sub when openid+profile scope is granted.
+    // The sub here is the correct identifier for urn:li:member: posts.
+    try {
+      const response = await axios.get(`${LINKEDIN_API_BASE}/v2/userinfo`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const sub = (response.data as { sub?: string }).sub;
+      if (sub) {
+        console.log(`[AUTH] person URN from userinfo sub: ${sub}`);
+        return `urn:li:member:${sub}`;
+      }
+    } catch { /* fall through */ }
+
+    // /v2/me — works when r_liteprofile scope is available (legacy fallback)
     try {
       const response = await axios.get(`${LINKEDIN_API_BASE}/v2/me`, {
         headers: {
@@ -47,10 +59,13 @@ export class LinkedInService {
         },
       });
       const id = (response.data as { id?: string }).id;
-      if (id) return `urn:li:person:${id}`;
+      if (id) {
+        console.log(`[AUTH] person URN from /v2/me: ${id}`);
+        return `urn:li:member:${id}`;
+      }
     } catch { /* fall through */ }
 
-    // Try token introspection — returns sub (member ID), works with w_member_social only
+    // Token introspection fallback
     try {
       const intro = await axios.post(
         `${LINKEDIN_AUTH_BASE}/introspectToken`,
@@ -61,8 +76,10 @@ export class LinkedInService {
         }).toString(),
         { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
       );
-      const sub = (intro.data as { sub?: string }).sub;
-      if (sub) return `urn:li:person:${sub}`;
+      const d = intro.data as { sub?: string; scope?: string };
+      console.log(`[AUTH] introspection scope="${d.scope}" sub="${d.sub}"`);
+      const sub = d.sub;
+      if (sub) return `urn:li:member:${sub}`;
     } catch { /* fall through */ }
 
     // Fallback: LINKEDIN_PERSON_URN env var (set manually in Render dashboard)
@@ -160,10 +177,8 @@ export class LinkedInService {
     authorUrn: string,  // urn:li:person:X (personal) or urn:li:organization:X (org page)
   ): Promise<{ postId: string }> {
     try {
-      // /v2/ugcPosts requires urn:li:member: (not urn:li:person:) for personal authors
-      const ugcAuthorUrn = authorUrn.replace(/^urn:li:person:/, 'urn:li:member:');
       const payload = {
-        author: ugcAuthorUrn,
+        author: authorUrn,
         lifecycleState: 'PUBLISHED',
         specificContent: {
           'com.linkedin.ugc.ShareContent': {
@@ -199,19 +214,16 @@ export class LinkedInService {
     token: string,
     text: string,
     imageUrl: string,
-    authorUrn: string,  // urn:li:person:X (personal) or urn:li:organization:X (org page)
+    authorUrn: string,  // urn:li:member:X (personal) or urn:li:organization:X (org page)
   ): Promise<{ postId: string }> {
     try {
-      // /v2/ugcPosts requires urn:li:member: (not urn:li:person:) for personal authors
-      const ugcAuthorUrn = authorUrn.replace(/^urn:li:person:/, 'urn:li:member:');
-
       // Step 1: Register image upload via v2 assets API (no LinkedIn-Version header)
       const registerResponse = await axios.post(
         `${LINKEDIN_API_BASE}/v2/assets?action=registerUpload`,
         {
           registerUploadRequest: {
             recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
-            owner: ugcAuthorUrn,
+            owner: authorUrn,
             serviceRelationships: [
               {
                 relationshipType: 'OWNER',
@@ -263,7 +275,7 @@ export class LinkedInService {
 
       // Step 4: Create UGC post referencing the uploaded asset
       const payload = {
-        author: ugcAuthorUrn,
+        author: authorUrn,
         lifecycleState: 'PUBLISHED',
         specificContent: {
           'com.linkedin.ugc.ShareContent': {

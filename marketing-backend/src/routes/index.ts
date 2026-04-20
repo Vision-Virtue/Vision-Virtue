@@ -128,6 +128,12 @@ router.post(
   asyncHandler((req, res) => contentController.publish(req, res)),
 );
 
+// Reset PUBLISHED → APPROVED_FOR_PUBLISHING so publish can be retried
+router.post(
+  '/content/:id/reset-for-publish',
+  asyncHandler((req, res) => contentController.resetForPublish(req, res)),
+);
+
 // ─── Direct Agent Chat ────────────────────────────────────────────────────────
 
 router.post(

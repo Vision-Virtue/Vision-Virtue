@@ -640,6 +640,22 @@ export class ContentController {
     res.json({ success: true, data: updatedItem });
   }
 
+  // POST /api/content/:id/reset-for-publish — resets PUBLISHED→APPROVED_FOR_PUBLISHING so user can retry
+  async resetForPublish(req: Request, res: Response): Promise<void> {
+    const { id } = req.params;
+    const item = contentRepository.findById(id);
+    if (!item) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: `Content item ${id} not found` } });
+      return;
+    }
+    if (item.state !== 'PUBLISHED') {
+      res.status(400).json({ error: { code: 'INVALID_STATE', message: `Item is not in PUBLISHED state` } });
+      return;
+    }
+    const updatedItem = workflowStateMachine.transition(item, 'APPROVED_FOR_PUBLISHING', 'system', { reason: 'retry_publish' });
+    res.json({ success: true, data: updatedItem });
+  }
+
   // GET /api/content/:id
   async getById(req: Request, res: Response): Promise<void> {
     const { id } = req.params;
