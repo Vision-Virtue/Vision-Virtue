@@ -652,7 +652,8 @@ export class ContentController {
       res.status(400).json({ error: { code: 'INVALID_STATE', message: `Item is not in PUBLISHED state` } });
       return;
     }
-    const updatedItem = workflowStateMachine.transition(item, 'APPROVED_FOR_PUBLISHING', 'system', { reason: 'retry_publish' });
+    // Bypass state machine — directly reset state so user can retry publish
+    const updatedItem = contentRepository.update(id, { state: 'APPROVED_FOR_PUBLISHING' });
     res.json({ success: true, data: updatedItem });
   }
 
