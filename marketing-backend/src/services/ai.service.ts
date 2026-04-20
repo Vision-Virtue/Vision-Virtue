@@ -78,22 +78,24 @@ function validateAIResponse(parsed: unknown, expectedStage: AIResponse['stage'])
 
   const obj = parsed as Record<string, unknown>;
 
-  if (obj['stage'] !== expectedStage) {
-    throw new ApiError(
-      500,
-      `AI response stage mismatch: expected ${expectedStage}, got ${obj['stage']}`,
-      'AI_STAGE_MISMATCH',
-    );
-  }
+  // Accept if required data field is present, even if stage is missing or mismatched
+  const hasEconomistBrief = !!obj['economist_brief'];
+  const hasMarketingDraft = !!obj['marketing_draft'];
+  const hasVpReview = !!obj['vp_review'];
 
-  if (expectedStage === 'economist' && !obj['economist_brief']) {
+  if (expectedStage === 'economist' && !hasEconomistBrief) {
     throw new ApiError(500, 'AI response missing economist_brief', 'AI_MISSING_FIELD');
   }
-  if (expectedStage === 'draft' && !obj['marketing_draft']) {
+  if (expectedStage === 'draft' && !hasMarketingDraft) {
     throw new ApiError(500, 'AI response missing marketing_draft', 'AI_MISSING_FIELD');
   }
-  if (expectedStage === 'review' && !obj['vp_review']) {
+  if (expectedStage === 'review' && !hasVpReview) {
     throw new ApiError(500, 'AI response missing vp_review', 'AI_MISSING_FIELD');
+  }
+
+  // Normalise missing stage field so downstream code isn't broken
+  if (!obj['stage']) {
+    obj['stage'] = expectedStage;
   }
 
   return obj as unknown as AIResponse;
