@@ -160,10 +160,10 @@ export class LinkedInService {
     authorUrn: string,  // urn:li:person:X (personal) or urn:li:organization:X (org page)
   ): Promise<{ postId: string }> {
     try {
-      // Use /v2/ugcPosts — stable endpoint for Share on LinkedIn,
-      // does not require a versioned LinkedIn-Version header.
+      // /v2/ugcPosts requires urn:li:member: (not urn:li:person:) for personal authors
+      const ugcAuthorUrn = authorUrn.replace(/^urn:li:person:/, 'urn:li:member:');
       const payload = {
-        author: authorUrn,
+        author: ugcAuthorUrn,
         lifecycleState: 'PUBLISHED',
         specificContent: {
           'com.linkedin.ugc.ShareContent': {
@@ -202,13 +202,16 @@ export class LinkedInService {
     authorUrn: string,  // urn:li:person:X (personal) or urn:li:organization:X (org page)
   ): Promise<{ postId: string }> {
     try {
+      // /v2/ugcPosts requires urn:li:member: (not urn:li:person:) for personal authors
+      const ugcAuthorUrn = authorUrn.replace(/^urn:li:person:/, 'urn:li:member:');
+
       // Step 1: Register image upload via v2 assets API (no LinkedIn-Version header)
       const registerResponse = await axios.post(
         `${LINKEDIN_API_BASE}/v2/assets?action=registerUpload`,
         {
           registerUploadRequest: {
             recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
-            owner: authorUrn,
+            owner: ugcAuthorUrn,
             serviceRelationships: [
               {
                 relationshipType: 'OWNER',
@@ -260,7 +263,7 @@ export class LinkedInService {
 
       // Step 4: Create UGC post referencing the uploaded asset
       const payload = {
-        author: authorUrn,
+        author: ugcAuthorUrn,
         lifecycleState: 'PUBLISHED',
         specificContent: {
           'com.linkedin.ugc.ShareContent': {
