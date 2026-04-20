@@ -1283,6 +1283,11 @@ function renderSettings(area) {
         <div class="settings-label">System Info</div>
         <div id="health-info" class="brief-value" style="margin-top:0.5rem">Checking…</div>
       </div>
+      <div class="settings-card">
+        <div class="settings-label">LinkedIn Connection</div>
+        <p class="brief-value" style="margin-top:0.5rem">Disconnect to re-authorize with a fresh token.</p>
+        <button class="btn btn-danger" id="disconnect-linkedin-btn" style="margin-top:0.75rem">Disconnect LinkedIn</button>
+      </div>
     </div>`;
 
   GET('/health').then(h => {
@@ -1290,6 +1295,22 @@ function renderSettings(area) {
   }).catch(e => {
     document.getElementById('health-info').textContent = `Offline: ${e.message}`;
   });
+
+  document.getElementById('disconnect-linkedin-btn').onclick = async () => {
+    const btn = document.getElementById('disconnect-linkedin-btn');
+    if (!confirm('Disconnect LinkedIn? You will need to reconnect to publish posts.')) return;
+    setLoading(btn, true);
+    try {
+      await api('DELETE', '/auth/linkedin');
+      toast('LinkedIn disconnected. Reconnect via the LinkedIn Connected button.', 'success');
+      checkLinkedInStatus();
+      btn.disabled = false;
+      btn.textContent = 'Disconnect LinkedIn';
+    } catch(e) {
+      toast(e.message, 'error');
+      setLoading(btn, false, 'Disconnect LinkedIn');
+    }
+  };
 }
 
 // ═══════════════════════════════════════════════════════════════
