@@ -125,13 +125,22 @@ async function checkLinkedInStatus() {
     const data = await GET('/auth/status');
     if (data.linkedin_connected) {
       el.innerHTML = `<span class="status-dot dot-connected"></span><span class="status-text">LinkedIn Connected</span>`;
+      el.style.cursor = 'default';
+      el.onclick = null;
     } else if (!data.credentials_configured) {
       el.innerHTML = `<span class="status-dot dot-checking"></span><span class="status-text">Awaiting LinkedIn API Approval</span>`;
+      el.style.cursor = 'default';
+      el.onclick = null;
     } else {
-      el.innerHTML = `<span class="status-dot dot-disconnected"></span><span class="status-text">LinkedIn Disconnected</span>`;
+      el.innerHTML = `<span class="status-dot dot-disconnected"></span><span class="status-text">Connect LinkedIn →</span>`;
+      el.style.cursor = 'pointer';
+      el.title = 'Click to connect LinkedIn';
+      el.onclick = () => { window.location.href = API_BASE + '/auth/linkedin'; };
     }
   } catch {
     el.innerHTML = `<span class="status-dot dot-checking"></span><span class="status-text">Backend Starting…</span>`;
+    el.style.cursor = 'default';
+    el.onclick = null;
   }
 }
 
