@@ -1341,8 +1341,10 @@ function openRaphaelModal(action, item) {
       : 'Reject this content. It will be marked REJECTED and removed from the active pipeline.';
   document.getElementById('raphael-passcode').value = '';
   document.getElementById('raphael-notes').value = '';
-  document.getElementById('confirm-raphael-btn').className = `btn ${action === 'approve' ? 'btn-primary' : 'btn-danger'}`;
-  document.getElementById('confirm-raphael-btn').textContent = action === 'approve' ? 'Approve' : 'Reject';
+  const confirmBtn = document.getElementById('confirm-raphael-btn');
+  confirmBtn.className = `btn ${action === 'approve' ? 'btn-primary' : 'btn-danger'}`;
+  confirmBtn.textContent = action === 'approve' ? 'Approve' : 'Reject';
+  confirmBtn.disabled = false;
   setTimeout(() => document.getElementById('raphael-passcode').focus(), 50);
 }
 
