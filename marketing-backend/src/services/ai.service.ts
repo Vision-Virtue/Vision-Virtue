@@ -138,14 +138,16 @@ export class AIService {
 
   async runChiefEconomist(topic: string, searchService?: BraveSearchService): Promise<AIResponse> {
     const today = new Date().toISOString().split('T')[0];
-    const prompt = chiefEconomistPrompt(topic, today);
 
     if (!searchService) {
+      const prompt = chiefEconomistPrompt(topic, today, false);
       const raw = await this.callClaude(prompt);
       console.log(`[AI] economist raw (first 300): ${raw.slice(0, 300)}`);
       const parsed = extractJson(raw);
       return validateAIResponse(parsed, 'economist');
     }
+
+    const prompt = chiefEconomistPrompt(topic, today, true);
 
     // Agentic loop: Claude calls web_search tool to fetch live economic data
     const webSearchTool: Anthropic.Tool = {
