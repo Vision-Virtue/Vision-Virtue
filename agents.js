@@ -11,82 +11,18 @@ function esc(s) {
     .replace(/"/g, '&quot;');
 }
 
-// ── Access gate ─────────────────────────────────────────────
+// ── Auth check — redirect to main page if not authenticated ──
 const BACKEND_URL = 'https://vv-marketing-api.onrender.com';
 
-const accessGate   = document.getElementById('accessGate');
-const agentsApp    = document.getElementById('agentsApp');
-const accessPin    = document.getElementById('accessPin');
-const accessApiKey = document.getElementById('accessApiKey');
-const accessBtn    = document.getElementById('accessBtn');
-const gateError    = document.getElementById('gateError');
-
-async function tryAccess() {
-  const pin = accessPin.value.trim();
-  const key = accessApiKey.value.trim();
-
-  if (!pin) {
-    gateError.textContent = 'Please enter an access code.';
-    accessPin.focus();
-    return;
-  }
-
-  if (key && !key.startsWith('sk-ant-')) {
-    gateError.textContent = 'API key must start with sk-ant- (or leave it blank).';
-    accessApiKey.focus();
-    return;
-  }
-
-  accessBtn.disabled = true;
-  gateError.textContent = '';
-
-  try {
-    const res = await fetch(`${BACKEND_URL}/api/auth/verify-pin`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pin }),
-    });
-    const data = await res.json();
-
-    if (!data.valid) {
-      gateError.textContent = 'Incorrect access code. Try again.';
-      accessPin.value = '';
-      accessPin.focus();
-      return;
-    }
-
-    sessionStorage.setItem('vv_auth', '1');
-    if (key) sessionStorage.setItem('vv_key', key);
-    accessGate.style.display = 'none';
-    agentsApp.style.display  = 'block';
-  } catch {
-    gateError.textContent = 'Could not reach server. Please try again.';
-  } finally {
-    accessBtn.disabled = false;
-  }
+if (sessionStorage.getItem('vv_auth') !== '1') {
+  window.location.replace('index.html');
 }
 
-// Auto-pass if already authenticated this session
-if (sessionStorage.getItem('vv_auth') === '1') {
-  accessGate.style.display = 'none';
-  agentsApp.style.display  = 'block';
-}
-
-accessBtn.addEventListener('click', tryAccess);
-[accessPin, accessApiKey].forEach(el =>
-  el.addEventListener('keydown', e => { if (e.key === 'Enter') tryAccess(); })
-);
-
-// Reset key — clears session and shows gate again
+// Reset key — clears session and returns to main page
 document.getElementById('resetKeyBtn')?.addEventListener('click', () => {
   sessionStorage.removeItem('vv_auth');
   sessionStorage.removeItem('vv_key');
-  agentsApp.style.display  = 'none';
-  accessGate.style.display = 'flex';
-  accessPin.value = '';
-  accessApiKey.value = '';
-  gateError.textContent = '';
-  setTimeout(() => accessPin.focus(), 50);
+  window.location.replace('index.html');
 });
 
 // ── Money input formatting ────────────────────────────────────
