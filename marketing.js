@@ -1447,8 +1447,9 @@ document.getElementById('confirm-raphael-btn').onclick = async () => {
     const endpoint = raphaelAction === 'approve' ? 'approve' : 'reject';
     currentItem = await POST(`/content/${currentItem.id}/${endpoint}`, { passcode, notes });
     _raphaelPasscode = passcode; // cache for ask-economist / return-to-vp in this session
+    const wasApprove = raphaelAction === 'approve';
     closeRaphaelModal();
-    toast(raphaelAction === 'approve' ? 'Content approved for publishing.' : 'Content rejected.', 'success');
+    toast(wasApprove ? 'Content approved for publishing.' : 'Content rejected.', 'success');
     renderDetail(document.getElementById('content-area'));
   } catch(e) {
     toast(e.message, 'error');

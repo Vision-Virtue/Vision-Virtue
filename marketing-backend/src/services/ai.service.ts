@@ -77,6 +77,7 @@ function validateAIResponse(parsed: unknown, expectedStage: AIResponse['stage'])
   }
 
   const obj = parsed as Record<string, unknown>;
+  console.log(`[AI] validateAIResponse stage=${expectedStage} keys=${Object.keys(obj).join(',')}`);
 
   // Accept if required data field is present, even if stage is missing or mismatched
   const hasEconomistBrief = !!obj['economist_brief'];
@@ -84,13 +85,13 @@ function validateAIResponse(parsed: unknown, expectedStage: AIResponse['stage'])
   const hasVpReview = !!obj['vp_review'];
 
   if (expectedStage === 'economist' && !hasEconomistBrief) {
-    throw new ApiError(500, 'AI response missing economist_brief', 'AI_MISSING_FIELD');
+    throw new ApiError(500, `AI response missing economist_brief. Keys present: ${Object.keys(obj).join(', ')}`, 'AI_MISSING_FIELD');
   }
   if (expectedStage === 'draft' && !hasMarketingDraft) {
-    throw new ApiError(500, 'AI response missing marketing_draft', 'AI_MISSING_FIELD');
+    throw new ApiError(500, `AI response missing marketing_draft. Keys present: ${Object.keys(obj).join(', ')}`, 'AI_MISSING_FIELD');
   }
   if (expectedStage === 'review' && !hasVpReview) {
-    throw new ApiError(500, 'AI response missing vp_review', 'AI_MISSING_FIELD');
+    throw new ApiError(500, `AI response missing vp_review. Keys present: ${Object.keys(obj).join(', ')}`, 'AI_MISSING_FIELD');
   }
 
   // Normalise missing stage field so downstream code isn't broken
@@ -137,13 +138,16 @@ export class AIService {
 
   async runChiefEconomist(topic: string, searchService?: BraveSearchService): Promise<AIResponse> {
     const today = new Date().toISOString().split('T')[0];
-    const prompt = chiefEconomistPrompt(topic, today);
 
     if (!searchService) {
+      const prompt = chiefEconomistPrompt(topic, today, false);
       const raw = await this.callClaude(prompt);
+      console.log(`[AI] economist raw (first 300): ${raw.slice(0, 300)}`);
       const parsed = extractJson(raw);
       return validateAIResponse(parsed, 'economist');
     }
+
+    const prompt = chiefEconomistPrompt(topic, today, true);
 
     // Agentic loop: Claude calls web_search tool to fetch live economic data
     const webSearchTool: Anthropic.Tool = {
@@ -159,14 +163,19 @@ export class AIService {
     };
 
     const messages: Anthropic.MessageParam[] = [{ role: 'user', content: prompt }];
-    const MAX_SEARCHES = 6;
-    const MAX_LOOP_MS = 120_000; // 2-minute total cap to avoid Render request timeout
+    const MAX_SEARCHES = 3; // reduced from 6 to stay well under Render's request window
+    const MAX_LOOP_MS = 80_000; // 80-second cap; fall back to plain call if exceeded
     let searches = 0;
     const loopStart = Date.now();
 
     while (true) {
       if (Date.now() - loopStart > MAX_LOOP_MS) {
-        throw new ApiError(504, 'Economist research timed out — please try again. If this repeats, reduce the topic complexity.', 'AI_TIMEOUT');
+        // Web-search loop is taking too long — fall back to plain Claude call
+        console.warn('[AI] Economist agentic loop timed out, falling back to plain call');
+        const raw = await this.callClaude(prompt);
+        console.log(`[AI] economist fallback raw (first 300): ${raw.slice(0, 300)}`);
+        const parsed = extractJson(raw);
+        return validateAIResponse(parsed, 'economist');
       }
 
       let response: Anthropic.Message;

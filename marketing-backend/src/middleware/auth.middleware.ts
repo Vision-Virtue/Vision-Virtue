@@ -88,6 +88,7 @@ export function errorHandler(
   _next: NextFunction,
 ): void {
   if (err instanceof ApiError) {
+    console.error(`[API_ERROR] ${err.statusCode} ${err.code}: ${err.message}`);
     res.status(err.statusCode).json(err.toJSON());
     return;
   }
