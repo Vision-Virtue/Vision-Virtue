@@ -12,28 +12,8 @@
 </head>
 <body class="agents-page">
 
-  <!-- ACCESS GATE -->
-  <div class="access-gate" id="accessGate">
-    <div class="gate-card">
-      <div class="gate-logo">
-        <span class="logo-v">V</span>
-        <span class="logo-text">VISION &amp; VIRTUE</span>
-      </div>
-      <h2 class="gate-title">Restricted Access</h2>
-      <p class="gate-sub">This area is for authorized principals only.</p>
-      <div class="gate-field">
-        <input type="password" id="accessPin" placeholder="Access code" autocomplete="off" />
-      </div>
-      <div class="gate-field gate-field-key">
-        <input type="password" id="accessApiKey" placeholder="Claude API key (optional — sk-ant-...)" autocomplete="off" />
-      </div>
-      <button id="accessBtn" class="gate-btn-full">Enter</button>
-      <p class="gate-error" id="gateError"></p>
-    </div>
-  </div>
-
-  <!-- MAIN CONTENT (hidden until authenticated) -->
-  <div class="agents-app" id="agentsApp" style="display:none">
+  <!-- MAIN CONTENT -->
+  <div class="agents-app" id="agentsApp">
 
     <!-- NAV -->
     <nav class="navbar agents-nav" id="navbar">

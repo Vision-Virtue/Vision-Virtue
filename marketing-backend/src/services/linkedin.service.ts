@@ -194,7 +194,7 @@ export class LinkedInService {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'LinkedIn-Version': '202406',
+          'LinkedIn-Version': '202604',
           'X-Restli-Protocol-Version': '2.0.0',
         },
       });
@@ -225,7 +225,7 @@ export class LinkedInService {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
-            'LinkedIn-Version': '202406',
+            'LinkedIn-Version': '202604',
             'X-Restli-Protocol-Version': '2.0.0',
           },
         },
@@ -277,7 +277,7 @@ export class LinkedInService {
         headers: {
           Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
-          'LinkedIn-Version': '202406',
+          'LinkedIn-Version': '202604',
           'X-Restli-Protocol-Version': '2.0.0',
         },
       });
