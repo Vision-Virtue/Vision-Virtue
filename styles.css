@@ -3012,3 +3012,86 @@ body {
 }
 
 .data-notice a { color: #1a4a6b; font-weight: 600; }
+
+/* =====================================================================
+   MOBILE HORIZONTAL SCROLL — selected sections only
+   On narrow (phone) viewports, replace the tall single-column stacks with
+   a horizontal swipe row (scroll-snap). Each card occupies ~85% width so
+   the next card peeks in from the right as a visual swipe hint.
+   Sections affected: Who We Are, How Do We Do That, What Sets Us Apart,
+   The Pillar Flow, Ripple Effect, Vision & Insights Enablers, AOP,
+   Our Offerings.
+   ===================================================================== */
+@media (max-width: 700px) {
+  .who-grid,
+  .how-steps,
+  .apart-grid,
+  .pillar-flow,
+  .ripple-diagram,
+  .vi-grid,
+  .aop-grid,
+  .offerings-grid {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: nowrap;
+    grid-template-columns: none;
+    overflow-x: auto;
+    overflow-y: visible;
+    scroll-snap-type: x mandatory;
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+    gap: 1rem;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    scroll-padding-left: 1rem;
+    scrollbar-width: thin;
+  }
+
+  .who-grid > .who-card,
+  .apart-grid > .apart-card,
+  .pillar-flow > .pf-step,
+  .vi-grid > .vi-card,
+  .aop-grid > .aop-card,
+  .offerings-grid > .offering-card,
+  .how-steps > .step {
+    flex: 0 0 85%;
+    max-width: 360px;
+    min-width: 0;
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
+  }
+
+  .how-steps > .step-arrow-down { display: none; }
+
+  .ripple-diagram > .ripple-inputs,
+  .ripple-diagram > .ripple-center-col,
+  .ripple-diagram > .ripple-outputs {
+    flex: 0 0 85%;
+    max-width: 360px;
+    min-width: 0;
+    scroll-snap-align: center;
+    scroll-snap-stop: always;
+  }
+
+  .who-grid::-webkit-scrollbar,
+  .how-steps::-webkit-scrollbar,
+  .apart-grid::-webkit-scrollbar,
+  .pillar-flow::-webkit-scrollbar,
+  .ripple-diagram::-webkit-scrollbar,
+  .vi-grid::-webkit-scrollbar,
+  .aop-grid::-webkit-scrollbar,
+  .offerings-grid::-webkit-scrollbar {
+    height: 4px;
+  }
+  .who-grid::-webkit-scrollbar-thumb,
+  .how-steps::-webkit-scrollbar-thumb,
+  .apart-grid::-webkit-scrollbar-thumb,
+  .pillar-flow::-webkit-scrollbar-thumb,
+  .ripple-diagram::-webkit-scrollbar-thumb,
+  .vi-grid::-webkit-scrollbar-thumb,
+  .aop-grid::-webkit-scrollbar-thumb,
+  .offerings-grid::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 2px;
+  }
+}
