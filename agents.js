@@ -607,8 +607,7 @@ const fileList    = document.getElementById('finFileList');
 
 let uploadedFiles = [];
 
-browseBtn.addEventListener('click', (e) => { e.stopPropagation(); fileInput.click(); });
-dropzone.addEventListener('click', () => fileInput.click());
+dropzone.addEventListener('click', (e) => { if (e.target !== fileInput) fileInput.click(); });
 
 fileInput.addEventListener('change', () => {
   addFiles(Array.from(fileInput.files));

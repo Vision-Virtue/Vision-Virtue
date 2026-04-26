@@ -739,7 +739,7 @@
   font-family: var(--font-head);
   font-size: 1.15rem;
   font-weight: 700;
-  color: var(--white);
+  color: #ffffff;
   margin-bottom: 0.4rem;
 }
 
@@ -930,7 +930,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--gray-500);
+  color: rgba(255,255,255,0.6);
 }
 .fin-ctx-select,
 .fin-ctx-input {
