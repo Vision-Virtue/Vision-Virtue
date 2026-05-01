@@ -389,16 +389,7 @@ function extractXml(text, tag) {
 
 // ── Financial Templates ──────────────────────────────────────
 
-// ─── Excel Model — direct download of static template ────────
-document.getElementById('downloadXlsBtn').addEventListener('click', () => {
-  const a = document.createElement('a');
-  a.href = 'Financial%20Model%20v4.xlsx';
-  a.download = 'Financial Model v4.xlsx';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-});
-
+// ─── Excel Model — handled by native <a download> in agents.html ─
 
 // ─── PowerPoint Template — direct download of static file ────
 document.getElementById('downloadPptBtn').addEventListener('click', () => {
