@@ -936,6 +936,10 @@
           <h3 class="offering-title">Visibility</h3>
           <p class="offering-desc">A Tailor-Made budget integrated in your ERP, for ultimate Visibility. This is a key driver for growth and efficiencies. Enabling you to determine KPI's for Growth &amp; Efficiency.</p>
         </div>
+        <button type="button" class="offering-cta is-disabled" aria-disabled="true" title="Coming soon">
+          <span class="offering-cta-dot"></span>
+          <span class="offering-cta-text">Already a customer? Press here</span>
+        </button>
       </div>
       <div class="offering-card">
         <div class="offering-img" style="background-image:url('apart_efficient.png')"></div>
@@ -943,6 +947,10 @@
           <h3 class="offering-title">Efficiency</h3>
           <p class="offering-desc">Cost reduction initiatives determined as KPI's, both in COGS &amp; OPEX, for higher Gross Margin and higher EBITDA.</p>
         </div>
+        <button type="button" class="offering-cta is-disabled" aria-disabled="true" title="Coming soon">
+          <span class="offering-cta-dot"></span>
+          <span class="offering-cta-text">Already a customer? Press here</span>
+        </button>
       </div>
       <div class="offering-card">
         <div class="offering-img" style="background-image:url('apart_expertise.png')"></div>
@@ -950,6 +958,10 @@
           <h3 class="offering-title">Growth</h3>
           <p class="offering-desc">Top-Line Growth initiatives determined as KPI's.</p>
         </div>
+        <button type="button" class="offering-cta is-disabled" aria-disabled="true" title="Coming soon">
+          <span class="offering-cta-dot"></span>
+          <span class="offering-cta-text">Already a customer? Press here</span>
+        </button>
       </div>
       <div class="offering-card">
         <div class="offering-img" style="background-image:url('apart_partner.png')"></div>
@@ -957,6 +969,10 @@
           <h3 class="offering-title">Partner</h3>
           <p class="offering-desc">End-To-End Investment enabler via Financial Modeling, Consulting and Representation.</p>
         </div>
+        <button type="button" class="offering-cta" id="partnerCustomerCta" data-target="partner">
+          <span class="offering-cta-dot"></span>
+          <span class="offering-cta-text">Already a customer? Press here</span>
+        </button>
       </div>
     </div>
   </section>
@@ -1210,6 +1226,24 @@
       </div>
       <button id="apEnterBtn" class="gate-btn-full ap-enter">Enter</button>
       <p class="gate-error" id="apError"></p>
+    </div>
+  </div>
+
+  <!-- CUSTOMER KEY GATE -->
+  <div class="ap-overlay" id="ckOverlay" aria-hidden="true">
+    <div class="ap-modal">
+      <button class="ap-close" id="ckClose" aria-label="Close">&#x2715;</button>
+      <div class="gate-logo" style="justify-content:center;margin-bottom:1.5rem">
+        <span class="logo-v">V</span>
+        <span class="logo-text">VISION &amp; VIRTUE</span>
+      </div>
+      <h2 class="gate-title">Customer Access</h2>
+      <p class="gate-sub">Enter your Customer Key to continue.</p>
+      <div style="display:flex;flex-direction:column;gap:0.75rem;margin-bottom:0.5rem">
+        <input type="password" id="ckKey" class="ap-input" placeholder="Customer Key" autocomplete="off" />
+      </div>
+      <button id="ckEnterBtn" class="gate-btn-full ap-enter">Enter</button>
+      <p class="gate-error" id="ckError"></p>
     </div>
   </div>
 

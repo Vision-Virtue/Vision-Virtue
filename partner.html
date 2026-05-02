@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vision &amp; Virtue | Partner Area</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="partner.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
+</head>
+<body class="partner-page">
+
+  <!-- NAV -->
+  <nav class="navbar partner-nav" id="navbar">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">
+        <span class="logo-v">V</span>
+        <span class="logo-text">VISION &amp; VIRTUE</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="index.html">← Main Site</a></li>
+        <li><span class="nav-badge partner-nav-badge">Partner Customer Area</span></li>
+        <li><button class="nav-reset-btn" id="signOutBtn" title="Sign out">⟳ Sign Out</button></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="partner-hero">
+    <div class="partner-hero-bg"></div>
+    <div class="partner-hero-content">
+      <p class="hero-eyebrow">Customer Portal</p>
+      <h1 class="partner-hero-title">Partner Area</h1>
+      <p class="partner-hero-sub" id="partnerWelcome">Welcome. Select a product below to begin or continue.</p>
+    </div>
+  </section>
+
+  <!-- PRODUCT TILES -->
+  <section class="partner-products-section">
+    <div class="partner-section-head">
+      <div class="section-tag dark">Your Products</div>
+      <h2 class="partner-section-title">Available Deliverables</h2>
+      <p class="partner-section-sub">Each product is built from your Customer's Questionnaire and finalized by the Vision &amp; Virtue team.</p>
+    </div>
+
+    <div class="partner-tiles-grid">
+
+      <!-- FINANCIAL MODEL TILE -->
+      <button type="button" class="partner-tile" id="tileFinancialModel" data-product="financial-model">
+        <div class="partner-tile-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <line x1="3" y1="9" x2="21" y2="9"/>
+            <line x1="3" y1="15" x2="21" y2="15"/>
+            <line x1="9" y1="3" x2="9" y2="21"/>
+            <line x1="15" y1="3" x2="15" y2="21"/>
+          </svg>
+        </div>
+        <h3 class="partner-tile-title">Financial Model</h3>
+        <p class="partner-tile-desc">Multi-sheet integrated financial model with linked formulas — populated from your Customer's Questionnaire.</p>
+        <div class="partner-tile-status" id="statusFinancialModel">
+          <span class="partner-status-pill partner-status-new">Get Started</span>
+        </div>
+      </button>
+
+      <!-- BUSINESS MODEL PRESENTATION TILE (coming soon) -->
+      <div class="partner-tile is-coming-soon" aria-disabled="true">
+        <div class="partner-tile-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2"/>
+            <line x1="8" y1="21" x2="16" y2="21"/>
+            <line x1="12" y1="17" x2="12" y2="21"/>
+          </svg>
+        </div>
+        <h3 class="partner-tile-title">Business Model Presentation</h3>
+        <p class="partner-tile-desc">V&amp;V-branded presentation deck for your business plan and financial model.</p>
+        <div class="partner-tile-status">
+          <span class="partner-status-pill partner-status-soon">Coming Soon</span>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- CUSTOMER QUESTIONNAIRE PANEL (rendered by partner.js) -->
+  <section class="partner-questionnaire-section" id="questionnaireSection" hidden>
+    <div class="partner-q-head">
+      <button type="button" class="partner-q-back" id="questionnaireBack">&larr; Back to products</button>
+      <div class="section-tag dark">Customer's Questionnaire</div>
+      <h2 class="partner-section-title">Tell us about your company</h2>
+      <p class="partner-section-sub">Answers feed directly into your personalized financial model. The Vision &amp; Virtue team will review and finalize before delivery.</p>
+    </div>
+
+    <form id="customerQuestionnaire" class="partner-q-form" novalidate>
+
+      <!-- HEADER: Customer name -->
+      <div class="partner-q-block">
+        <h3 class="partner-q-block-title">Customer</h3>
+        <div class="partner-q-grid">
+          <div class="partner-q-field">
+            <label class="partner-q-label" for="qName">Name <span class="partner-q-req">*</span></label>
+            <input type="text" id="qName" name="name" class="partner-q-input" placeholder="Company A" required autocomplete="off" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 1–5: General -->
+      <div class="partner-q-block">
+        <h3 class="partner-q-block-title">General</h3>
+        <p class="partner-q-block-sub">Please fill-in the following questionnaire in order to complete the financial model:</p>
+        <div class="partner-q-grid">
+
+          <div class="partner-q-field">
+            <label class="partner-q-label" for="qSector">1. Company's sector</label>
+            <select id="qSector" name="sector" class="partner-q-select">
+              <option value="">— Select —</option>
+              <option>AI / GenAI</option><option>Hi-Tech</option><option>Bio-Tech</option>
+              <option>Med-Tech</option><option>Fin-Tech</option><option>Ag-Tech</option>
+              <option>Automotive</option><option>Telematics</option><option>Industrial</option>
+              <option>Food-Tech</option><option>SaaS</option><option>Cybersecurity</option>
+              <option>Digital Health</option><option>Consumer Tech</option><option>Climate Tech</option>
+              <option>Other</option>
+            </select>
+          </div>
+
+          <div class="partner-q-field">
+            <label class="partner-q-label" for="qRound">2. Upcoming Round</label>
+            <select id="qRound" name="round" class="partner-q-select">
+              <option value="">— Select —</option>
+              <option>Pre-Seed</option><option>Seed</option><option>Late Seed / Seed+</option>
+              <option>Round A</option><option>Round B</option><option>Round C</option>
+              <option>Growth Round</option><option>Pre-IPO</option><option>Other</option>
+            </select>
+          </div>
+
+          <div class="partner-q-field">
+            <label class="partner-q-label" for="qCapitalGoal">3. Capital Raise Goal (USD)</label>
+            <input type="text" id="qCapitalGoal" name="capitalGoal" class="partner-q-input partner-q-money" placeholder="$ 0" autocomplete="off" inputmode="numeric" />
+          </div>
+
+          <div class="partner-q-field">
+            <label class="partner-q-label" for="qYearsSinceFound">4. Avg. Years Since Foundation</label>
+            <input type="number" id="qYearsSinceFound" name="yearsSinceFound" class="partner-q-input" min="0" step="1" placeholder="3" />
+            <label class="partner-q-checkline">
+              <input type="checkbox" id="qInBenchmark" name="inBenchmark" />
+              <span>In Benchmark</span>
+            </label>
+          </div>
+
+          <div class="partner-q-field">
+            <label class="partner-q-label" for="qFirstYear">5. First Year of Financial Model</label>
+            <input type="number" id="qFirstYear" name="firstYear" class="partner-q-input" min="2020" max="2050" step="1" placeholder="2026" />
+          </div>
+
+        </div>
+      </div>
+
+      <!-- 6.a HW Revenue -->
+      <div class="partner-q-block">
+        <h3 class="partner-q-block-title">6.a Commercial — HW Revenue</h3>
+        <p class="partner-q-block-sub">Specify HW customers, products, prices and deployment quantities.</p>
+        <div class="partner-q-table-wrap">
+          <table class="partner-q-table" data-rev-table="hw">
+            <thead>
+              <tr>
+                <th>Customer Name</th>
+                <th>Type</th>
+                <th>Territory</th>
+                <th>Product Name</th>
+                <th>Price</th>
+                <th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>Year+1</th>
+                <th aria-label="Remove"></th>
+              </tr>
+            </thead>
+            <tbody data-rev-body="hw"></tbody>
+          </table>
+        </div>
+        <button type="button" class="partner-q-addrow" data-add-row="hw">+ Add row</button>
+      </div>
+
+      <!-- 6.b SW Revenue -->
+      <div class="partner-q-block">
+        <h3 class="partner-q-block-title">6.b Commercial — SW Revenue</h3>
+        <p class="partner-q-block-sub">Specify SW customers, products, prices and deployment quantities.</p>
+        <div class="partner-q-table-wrap">
+          <table class="partner-q-table" data-rev-table="sw">
+            <thead>
+              <tr>
+                <th>Customer Name</th>
+                <th>Type</th>
+                <th>Territory</th>
+                <th>Product Name</th>
+                <th>Price</th>
+                <th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>Year+1</th>
+                <th aria-label="Remove"></th>
+              </tr>
+            </thead>
+            <tbody data-rev-body="sw"></tbody>
+          </table>
+        </div>
+        <button type="button" class="partner-q-addrow" data-add-row="sw">+ Add row</button>
+      </div>
+
+      <!-- 6.c Other Revenue -->
+      <div class="partner-q-block">
+        <h3 class="partner-q-block-title">6.c Commercial — Other Revenue</h3>
+        <p class="partner-q-block-sub">Other commercial streams (services, licensing, etc.).</p>
+        <div class="partner-q-table-wrap">
+          <table class="partner-q-table" data-rev-table="other">
+            <thead>
+              <tr>
+                <th>Customer Name</th>
+                <th>Type</th>
+                <th>Territory</th>
+                <th>Product Name</th>
+                <th>Price</th>
+                <th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>Year+1</th>
+                <th aria-label="Remove"></th>
+              </tr>
+            </thead>
+            <tbody data-rev-body="other"></tbody>
+          </table>
+        </div>
+        <button type="button" class="partner-q-addrow" data-add-row="other">+ Add row</button>
+      </div>
+
+      <!-- 9 Unit Costs -->
+      <div class="partner-q-block">
+        <h3 class="partner-q-block-title">9. Products — Direct Unit Costs</h3>
+        <p class="partner-q-block-sub">Specify the direct unit cost per product. Add rows as needed.</p>
+        <div class="partner-q-table-wrap">
+          <table class="partner-q-table partner-q-table-narrow" data-cost-table="unit">
+            <thead>
+              <tr>
+                <th>Product</th>
+                <th>Unit Cost (USD)</th>
+                <th aria-label="Remove"></th>
+              </tr>
+            </thead>
+            <tbody data-cost-body="unit"></tbody>
+          </table>
+        </div>
+        <button type="button" class="partner-q-addrow" data-add-cost-row="unit">+ Add row</button>
+      </div>
+
+      <!-- 10 FTE Headcount -->
+      <div class="partner-q-block">
+        <h3 class="partner-q-block-title">10. FTE Headcount by P&amp;L Section</h3>
+        <p class="partner-q-block-sub">Full-Time Equivalent headcount for each P&amp;L section, by year.</p>
+        <div class="partner-q-table-wrap">
+          <table class="partner-q-table partner-q-table-narrow">
+            <thead>
+              <tr>
+                <th>P&amp;L Section</th>
+                <th id="fteY1Label">Year 1</th>
+                <th id="fteY2Label">Year 2</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>COGS</td>
+                <td><input type="number" class="partner-q-input partner-q-cell" name="fte_cogs_y1" min="0" step="1" placeholder="0" /></td>
+                <td><input type="number" class="partner-q-input partner-q-cell" name="fte_cogs_y2" min="0" step="1" placeholder="0" /></td>
+              </tr>
+              <tr>
+                <td>R&amp;D</td>
+                <td><input type="number" class="partner-q-input partner-q-cell" name="fte_rd_y1" min="0" step="1" placeholder="0" /></td>
+                <td><input type="number" class="partner-q-input partner-q-cell" name="fte_rd_y2" min="0" step="1" placeholder="0" /></td>
+              </tr>
+              <tr>
+                <td>S&amp;M</td>
+                <td><input type="number" class="partner-q-input partner-q-cell" name="fte_sm_y1" min="0" step="1" placeholder="0" /></td>
+                <td><input type="number" class="partner-q-input partner-q-cell" name="fte_sm_y2" min="0" step="1" placeholder="0" /></td>
+              </tr>
+              <tr>
+                <td>G&amp;A</td>
+                <td><input type="number" class="partner-q-input partner-q-cell" name="fte_ga_y1" min="0" step="1" placeholder="0" /></td>
+                <td><input type="number" class="partner-q-input partner-q-cell" name="fte_ga_y2" min="0" step="1" placeholder="0" /></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="partner-q-actions">
+        <button type="submit" class="partner-q-submit">Submit Questionnaire</button>
+        <p class="partner-q-disclaimer">Once submitted, your responses are sent to the Vision &amp; Virtue team for review and finalization.</p>
+      </div>
+    </form>
+
+    <!-- Submission confirmation (replaces form on submit) -->
+    <div class="partner-q-thanks" id="questionnaireThanks" hidden>
+      <div class="partner-q-thanks-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="9 12 11 14 15 10"/>
+        </svg>
+      </div>
+      <h3>Submitted — Under Vision's Review</h3>
+      <p>Thank you. Your Customer's Questionnaire has been received. The Vision &amp; Virtue team will review your inputs and finalize your Financial Model. You'll see the finalized file appear in your Financial Model tile when ready.</p>
+      <button type="button" class="partner-q-back-btn" id="thanksBack">Back to products</button>
+    </div>
+
+  </section>
+
+  <script src="partner.js"></script>
+</body>
+</html>
