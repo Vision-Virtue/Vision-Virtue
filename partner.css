@@ -400,6 +400,46 @@
   color: var(--white);
 }
 
+/* ── SUB-BLOCK TITLES (e.g. 6.a / 6.b inside section 6) ─── */
+.partner-q-subblock-title {
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--navy-900);
+  margin: 0 0 0.6rem;
+  letter-spacing: 0.01em;
+}
+.partner-q-subblock-spaced { margin-top: 1.5rem; }
+
+/* ── READ-ONLY AUTO-FILL CELLS (Section 7 Let's Scale) ─── */
+.partner-q-readonly {
+  display: inline-block;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  background: rgba(58, 107, 196, 0.06);
+  color: var(--navy-900);
+  border: 1px dashed rgba(58, 107, 196, 0.25);
+  border-radius: 4px;
+  font-size: 0.82rem;
+  font-style: normal;
+  white-space: nowrap;
+  text-align: left;
+}
+.partner-q-readonly-cell {
+  font-weight: 600;
+  color: var(--navy-900);
+  background: rgba(58, 107, 196, 0.04);
+}
+
+/* ── EMPTY-STATE ROW (e.g. Unit Costs before any product) ─ */
+.partner-q-empty {
+  text-align: center;
+  color: var(--gray-600);
+  font-style: italic;
+  font-size: 0.82rem;
+  padding: 1rem 0.75rem;
+}
+
 /* ── RESPONSIVE ────────────────────────────────────────── */
 @media (max-width: 700px) {
   .partner-hero          { padding: 5rem 1.25rem 3.5rem; }
