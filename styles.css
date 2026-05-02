@@ -3012,3 +3012,78 @@ body {
 }
 
 .data-notice a { color: #1a4a6b; font-weight: 600; }
+
+/* =====================================================================
+   OFFERINGS — "Already a customer?" CTA with beeping blue dot
+   ===================================================================== */
+.offering-card { position: relative; }
+
+.offering-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  position: absolute;
+  bottom: 0.85rem;
+  right: 0.85rem;
+  background: rgba(58, 107, 196, 0.08);
+  border: 1px solid rgba(58, 107, 196, 0.25);
+  color: var(--accent, #3a6bc4);
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.35rem 0.65rem 0.35rem 0.55rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, transform 0.15s;
+}
+
+.offering-cta:hover {
+  background: rgba(58, 107, 196, 0.16);
+  border-color: rgba(58, 107, 196, 0.45);
+  transform: translateY(-1px);
+}
+
+.offering-cta:active { transform: translateY(0); }
+
+.offering-cta.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.offering-cta.is-disabled:hover {
+  background: rgba(58, 107, 196, 0.08);
+  border-color: rgba(58, 107, 196, 0.25);
+  transform: none;
+}
+
+.offering-cta-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent, #3a6bc4);
+  position: relative;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 0 rgba(58, 107, 196, 0.6);
+  animation: offering-beep 1.5s ease-out infinite;
+}
+
+.offering-cta.is-disabled .offering-cta-dot {
+  background: var(--gray-400, #9ca3af);
+  animation: none;
+  box-shadow: none;
+}
+
+@keyframes offering-beep {
+  0%   { box-shadow: 0 0 0 0   rgba(58, 107, 196, 0.55); }
+  70%  { box-shadow: 0 0 0 10px rgba(58, 107, 196, 0); }
+  100% { box-shadow: 0 0 0 0   rgba(58, 107, 196, 0); }
+}
+
+/* On very small screens, drop the text and just show the pulsing dot */
+@media (max-width: 480px) {
+  .offering-cta-text { display: none; }
+  .offering-cta {
+    padding: 0.4rem;
+    border-radius: 50%;
+  }
+}

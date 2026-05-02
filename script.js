@@ -113,3 +113,96 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     }
   });
 });
+
+// ---------- Customer Key gate (Partner offering CTA) ----------
+(function setupCustomerKeyGate() {
+  const CK_BACKEND   = 'https://vv-marketing-api.onrender.com';
+  const CK_TEST_KEY  = 'VV-TEST123';
+
+  const ckOverlay  = document.getElementById('ckOverlay');
+  const ckClose    = document.getElementById('ckClose');
+  const ckKey      = document.getElementById('ckKey');
+  const ckEnterBtn = document.getElementById('ckEnterBtn');
+  const ckError    = document.getElementById('ckError');
+  const partnerCta = document.getElementById('partnerCustomerCta');
+
+  if (!ckOverlay || !partnerCta) return;
+
+  let pendingTarget = null;
+
+  function openCk(target) {
+    pendingTarget = target;
+    ckOverlay.classList.add('open');
+    ckOverlay.setAttribute('aria-hidden', 'false');
+    ckKey.value = '';
+    ckError.textContent = '';
+    setTimeout(() => ckKey.focus(), 50);
+  }
+
+  function closeCk() {
+    ckOverlay.classList.remove('open');
+    ckOverlay.setAttribute('aria-hidden', 'true');
+    pendingTarget = null;
+  }
+
+  function targetUrl(t) {
+    if (t === 'partner') return 'partner.html';
+    return null;
+  }
+
+  async function submitKey() {
+    const key = ckKey.value.trim();
+    if (!key) {
+      ckError.textContent = 'Please enter your Customer Key.';
+      ckKey.focus();
+      return;
+    }
+    ckEnterBtn.disabled = true;
+    ckError.textContent = '';
+
+    // (1) Phase 1 hardcoded test key
+    if (key === CK_TEST_KEY) {
+      grantAccess(key);
+      return;
+    }
+
+    // (2) Authorized Personnel master PIN also unlocks customer area
+    try {
+      const res = await fetch(`${CK_BACKEND}/api/auth/verify-pin`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: key }),
+      });
+      const data = await res.json();
+      if (data && data.valid) {
+        sessionStorage.setItem('vv_auth', '1');
+        grantAccess(key);
+        return;
+      }
+      ckError.textContent = 'Invalid Customer Key. Please try again.';
+      ckKey.value = '';
+      ckKey.focus();
+    } catch {
+      ckError.textContent = 'Could not reach server. Please try again.';
+    } finally {
+      ckEnterBtn.disabled = false;
+    }
+  }
+
+  function grantAccess(key) {
+    sessionStorage.setItem('vv_customer_auth', '1');
+    sessionStorage.setItem('vv_customer_key', key);
+    const url = targetUrl(pendingTarget);
+    closeCk();
+    if (url) window.location.href = url;
+  }
+
+  partnerCta.addEventListener('click', () => openCk('partner'));
+  ckClose.addEventListener('click', closeCk);
+  ckOverlay.addEventListener('click', e => { if (e.target === ckOverlay) closeCk(); });
+  ckEnterBtn.addEventListener('click', submitKey);
+  ckKey.addEventListener('keydown', e => { if (e.key === 'Enter') submitKey(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && ckOverlay.classList.contains('open')) closeCk();
+  });
+})();
