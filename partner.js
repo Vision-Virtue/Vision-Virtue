@@ -27,18 +27,28 @@ window.addEventListener('scroll', () => {
   else navbar.classList.remove('scrolled');
 }, { passive: true });
 
-// ── Money input formatting ───────────────────────────────────
+// ── Money input formatting (handles whole $ and decimals) ────
 function formatMoney(el) {
-  const raw = el.value.replace(/[^\d]/g, '');
-  if (!raw) { el.value = ''; return; }
-  el.value = '$ ' + parseInt(raw, 10).toLocaleString('en-US');
+  let raw = el.value.replace(/[^\d.]/g, '');
+  // Keep only the first dot
+  const firstDot = raw.indexOf('.');
+  if (firstDot !== -1) {
+    raw = raw.slice(0, firstDot + 1) + raw.slice(firstDot + 1).replace(/\./g, '');
+  }
+  if (!raw || raw === '.') { el.value = ''; return; }
+  const [intPartRaw, decPart] = raw.split('.');
+  const intPart = intPartRaw === '' ? '0' : intPartRaw;
+  const intFormatted = parseInt(intPart, 10).toLocaleString('en-US');
+  el.value = '$ ' + (decPart !== undefined ? `${intFormatted}.${decPart}` : intFormatted);
 }
 function bindMoneyInputs(scope) {
   scope.querySelectorAll('.partner-q-money').forEach(el => {
+    if (el.dataset.moneyBound === '1') return;
+    el.dataset.moneyBound = '1';
     el.addEventListener('input', () => formatMoney(el));
     el.addEventListener('blur',  () => {
-      const raw = el.value.replace(/[^\d]/g, '');
-      if (!raw) el.value = '';
+      const raw = el.value.replace(/[^\d.]/g, '');
+      if (!raw || raw === '.') el.value = '';
     });
   });
 }
@@ -142,7 +152,7 @@ function makeRevRow(group) {
       </select>
     </td>
     <td><input type="text"   class="partner-q-input partner-q-cell" name="${group}_product[]" placeholder="Product" /></td>
-    <td><input type="number" class="partner-q-input partner-q-cell" name="${group}_price[]" min="0" step="0.01" placeholder="0" /></td>
+    <td><input type="text"   class="partner-q-input partner-q-cell partner-q-money" name="${group}_price[]" inputmode="decimal" autocomplete="off" placeholder="$ 0" /></td>
     <td><input type="number" class="partner-q-input partner-q-cell" name="${group}_q1[]" min="0" step="1" placeholder="0" /></td>
     <td><input type="number" class="partner-q-input partner-q-cell" name="${group}_q2[]" min="0" step="1" placeholder="0" /></td>
     <td><input type="number" class="partner-q-input partner-q-cell" name="${group}_q3[]" min="0" step="1" placeholder="0" /></td>
@@ -156,13 +166,19 @@ function makeRevRow(group) {
 
 function seedRevRowIfEmpty(group) {
   const body = document.querySelector(`tbody[data-rev-body="${group}"]`);
-  if (body && body.children.length === 0) body.appendChild(makeRevRow(group));
+  if (body && body.children.length === 0) {
+    const row = makeRevRow(group);
+    body.appendChild(row);
+    bindMoneyInputs(row);
+  }
 }
 
 document.querySelectorAll('[data-add-row]').forEach(btn => {
   const group = btn.getAttribute('data-add-row');
   btn.addEventListener('click', () => {
-    document.querySelector(`tbody[data-rev-body="${group}"]`).appendChild(makeRevRow(group));
+    const row = makeRevRow(group);
+    document.querySelector(`tbody[data-rev-body="${group}"]`).appendChild(row);
+    bindMoneyInputs(row);
   });
 });
 
@@ -173,8 +189,8 @@ function makeCostRow() {
   const idx = ++costRowSeed;
   const defaultLetter = idx <= 26 ? String.fromCharCode(64 + idx) : `${idx}`;
   tr.innerHTML = `
-    <td><input type="text"   class="partner-q-input partner-q-cell" name="cost_product[]" placeholder="Product ${defaultLetter}" /></td>
-    <td><input type="number" class="partner-q-input partner-q-cell" name="cost_unit[]"    min="0" step="0.01" placeholder="0" /></td>
+    <td><input type="text" class="partner-q-input partner-q-cell" name="cost_product[]" placeholder="Product ${defaultLetter}" /></td>
+    <td><input type="text" class="partner-q-input partner-q-cell partner-q-money" name="cost_unit[]" inputmode="decimal" autocomplete="off" placeholder="$ 0" /></td>
     <td><button type="button" class="partner-q-rmrow" aria-label="Remove row">&#x2715;</button></td>
   `;
   tr.querySelector('.partner-q-rmrow').addEventListener('click', () => tr.remove());
@@ -184,12 +200,18 @@ function seedCostRowIfEmpty() {
   const body = document.querySelector('tbody[data-cost-body="unit"]');
   if (body && body.children.length === 0) {
     // Seed five rows (Product A–E) to match the template layout
-    for (let i = 0; i < 5; i++) body.appendChild(makeCostRow());
+    for (let i = 0; i < 5; i++) {
+      const row = makeCostRow();
+      body.appendChild(row);
+      bindMoneyInputs(row);
+    }
   }
 }
 document.querySelectorAll('[data-add-cost-row]').forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelector('tbody[data-cost-body="unit"]').appendChild(makeCostRow());
+    const row = makeCostRow();
+    document.querySelector('tbody[data-cost-body="unit"]').appendChild(row);
+    bindMoneyInputs(row);
   });
 });
 
