@@ -153,98 +153,95 @@
         </div>
       </div>
 
-      <!-- 6.a HW Revenue -->
+      <!-- 6 Commercial Setup (Customers + Products) -->
       <div class="partner-q-block">
-        <h3 class="partner-q-block-title">6.a Commercial — HW Revenue</h3>
-        <p class="partner-q-block-sub">Specify HW customers, products, prices and deployment quantities.</p>
+        <h3 class="partner-q-block-title">6. Commercial Setup</h3>
+        <p class="partner-q-block-sub">Define your customers and your products. Both lists feed the dropdowns in section 7 (Let's Scale) and the Unit Costs table in section 8.</p>
+
+        <h4 class="partner-q-subblock-title">6.a Customers</h4>
         <div class="partner-q-table-wrap">
-          <table class="partner-q-table" data-rev-table="hw">
+          <table class="partner-q-table">
+            <thead>
+              <tr>
+                <th>Customer Name</th>
+                <th>Type</th>
+                <th>Territory</th>
+                <th aria-label="Remove"></th>
+              </tr>
+            </thead>
+            <tbody data-customers-body></tbody>
+          </table>
+        </div>
+        <button type="button" class="partner-q-addrow" data-add-customer>+ Add customer</button>
+
+        <h4 class="partner-q-subblock-title partner-q-subblock-spaced">6.b Products</h4>
+        <div class="partner-q-table-wrap">
+          <table class="partner-q-table">
+            <thead>
+              <tr>
+                <th>Product Name</th>
+                <th>Revenue Type</th>
+                <th>Price (USD)</th>
+                <th aria-label="Remove"></th>
+              </tr>
+            </thead>
+            <tbody data-products-body></tbody>
+          </table>
+        </div>
+        <button type="button" class="partner-q-addrow" data-add-product>+ Add product</button>
+      </div>
+
+      <!-- 7 Let's Scale -->
+      <div class="partner-q-block">
+        <h3 class="partner-q-block-title">7. Let's Scale — Deployment Plan</h3>
+        <p class="partner-q-block-sub">Pick a customer and a product from section 6. Type, Territory, Revenue Type and Price auto-fill from your selections — only the quarterly quantities are editable.</p>
+        <div class="partner-q-table-wrap">
+          <table class="partner-q-table">
             <thead>
               <tr>
                 <th>Customer Name</th>
                 <th>Type</th>
                 <th>Territory</th>
                 <th>Product Name</th>
+                <th>Revenue Type</th>
                 <th>Price</th>
-                <th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>Year+1</th>
+                <th data-ls-q1>Q1</th>
+                <th data-ls-q2>Q2</th>
+                <th data-ls-q3>Q3</th>
+                <th data-ls-q4>Q4</th>
+                <th data-ls-y2>Year+1</th>
                 <th aria-label="Remove"></th>
               </tr>
             </thead>
-            <tbody data-rev-body="hw"></tbody>
+            <tbody data-letsscale-body></tbody>
           </table>
         </div>
-        <button type="button" class="partner-q-addrow" data-add-row="hw">+ Add row</button>
+        <button type="button" class="partner-q-addrow" data-add-letsscale>+ Add row</button>
       </div>
 
-      <!-- 6.b SW Revenue -->
+      <!-- 8 Unit Costs (auto-pulls products from 6.b) -->
       <div class="partner-q-block">
-        <h3 class="partner-q-block-title">6.b Commercial — SW Revenue</h3>
-        <p class="partner-q-block-sub">Specify SW customers, products, prices and deployment quantities.</p>
+        <h3 class="partner-q-block-title">8. Products — Direct Unit Costs</h3>
+        <p class="partner-q-block-sub">For every product you defined in 6.b, specify its direct unit cost. Rows update automatically when you add or remove products.</p>
         <div class="partner-q-table-wrap">
-          <table class="partner-q-table" data-rev-table="sw">
-            <thead>
-              <tr>
-                <th>Customer Name</th>
-                <th>Type</th>
-                <th>Territory</th>
-                <th>Product Name</th>
-                <th>Price</th>
-                <th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>Year+1</th>
-                <th aria-label="Remove"></th>
-              </tr>
-            </thead>
-            <tbody data-rev-body="sw"></tbody>
-          </table>
-        </div>
-        <button type="button" class="partner-q-addrow" data-add-row="sw">+ Add row</button>
-      </div>
-
-      <!-- 6.c Other Revenue -->
-      <div class="partner-q-block">
-        <h3 class="partner-q-block-title">6.c Commercial — Other Revenue</h3>
-        <p class="partner-q-block-sub">Other commercial streams (services, licensing, etc.).</p>
-        <div class="partner-q-table-wrap">
-          <table class="partner-q-table" data-rev-table="other">
-            <thead>
-              <tr>
-                <th>Customer Name</th>
-                <th>Type</th>
-                <th>Territory</th>
-                <th>Product Name</th>
-                <th>Price</th>
-                <th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>Year+1</th>
-                <th aria-label="Remove"></th>
-              </tr>
-            </thead>
-            <tbody data-rev-body="other"></tbody>
-          </table>
-        </div>
-        <button type="button" class="partner-q-addrow" data-add-row="other">+ Add row</button>
-      </div>
-
-      <!-- 9 Unit Costs -->
-      <div class="partner-q-block">
-        <h3 class="partner-q-block-title">9. Products — Direct Unit Costs</h3>
-        <p class="partner-q-block-sub">Specify the direct unit cost per product. Add rows as needed.</p>
-        <div class="partner-q-table-wrap">
-          <table class="partner-q-table partner-q-table-narrow" data-cost-table="unit">
+          <table class="partner-q-table partner-q-table-narrow">
             <thead>
               <tr>
                 <th>Product</th>
                 <th>Unit Cost (USD)</th>
-                <th aria-label="Remove"></th>
               </tr>
             </thead>
-            <tbody data-cost-body="unit"></tbody>
+            <tbody data-unitcost-body>
+              <tr><td colspan="2" class="partner-q-empty">Define products in section 6.b to populate this table.</td></tr>
+            </tbody>
           </table>
         </div>
-        <button type="button" class="partner-q-addrow" data-add-cost-row="unit">+ Add row</button>
       </div>
 
-      <!-- 10 FTE Headcount -->
+      <!-- 9 FTE Headcount -->
       <div class="partner-q-block">
-        <h3 class="partner-q-block-title">10. FTE Headcount by P&amp;L Section</h3>
-        <p class="partner-q-block-sub">Full-Time Equivalent headcount for each P&amp;L section, by year.</p>
+        <h3 class="partner-q-block-title">9. FTE Headcount by P&amp;L Section</h3>
+        <p class="partner-q-block-sub">Full-Time Equivalent headcount for each P&amp;L section, by year. Year columns track the First Year of Financial Model from question 5.</p>
         <div class="partner-q-table-wrap">
           <table class="partner-q-table partner-q-table-narrow">
             <thead>
