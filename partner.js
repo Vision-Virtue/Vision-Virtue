@@ -474,5 +474,20 @@ qForm?.addEventListener('submit', e => {
   window.scrollTo({ top: 0, behavior: 'smooth' });
 });
 
+// ── Migrate / invalidate stale submissions across form upgrades ─
+// Old (pre-v5) submissions had top-level revenue arrays like
+// hw_customer / sw_customer / other_customer. They are not loadable
+// in the new form, so we wipe them so the customer can resubmit.
+function migrateStaleSubmission() {
+  const sub = readSubmission();
+  if (!sub || !sub.formData) return;
+  const hasNewShape = !!(sub.formData.customers || sub.formData.general);
+  const hasOldShape = !!(sub.formData.hw_customer || sub.formData.sw_customer || sub.formData.other_customer);
+  if (!hasNewShape && hasOldShape) {
+    localStorage.removeItem(LS_SUBMISSION);
+  }
+}
+migrateStaleSubmission();
+
 // ── Initial render ───────────────────────────────────────────
 renderTileState();
