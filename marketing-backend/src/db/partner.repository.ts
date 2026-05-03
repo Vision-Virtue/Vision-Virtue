@@ -169,6 +169,26 @@ export const partnerSubmissionRepo = {
     return row.c;
   },
 
+  /** Set the generated xlsx file path on a submission (called on submit). */
+  setXlsxPath(id: string, xlsxPath: string): PartnerSubmission | null {
+    getDb()
+      .prepare('UPDATE partner_submissions SET finalized_xlsx_path = ? WHERE id = ?')
+      .run(xlsxPath, id);
+    return this.getById(id);
+  },
+
+  /** Flip status to 'finalized' without re-generating the xlsx. */
+  markFinalized(id: string, notes?: string | null): PartnerSubmission | null {
+    getDb()
+      .prepare(
+        `UPDATE partner_submissions
+           SET status = 'finalized', finalized_at = ?, notes = COALESCE(?, notes)
+           WHERE id = ?`,
+      )
+      .run(new Date().toISOString(), notes ?? null, id);
+    return this.getById(id);
+  },
+
   finalize(id: string, xlsxPath: string, notes?: string | null): PartnerSubmission | null {
     getDb()
       .prepare(

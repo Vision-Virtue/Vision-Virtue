@@ -71,8 +71,13 @@ export const partnerController = {
    * POST /api/submissions
    * Header: X-Customer-Key
    * Body: { customerName, formData }
+   *
+   * Stores the submission AND immediately populates the personalized
+   * Customer's Questionnaire xlsx so Raphael can review the actual file.
+   * If xlsx generation fails (template issue, etc.), the submission still
+   * succeeds — the file can be regenerated later by re-running finalize.
    */
-  createSubmission(req: Request, res: Response): void {
+  async createSubmission(req: Request, res: Response): Promise<void> {
     const keyRow = resolveCustomerKey(req);
     if (!keyRow) { send401(res, 'Missing or invalid customer key.'); return; }
 
@@ -89,6 +94,14 @@ export const partnerController = {
       customerName:  parsed.data.customerName.trim(),
       formData:      parsed.data.formData,
     });
+
+    // Generate the personalized xlsx. Non-fatal — log but still 201.
+    try {
+      const result = await generateFinalizedXlsx(sub.id, sub.customerName, sub.formData as never);
+      partnerSubmissionRepo.setXlsxPath(sub.id, result.fileName);
+    } catch (err) {
+      console.error('[partner] xlsx generation on submit failed:', err);
+    }
 
     res.status(201).json({
       id:           sub.id,
@@ -161,14 +174,14 @@ export const partnerController = {
     const subs = partnerSubmissionRepo.listAll();
     res.json({
       submissions: subs.map(s => ({
-        id:                s.id,
-        customerKeyId:     s.customerKeyId,
-        customerName:      s.customerName,
-        status:            s.status,
-        submittedAt:       s.submittedAt,
-        finalizedAt:       s.finalizedAt,
-        hasFinalizedXlsx:  !!s.finalizedXlsxPath,
-        formData:          s.formData,
+        id:            s.id,
+        customerKeyId: s.customerKeyId,
+        customerName:  s.customerName,
+        status:        s.status,
+        submittedAt:   s.submittedAt,
+        finalizedAt:   s.finalizedAt,
+        hasXlsx:       !!s.finalizedXlsxPath,
+        formData:      s.formData,
       })),
     });
   },
@@ -185,22 +198,23 @@ export const partnerController = {
     }
     res.json({
       submission: {
-        id:                sub.id,
-        customerKeyId:     sub.customerKeyId,
-        customerName:      sub.customerName,
-        status:            sub.status,
-        submittedAt:       sub.submittedAt,
-        finalizedAt:       sub.finalizedAt,
-        hasFinalizedXlsx:  !!sub.finalizedXlsxPath,
-        formData:          sub.formData,
+        id:            sub.id,
+        customerKeyId: sub.customerKeyId,
+        customerName:  sub.customerName,
+        status:        sub.status,
+        submittedAt:   sub.submittedAt,
+        finalizedAt:   sub.finalizedAt,
+        hasXlsx:       !!sub.finalizedXlsxPath,
+        formData:      sub.formData,
       },
     });
   },
 
   /**
    * POST /api/admin/submissions/:id/finalize
-   * Generates the personalized xlsx, marks the submission finalized,
-   * and returns the new state.
+   * Flips status to 'finalized'. The xlsx was generated on submit, so this
+   * is purely a status change. If the xlsx is missing for any reason
+   * (e.g. earlier generation failed), we regenerate it before finalizing.
    */
   async adminFinalize(req: Request, res: Response): Promise<void> {
     const sub = partnerSubmissionRepo.getById(req.params.id);
@@ -209,36 +223,38 @@ export const partnerController = {
       return;
     }
 
-    let result;
-    try {
-      result = await generateFinalizedXlsx(sub.id, sub.customerName, sub.formData as never);
-    } catch (err) {
-      console.error('[partner] xlsx generation failed:', err);
-      res.status(500).json({
-        error: {
-          code: 'XLSX_GENERATION_FAILED',
-          message: err instanceof Error ? err.message : 'xlsx generation failed.',
-        },
-      });
-      return;
+    // Self-heal: if there is no xlsx on disk yet, generate one now.
+    if (!sub.finalizedXlsxPath || !resolveStoredXlsx(sub.finalizedXlsxPath)) {
+      try {
+        const result = await generateFinalizedXlsx(sub.id, sub.customerName, sub.formData as never);
+        partnerSubmissionRepo.setXlsxPath(sub.id, result.fileName);
+      } catch (err) {
+        console.error('[partner] xlsx regeneration on finalize failed:', err);
+        res.status(500).json({
+          error: {
+            code: 'XLSX_GENERATION_FAILED',
+            message: err instanceof Error ? err.message : 'xlsx generation failed.',
+          },
+        });
+        return;
+      }
     }
 
-    // Store just the file name (not the absolute path) so the file location
-    // is resolved through resolveStoredXlsx() at download time.
-    const updated = partnerSubmissionRepo.finalize(sub.id, result.fileName, null);
+    const updated = partnerSubmissionRepo.markFinalized(sub.id, null);
     res.json({
       submission: {
-        id:               updated?.id,
-        status:           updated?.status,
-        finalizedAt:      updated?.finalizedAt,
-        hasFinalizedXlsx: !!updated?.finalizedXlsxPath,
+        id:          updated?.id,
+        status:      updated?.status,
+        finalizedAt: updated?.finalizedAt,
+        hasXlsx:     !!updated?.finalizedXlsxPath,
       },
     });
   },
 
   /**
    * GET /api/admin/submissions/:id/xlsx
-   * Streams the finalized xlsx (admin / Raphael view).
+   * Streams the generated xlsx for any submission (admin / Raphael view).
+   * Available regardless of status because the xlsx is created on submit.
    */
   adminDownloadXlsx(req: Request, res: Response): void {
     const sub = partnerSubmissionRepo.getById(req.params.id);
@@ -246,13 +262,17 @@ export const partnerController = {
       res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
       return;
     }
-    if (sub.status !== 'finalized' || !sub.finalizedXlsxPath) {
-      res.status(409).json({ error: { code: 'NOT_FINALIZED', message: 'Submission has not been finalized yet.' } });
+    if (!sub.finalizedXlsxPath) {
+      res.status(409).json({
+        error: { code: 'XLSX_NOT_READY', message: 'xlsx has not been generated yet.' },
+      });
       return;
     }
     const abs = resolveStoredXlsx(sub.finalizedXlsxPath);
     if (!abs) {
-      res.status(410).json({ error: { code: 'FILE_GONE', message: 'The finalized file is no longer available on disk.' } });
+      res.status(410).json({
+        error: { code: 'FILE_GONE', message: 'The xlsx file is no longer available on disk.' },
+      });
       return;
     }
     const downloadName = `${sub.customerName || 'Customer'} - Financial Model.xlsx`;

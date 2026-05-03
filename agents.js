@@ -2724,97 +2724,51 @@ async function generatePptxDeck(d) {
     list.innerHTML = '<div class="partner-subs-empty">No customer submissions yet. Folders appear here as soon as a partner customer submits the Customer’s Questionnaire.</div>';
   }
 
-  function renderTable(formData) {
-    const fd = formData && typeof formData === 'object' ? formData : {};
-    const g  = fd.general || {};
-    const customers = Array.isArray(fd.customers) ? fd.customers : [];
-    const products  = Array.isArray(fd.products)  ? fd.products  : [];
-    const letsScale = Array.isArray(fd.letsScale) ? fd.letsScale : [];
-    const unitCosts = Array.isArray(fd.unitCosts) ? fd.unitCosts : [];
-    const fte = fd.fte || {};
+  function renderDeliverables(sub) {
+    const isFinal = sub.status === 'finalized';
+    const xlsxReady = sub.hasXlsx === true;
 
-    const generalRows = `
-      <tr><td>Sector</td><td>${htmlEsc(g.sector)}</td></tr>
-      <tr><td>Round</td><td>${htmlEsc(g.round)}</td></tr>
-      <tr><td>Capital Raise Goal</td><td>${htmlEsc(g.capitalGoal)}</td></tr>
-      <tr><td>Avg. Years Since Foundation</td><td>${htmlEsc(g.yearsSinceFound)}</td></tr>
-      <tr><td>First Year of Financial Model</td><td>${htmlEsc(g.firstYear)}</td></tr>
+    // Excel row actions: Download (always when xlsx exists) + Finalize (only when not finalized)
+    const excelActions = `
+      ${xlsxReady
+        ? `<button type="button" class="partner-subs-action partner-subs-download" data-action="download" data-product="excel">⬇ Download</button>`
+        : `<span class="partner-subs-action-disabled">xlsx not ready</span>`}
+      ${isFinal
+        ? `<span class="partner-status-pill partner-status-finalized">Finalized</span>`
+        : `<button type="button" class="partner-subs-action partner-subs-finalize" data-action="finalize">Finalize</button>`}
     `;
 
-    const custRows = customers.length === 0
-      ? '<tr><td colspan="3" class="partner-subs-empty-row">No customers</td></tr>'
-      : customers.map(c => `
-          <tr><td>${htmlEsc(c.name)}</td><td>${htmlEsc(c.type)}</td><td>${htmlEsc(c.territory)}</td></tr>
-        `).join('');
-
-    const prodRows = products.length === 0
-      ? '<tr><td colspan="3" class="partner-subs-empty-row">No products</td></tr>'
-      : products.map(p => `
-          <tr><td>${htmlEsc(p.name)}</td><td>${htmlEsc(p.revenueType)}</td><td>${htmlEsc(p.price)}</td></tr>
-        `).join('');
-
-    const lsRows = letsScale.length === 0
-      ? '<tr><td colspan="11" class="partner-subs-empty-row">No deployment plan rows</td></tr>'
-      : letsScale.map(l => `
-          <tr>
-            <td>${htmlEsc(l.customerName)}</td><td>${htmlEsc(l.type)}</td><td>${htmlEsc(l.territory)}</td>
-            <td>${htmlEsc(l.productName)}</td><td>${htmlEsc(l.revenueType)}</td><td>${htmlEsc(l.price)}</td>
-            <td>${htmlEsc(l.q1)}</td><td>${htmlEsc(l.q2)}</td><td>${htmlEsc(l.q3)}</td><td>${htmlEsc(l.q4)}</td>
-            <td>${htmlEsc(l.y2)}</td>
-          </tr>
-        `).join('');
-
-    const ucRows = unitCosts.length === 0
-      ? '<tr><td colspan="2" class="partner-subs-empty-row">No unit costs</td></tr>'
-      : unitCosts.map(u => `
-          <tr><td>${htmlEsc(u.productName)}</td><td>${htmlEsc(u.cost)}</td></tr>
-        `).join('');
-
     return `
-      <div class="partner-subs-detail">
-        <h5>General</h5>
-        <table class="partner-subs-table"><tbody>${generalRows}</tbody></table>
-
-        <h5>6.a Customers</h5>
-        <table class="partner-subs-table">
-          <thead><tr><th>Name</th><th>Type</th><th>Territory</th></tr></thead>
-          <tbody>${custRows}</tbody>
-        </table>
-
-        <h5>6.b Products</h5>
-        <table class="partner-subs-table">
-          <thead><tr><th>Name</th><th>Revenue Type</th><th>Price</th></tr></thead>
-          <tbody>${prodRows}</tbody>
-        </table>
-
-        <h5>7. Let's Scale</h5>
-        <div class="partner-subs-table-wrap">
-          <table class="partner-subs-table">
-            <thead><tr>
-              <th>Customer</th><th>Type</th><th>Territory</th>
-              <th>Product</th><th>Rev. Type</th><th>Price</th>
-              <th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>Y+1</th>
-            </tr></thead>
-            <tbody>${lsRows}</tbody>
-          </table>
+      <div class="partner-subs-deliverables">
+        <div class="partner-subs-deliverable">
+          <div class="partner-subs-deliverable-icon partner-subs-deliverable-icon-excel">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2"/>
+              <line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/>
+              <line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>
+            </svg>
+          </div>
+          <div class="partner-subs-deliverable-meta">
+            <div class="partner-subs-deliverable-title">Financial Model</div>
+            <div class="partner-subs-deliverable-sub">Customer's Questionnaire populated · downstream sheets calculated by formulas</div>
+          </div>
+          <div class="partner-subs-deliverable-actions">${excelActions}</div>
         </div>
-
-        <h5>8. Unit Costs</h5>
-        <table class="partner-subs-table">
-          <thead><tr><th>Product</th><th>Unit Cost</th></tr></thead>
-          <tbody>${ucRows}</tbody>
-        </table>
-
-        <h5>9. FTE Headcount</h5>
-        <table class="partner-subs-table">
-          <thead><tr><th>P&amp;L Section</th><th>Year 1</th><th>Year 2</th></tr></thead>
-          <tbody>
-            <tr><td>COGS</td><td>${htmlEsc(fte.cogs_y1)}</td><td>${htmlEsc(fte.cogs_y2)}</td></tr>
-            <tr><td>R&amp;D</td><td>${htmlEsc(fte.rd_y1)}</td><td>${htmlEsc(fte.rd_y2)}</td></tr>
-            <tr><td>S&amp;M</td><td>${htmlEsc(fte.sm_y1)}</td><td>${htmlEsc(fte.sm_y2)}</td></tr>
-            <tr><td>G&amp;A</td><td>${htmlEsc(fte.ga_y1)}</td><td>${htmlEsc(fte.ga_y2)}</td></tr>
-          </tbody>
-        </table>
+        <div class="partner-subs-deliverable is-coming-soon">
+          <div class="partner-subs-deliverable-icon partner-subs-deliverable-icon-ppt">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="3" width="20" height="14" rx="2"/>
+              <line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+          </div>
+          <div class="partner-subs-deliverable-meta">
+            <div class="partner-subs-deliverable-title">Business Model Presentation</div>
+            <div class="partner-subs-deliverable-sub">PowerPoint deck (under construction)</div>
+          </div>
+          <div class="partner-subs-deliverable-actions">
+            <span class="partner-status-pill partner-status-soon">Coming Soon</span>
+          </div>
+        </div>
       </div>
     `;
   }
@@ -2828,7 +2782,7 @@ async function generatePptxDeck(d) {
     card.className = 'partner-subs-folder';
     card.dataset.subId = sub.id;
     card.innerHTML = `
-      <button type="button" class="partner-subs-folder-head" aria-expanded="false">
+      <button type="button" class="partner-subs-folder-head" aria-expanded="true">
         <svg class="partner-subs-folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
           <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
         </svg>
@@ -2839,14 +2793,8 @@ async function generatePptxDeck(d) {
         <span class="partner-status-pill ${pillCls}">${pillTxt}</span>
         <span class="partner-subs-folder-caret">▾</span>
       </button>
-      <div class="partner-subs-folder-body" hidden>
-        ${renderTable(sub.formData)}
-        <div class="partner-subs-folder-actions">
-          ${isFinal
-            ? `<button type="button" class="partner-subs-action partner-subs-download" data-action="download">⬇ Download Generated Model</button>`
-            : `<button type="button" class="partner-subs-action partner-subs-finalize" data-action="finalize">Finalize</button>`
-          }
-        </div>
+      <div class="partner-subs-folder-body">
+        ${renderDeliverables(sub)}
       </div>
     `;
 

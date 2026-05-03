@@ -1388,3 +1388,62 @@
   background: rgba(74, 124, 63, 0.20);
   color: #8fc683;
 }
+.partner-status-pill.partner-status-soon {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* ── Two-row deliverables list inside each folder ───────────── */
+.partner-subs-deliverables {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.partner-subs-deliverable {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.75rem 0.85rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+}
+.partner-subs-deliverable.is-coming-soon { opacity: 0.55; }
+.partner-subs-deliverable-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+}
+.partner-subs-deliverable-icon-excel {
+  background: rgba(33, 130, 70, 0.18);
+  color: #6ab576;
+}
+.partner-subs-deliverable-icon-ppt {
+  background: rgba(196, 78, 35, 0.18);
+  color: #d68b6c;
+}
+.partner-subs-deliverable-icon svg { width: 20px; height: 20px; }
+.partner-subs-deliverable-meta { flex: 1; min-width: 0; }
+.partner-subs-deliverable-title {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--white, #fff);
+}
+.partner-subs-deliverable-sub {
+  font-size: 0.74rem;
+  color: rgba(255, 255, 255, 0.5);
+  margin-top: 0.15rem;
+}
+.partner-subs-deliverable-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+.partner-subs-action-disabled {
+  font-size: 0.74rem;
+  color: rgba(255, 255, 255, 0.45);
+  font-style: italic;
+}
