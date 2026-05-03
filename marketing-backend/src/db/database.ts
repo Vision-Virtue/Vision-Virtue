@@ -74,6 +74,34 @@ function initializeSchema(database: Database.Database): void {
       data       TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS customer_keys (
+      id              TEXT PRIMARY KEY,
+      key             TEXT NOT NULL UNIQUE,
+      customer_name   TEXT NOT NULL DEFAULT '',
+      created_at      TEXT NOT NULL,
+      created_by      TEXT NOT NULL DEFAULT 'admin',
+      revoked         INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_customer_keys_key ON customer_keys(key);
+
+    CREATE TABLE IF NOT EXISTS partner_submissions (
+      id                   TEXT PRIMARY KEY,
+      customer_key_id      TEXT,
+      customer_name        TEXT NOT NULL,
+      form_data            TEXT NOT NULL,
+      status               TEXT NOT NULL DEFAULT 'review',
+      submitted_at         TEXT NOT NULL,
+      finalized_at         TEXT,
+      finalized_xlsx_path  TEXT,
+      notes                TEXT,
+      FOREIGN KEY (customer_key_id) REFERENCES customer_keys(id) ON DELETE SET NULL
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_partner_subs_status     ON partner_submissions(status);
+    CREATE INDEX IF NOT EXISTS idx_partner_subs_key_id     ON partner_submissions(customer_key_id);
+    CREATE INDEX IF NOT EXISTS idx_partner_subs_submitted  ON partner_submissions(submitted_at);
   `);
 
   // Migrations — add new columns to existing tables
@@ -83,6 +111,18 @@ function initializeSchema(database: Database.Database): void {
   try {
     database.exec(`ALTER TABLE linkedin_accounts ADD COLUMN person_urn TEXT NOT NULL DEFAULT ''`);
   } catch { /* already exists */ }
+
+  // Seed the VV-TEST123 customer key (idempotent)
+  try {
+    database
+      .prepare(
+        `INSERT OR IGNORE INTO customer_keys (id, key, customer_name, created_at, created_by, revoked)
+         VALUES (?, ?, ?, ?, ?, 0)`,
+      )
+      .run('seed-test-key-001', 'VV-TEST123', 'Test Customer', new Date().toISOString(), 'seed');
+  } catch (err) {
+    console.warn('[DB] Failed to seed test customer key:', err);
+  }
 
   console.log('[DB] Schema initialized successfully');
 }

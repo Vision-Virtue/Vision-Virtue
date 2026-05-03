@@ -160,25 +160,39 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     ckEnterBtn.disabled = true;
     ckError.textContent = '';
 
-    // (1) Phase 1 hardcoded test key
-    if (key === CK_TEST_KEY) {
-      grantAccess(key);
-      return;
-    }
-
-    // (2) Authorized Personnel master PIN also unlocks customer area
     try {
-      const res = await fetch(`${CK_BACKEND}/api/auth/verify-pin`, {
+      // (1) Try as a customer key
+      const cRes = await fetch(`${CK_BACKEND}/api/customer/auth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      });
+      if (cRes.ok) {
+        const cData = await cRes.json();
+        if (cData && cData.valid) {
+          sessionStorage.setItem('vv_customer_name', cData.customerName || '');
+          grantAccess(key);
+          return;
+        }
+      }
+
+      // (2) Master PIN fallback — Authorized Personnel can also enter the
+      // customer area (mapped to the seeded test customer for preview).
+      const pRes = await fetch(`${CK_BACKEND}/api/auth/verify-pin`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pin: key }),
       });
-      const data = await res.json();
-      if (data && data.valid) {
-        sessionStorage.setItem('vv_auth', '1');
-        grantAccess(key);
-        return;
+      if (pRes.ok) {
+        const pData = await pRes.json();
+        if (pData && pData.valid) {
+          sessionStorage.setItem('vv_auth', '1');
+          sessionStorage.setItem('vv_customer_name', 'Test Customer (admin preview)');
+          grantAccess(CK_TEST_KEY);
+          return;
+        }
       }
+
       ckError.textContent = 'Invalid Customer Key. Please try again.';
       ckKey.value = '';
       ckKey.focus();
