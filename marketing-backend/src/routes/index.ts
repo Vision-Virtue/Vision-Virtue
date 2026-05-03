@@ -3,6 +3,7 @@ import { contentController } from '../controllers/content.controller';
 import { linkedInController } from '../controllers/linkedin.controller';
 import { authController, verifyPin } from '../controllers/auth.controller';
 import { chatController } from '../controllers/chat.controller';
+import { partnerController } from '../controllers/partner.controller';
 import { requireRaphael, requireLinkedIn } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -140,6 +141,17 @@ router.post(
   '/chat/:agent',
   asyncHandler((req, res) => chatController.directChat(req, res)),
 );
+
+// ─── Partner Customer Area (Phase 2A) ────────────────────────────────────────
+
+// Validate a customer key and return basic info
+router.post('/customer/auth', (req, res) => partnerController.auth(req, res));
+
+// Submit a Customer's Questionnaire (header X-Customer-Key required)
+router.post('/submissions', (req, res) => partnerController.createSubmission(req, res));
+
+// List the authenticated customer's submissions
+router.get('/customer/me/submissions', (req, res) => partnerController.listMySubmissions(req, res));
 
 // ─── LinkedIn Routes ──────────────────────────────────────────────────────────
 

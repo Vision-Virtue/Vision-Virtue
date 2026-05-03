@@ -1,24 +1,60 @@
 /* ============================================================
    VISION & VIRTUE — Partner Customer Area
-   Phase 1: client-only. Submission is stored in localStorage.
-   Phase 2 will wire submit + status to the backend.
+   Phase 2: submissions live on the backend
+   (vv-marketing-api.onrender.com), keyed by customer key.
    ============================================================ */
+
+const PARTNER_API = 'https://vv-marketing-api.onrender.com';
 
 // ── Auth check: must have a customer key in sessionStorage ───
 if (sessionStorage.getItem('vv_customer_auth') !== '1') {
   window.location.replace('index.html');
 }
 
-// ── Storage keys ─────────────────────────────────────────────
-const LS_SUBMISSION = 'vv_partner_submission';
-// shape: { customerName, formData, status: 'review' | 'finalized', submittedAt, finalizedXlsxUrl? }
+// ── Cache the latest fetched submission to drive tile-click logic ──
+let _latestSubmission = null;
 
 // ── Sign Out ─────────────────────────────────────────────────
 document.getElementById('signOutBtn')?.addEventListener('click', () => {
   sessionStorage.removeItem('vv_customer_auth');
   sessionStorage.removeItem('vv_customer_key');
+  sessionStorage.removeItem('vv_customer_name');
   window.location.replace('index.html');
 });
+
+// ── API helpers ──────────────────────────────────────────────
+function customerKey() { return sessionStorage.getItem('vv_customer_key') || ''; }
+
+async function apiFetchMySubmissions() {
+  const key = customerKey();
+  if (!key) return [];
+  const res = await fetch(`${PARTNER_API}/api/customer/me/submissions`, {
+    headers: { 'X-Customer-Key': key },
+  });
+  if (res.status === 401) {
+    sessionStorage.clear();
+    window.location.replace('index.html');
+    return [];
+  }
+  if (!res.ok) throw new Error(`Failed to load submissions (${res.status})`);
+  const data = await res.json();
+  return Array.isArray(data.submissions) ? data.submissions : [];
+}
+
+async function apiSubmitQuestionnaire(customerName, formData) {
+  const key = customerKey();
+  if (!key) throw new Error('Missing customer key');
+  const res = await fetch(`${PARTNER_API}/api/submissions`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Customer-Key': key },
+    body: JSON.stringify({ customerName, formData }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Submission failed (${res.status}): ${body.slice(0, 200)}`);
+  }
+  return res.json();
+}
 
 // ── Navbar scroll effect ─────────────────────────────────────
 const navbar = document.getElementById('navbar');
@@ -53,22 +89,44 @@ function bindMoneyInputs(scope) {
   });
 }
 
-// ── Render submission state on tiles ─────────────────────────
-function renderTileState() {
-  const sub = readSubmission();
+// ── Render submission state on the Financial Model tile ──────
+async function renderTileState() {
   const statusEl = document.getElementById('statusFinancialModel');
-  const tile = document.getElementById('tileFinancialModel');
+  const tile     = document.getElementById('tileFinancialModel');
   if (!statusEl || !tile) return;
+
+  // Loading placeholder while we fetch
+  statusEl.innerHTML = '<span class="partner-status-pill partner-status-new">Loading…</span>';
+
+  let subs;
+  try { subs = await apiFetchMySubmissions(); }
+  catch (err) {
+    statusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Connection error — retry</span>';
+    return;
+  }
+
+  // Most recent submission drives the tile state
+  const sub = subs[0] || null;
+  _latestSubmission = sub;
+
+  // Welcome line uses the customer name we got from the auth response
+  const knownName = sessionStorage.getItem('vv_customer_name') || sub?.customerName || '';
+  if (knownName) {
+    const welcome = document.getElementById('partnerWelcome');
+    if (welcome) welcome.textContent = `Welcome, ${knownName}. Select a product below to view its status.`;
+  }
 
   if (!sub) {
     statusEl.innerHTML = '<span class="partner-status-pill partner-status-new">Get Started</span>';
     tile.classList.remove('is-review', 'is-finalized');
     return;
   }
-  if (sub.status === 'finalized' && sub.finalizedXlsxUrl) {
+
+  if (sub.status === 'finalized' && sub.hasFinalizedXlsx) {
+    // Phase 3 will surface a real download URL from the backend.
     statusEl.innerHTML = `
       <span class="partner-status-pill partner-status-finalized">Finalized</span>
-      <a class="partner-tile-download" href="${sub.finalizedXlsxUrl}" download="${(sub.customerName || 'Customer')} - Financial Model.xlsx">Download Model</a>
+      <a class="partner-tile-download" href="#" data-download-id="${sub.id}">Download Model</a>
     `;
     tile.classList.add('is-finalized');
     tile.classList.remove('is-review');
@@ -77,22 +135,6 @@ function renderTileState() {
     tile.classList.add('is-review');
     tile.classList.remove('is-finalized');
   }
-
-  // Update welcome line with the customer name if known
-  if (sub.customerName) {
-    const welcome = document.getElementById('partnerWelcome');
-    if (welcome) welcome.textContent = `Welcome, ${sub.customerName}. Select a product below to view its status.`;
-  }
-}
-
-function readSubmission() {
-  try {
-    const raw = localStorage.getItem(LS_SUBMISSION);
-    return raw ? JSON.parse(raw) : null;
-  } catch { return null; }
-}
-function writeSubmission(sub) {
-  localStorage.setItem(LS_SUBMISSION, JSON.stringify(sub));
 }
 
 // ── Tile click → questionnaire or status view ────────────────
@@ -103,12 +145,9 @@ const qForm    = document.getElementById('customerQuestionnaire');
 const qThanks  = document.getElementById('questionnaireThanks');
 
 tile?.addEventListener('click', () => {
-  const sub = readSubmission();
-  if (sub) {
-    // Already submitted — keep them on the products view (status pill already
-    // shown on the tile). In Phase 3, finalized state shows download link too.
-    return;
-  }
+  // If a submission already exists, keep them on the products view —
+  // the tile pill already shows status.
+  if (_latestSubmission) return;
   showQuestionnaire();
 });
 
@@ -425,7 +464,7 @@ function collectUnitCosts() {
 }
 
 // ── Submit ───────────────────────────────────────────────────
-qForm?.addEventListener('submit', e => {
+qForm?.addEventListener('submit', async e => {
   e.preventDefault();
   const name = (document.getElementById('qName')?.value || '').trim();
   if (!name) {
@@ -451,43 +490,33 @@ qForm?.addEventListener('submit', e => {
     ga_y2:   qForm.elements['fte_ga_y2']?.value   || '',
   };
 
-  const submission = {
-    customerName: name,
-    customerKey:  sessionStorage.getItem('vv_customer_key') || null,
-    submittedAt:  new Date().toISOString(),
-    status:       'review',
-    formData: {
-      general,
-      customers:  getCustomers(),
-      products:   getProducts(),
-      letsScale:  collectLetsScale(),
-      unitCosts:  collectUnitCosts(),
-      fte,
-    },
+  const formData = {
+    general,
+    customers: getCustomers(),
+    products:  getProducts(),
+    letsScale: collectLetsScale(),
+    unitCosts: collectUnitCosts(),
+    fte,
   };
-  writeSubmission(submission);
 
-  // Switch to thank-you view and update tile
-  qForm.hidden = true;
-  qThanks.hidden = false;
-  renderTileState();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  const submitBtn = qForm.querySelector('.partner-q-submit');
+  const originalText = submitBtn?.textContent;
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting…'; }
+
+  try {
+    await apiSubmitQuestionnaire(name, formData);
+    sessionStorage.setItem('vv_customer_name', name);
+    qForm.hidden = true;
+    qThanks.hidden = false;
+    await renderTileState();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (err) {
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalText || 'Submit Questionnaire'; }
+    alert('Submission failed. Please check your connection and try again.\n\n' + (err && err.message ? err.message : ''));
+  }
 });
 
-// ── Migrate / invalidate stale submissions across form upgrades ─
-// Old (pre-v5) submissions had top-level revenue arrays like
-// hw_customer / sw_customer / other_customer. They are not loadable
-// in the new form, so we wipe them so the customer can resubmit.
-function migrateStaleSubmission() {
-  const sub = readSubmission();
-  if (!sub || !sub.formData) return;
-  const hasNewShape = !!(sub.formData.customers || sub.formData.general);
-  const hasOldShape = !!(sub.formData.hw_customer || sub.formData.sw_customer || sub.formData.other_customer);
-  if (!hasNewShape && hasOldShape) {
-    localStorage.removeItem(LS_SUBMISSION);
-  }
-}
-migrateStaleSubmission();
-
 // ── Initial render ───────────────────────────────────────────
+// Clean up any leftover localStorage from Phase 1 (now backend-backed).
+try { localStorage.removeItem('vv_partner_submission'); } catch { /* ignore */ }
 renderTileState();
