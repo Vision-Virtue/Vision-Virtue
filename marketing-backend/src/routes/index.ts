@@ -148,7 +148,7 @@ router.post(
 router.post('/customer/auth', (req, res) => partnerController.auth(req, res));
 
 // Submit a Customer's Questionnaire (header X-Customer-Key required)
-router.post('/submissions', (req, res) => partnerController.createSubmission(req, res));
+router.post('/submissions', asyncHandler(async (req, res) => { await partnerController.createSubmission(req, res); }));
 
 // List the authenticated customer's submissions
 router.get('/customer/me/submissions', (req, res) => partnerController.listMySubmissions(req, res));
