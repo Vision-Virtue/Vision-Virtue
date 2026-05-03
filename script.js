@@ -220,3 +220,59 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     if (e.key === 'Escape' && ckOverlay.classList.contains('open')) closeCk();
   });
 })();
+
+// ---------- Authorized Personnel notification badge ----------
+// Fetches the count of pending partner submissions from the public
+// /api/notifications/pending-count endpoint and shows a small red bubble
+// on the Authorized Personnel button (and the mobile menu copy).
+(function setupAuthNotifBadge() {
+  const NOTIF_API   = 'https://vv-marketing-api.onrender.com';
+  const POLL_MS     = 60_000; // re-poll while the tab is open
+  const badge       = document.getElementById('authNotifBadge');
+  const badgeMobile = document.getElementById('authNotifBadgeMobile');
+  if (!badge && !badgeMobile) return;
+
+  function setCount(n) {
+    const display = n > 99 ? '99+' : String(n);
+    [badge, badgeMobile].forEach(el => {
+      if (!el) return;
+      if (n > 0) {
+        el.textContent = display;
+        el.hidden = false;
+      } else {
+        el.textContent = '';
+        el.hidden = true;
+      }
+    });
+  }
+
+  let timer = null;
+  async function refresh() {
+    try {
+      const res = await fetch(`${NOTIF_API}/api/notifications/pending-count`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      const n = Number.isFinite(data.pending) ? data.pending : 0;
+      setCount(n);
+    } catch {
+      // Silent — backend may be cold-starting; we'll try again on the next tick.
+    }
+  }
+
+  function start() {
+    refresh();
+    if (timer === null) timer = window.setInterval(refresh, POLL_MS);
+  }
+  function stop() {
+    if (timer !== null) { window.clearInterval(timer); timer = null; }
+  }
+
+  start();
+  // Pause polling while the tab is hidden, refresh immediately when it becomes visible again.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stop();
+    else start();
+  });
+})();

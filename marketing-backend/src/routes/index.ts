@@ -156,6 +156,11 @@ router.get('/customer/me/submissions', (req, res) => partnerController.listMySub
 // Customer downloads their own finalized xlsx
 router.get('/customer/me/submissions/:id/xlsx', (req, res) => partnerController.downloadMyXlsx(req, res));
 
+// Public count of pending submissions — used by the homepage notification
+// badge on the Authorized Personnel button. Returns just `{ pending: N }`,
+// no PII, so it doesn't need auth.
+router.get('/notifications/pending-count', (req, res) => partnerController.adminPendingCount(req, res));
+
 // ─── Admin (Raphael) — Partner Submissions ──────────────────────────────────
 // All admin endpoints require an X-Admin-Pin header matching ACCESS_CODE.
 
