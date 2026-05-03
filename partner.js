@@ -123,18 +123,48 @@ async function renderTileState() {
   }
 
   if (sub.status === 'finalized' && sub.hasFinalizedXlsx) {
-    // Phase 3 will surface a real download URL from the backend.
     statusEl.innerHTML = `
       <span class="partner-status-pill partner-status-finalized">Finalized</span>
-      <a class="partner-tile-download" href="#" data-download-id="${sub.id}">Download Model</a>
+      <button type="button" class="partner-tile-download" data-download-id="${sub.id}">Download Model</button>
     `;
     tile.classList.add('is-finalized');
     tile.classList.remove('is-review');
+    statusEl.querySelector('[data-download-id]')?.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      const btn = ev.currentTarget;
+      const orig = btn.textContent;
+      btn.disabled = true; btn.textContent = 'Downloading…';
+      try {
+        await downloadFinalizedXlsx(sub.id, sub.customerName);
+      } catch (err) {
+        alert('Download failed.\n\n' + (err && err.message ? err.message : ''));
+      } finally {
+        btn.disabled = false; btn.textContent = orig;
+      }
+    });
   } else {
     statusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Under Vision’s Review</span>';
     tile.classList.add('is-review');
     tile.classList.remove('is-finalized');
   }
+}
+
+async function downloadFinalizedXlsx(submissionId, customerName) {
+  const key = customerKey();
+  const res = await fetch(`${PARTNER_API}/api/customer/me/submissions/${encodeURIComponent(submissionId)}/xlsx`, {
+    headers: { 'X-Customer-Key': key },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`HTTP ${res.status} ${text.slice(0, 160)}`);
+  }
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `${customerName || 'Customer'} - Financial Model.xlsx`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
 
 // ── Tile click → questionnaire or status view ────────────────

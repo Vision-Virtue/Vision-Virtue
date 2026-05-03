@@ -6,7 +6,9 @@
    ============================================================ */
 
 import { Request, Response } from 'express';
+import path from 'path';
 import { customerKeyRepo, partnerSubmissionRepo, CustomerKeyRow } from '../db/partner.repository';
+import { generateFinalizedXlsx, resolveStoredXlsx } from '../services/partner-xlsx.service';
 import { z } from 'zod';
 
 // ─── Request validation schemas ──────────────────────────────────────────────
@@ -117,4 +119,191 @@ export const partnerController = {
     }));
     res.json({ submissions: safe });
   },
+
+  /**
+   * GET /api/customer/me/submissions/:id/xlsx
+   * Header: X-Customer-Key
+   * Streams the finalized xlsx for one of the customer's own submissions.
+   */
+  downloadMyXlsx(req: Request, res: Response): void {
+    const keyRow = resolveCustomerKey(req);
+    if (!keyRow) { send401(res, 'Missing or invalid customer key.'); return; }
+
+    const sub = partnerSubmissionRepo.getById(req.params.id);
+    if (!sub || sub.customerKeyId !== keyRow.id) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
+      return;
+    }
+    if (sub.status !== 'finalized' || !sub.finalizedXlsxPath) {
+      res.status(409).json({ error: { code: 'NOT_FINALIZED', message: 'Submission has not been finalized yet.' } });
+      return;
+    }
+    const abs = resolveStoredXlsx(sub.finalizedXlsxPath);
+    if (!abs) {
+      res.status(410).json({ error: { code: 'FILE_GONE', message: 'The finalized file is no longer available on disk.' } });
+      return;
+    }
+    const downloadName = `${sub.customerName || 'Customer'} - Financial Model.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName.replace(/"/g, '')}"`);
+    res.sendFile(abs);
+  },
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Admin (Raphael) endpoints — protected by requireAdminPin middleware.
+  // ────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * GET /api/admin/submissions
+   * List every submission with its full form data (newest first).
+   */
+  adminListSubmissions(_req: Request, res: Response): void {
+    const subs = partnerSubmissionRepo.listAll();
+    res.json({
+      submissions: subs.map(s => ({
+        id:                s.id,
+        customerKeyId:     s.customerKeyId,
+        customerName:      s.customerName,
+        status:            s.status,
+        submittedAt:       s.submittedAt,
+        finalizedAt:       s.finalizedAt,
+        hasFinalizedXlsx:  !!s.finalizedXlsxPath,
+        formData:          s.formData,
+      })),
+    });
+  },
+
+  /**
+   * GET /api/admin/submissions/:id
+   * Single submission with full form data.
+   */
+  adminGetSubmission(req: Request, res: Response): void {
+    const sub = partnerSubmissionRepo.getById(req.params.id);
+    if (!sub) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
+      return;
+    }
+    res.json({
+      submission: {
+        id:                sub.id,
+        customerKeyId:     sub.customerKeyId,
+        customerName:      sub.customerName,
+        status:            sub.status,
+        submittedAt:       sub.submittedAt,
+        finalizedAt:       sub.finalizedAt,
+        hasFinalizedXlsx:  !!sub.finalizedXlsxPath,
+        formData:          sub.formData,
+      },
+    });
+  },
+
+  /**
+   * POST /api/admin/submissions/:id/finalize
+   * Generates the personalized xlsx, marks the submission finalized,
+   * and returns the new state.
+   */
+  async adminFinalize(req: Request, res: Response): Promise<void> {
+    const sub = partnerSubmissionRepo.getById(req.params.id);
+    if (!sub) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
+      return;
+    }
+
+    let result;
+    try {
+      result = await generateFinalizedXlsx(sub.id, sub.customerName, sub.formData as never);
+    } catch (err) {
+      console.error('[partner] xlsx generation failed:', err);
+      res.status(500).json({
+        error: {
+          code: 'XLSX_GENERATION_FAILED',
+          message: err instanceof Error ? err.message : 'xlsx generation failed.',
+        },
+      });
+      return;
+    }
+
+    // Store just the file name (not the absolute path) so the file location
+    // is resolved through resolveStoredXlsx() at download time.
+    const updated = partnerSubmissionRepo.finalize(sub.id, result.fileName, null);
+    res.json({
+      submission: {
+        id:               updated?.id,
+        status:           updated?.status,
+        finalizedAt:      updated?.finalizedAt,
+        hasFinalizedXlsx: !!updated?.finalizedXlsxPath,
+      },
+    });
+  },
+
+  /**
+   * GET /api/admin/submissions/:id/xlsx
+   * Streams the finalized xlsx (admin / Raphael view).
+   */
+  adminDownloadXlsx(req: Request, res: Response): void {
+    const sub = partnerSubmissionRepo.getById(req.params.id);
+    if (!sub) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
+      return;
+    }
+    if (sub.status !== 'finalized' || !sub.finalizedXlsxPath) {
+      res.status(409).json({ error: { code: 'NOT_FINALIZED', message: 'Submission has not been finalized yet.' } });
+      return;
+    }
+    const abs = resolveStoredXlsx(sub.finalizedXlsxPath);
+    if (!abs) {
+      res.status(410).json({ error: { code: 'FILE_GONE', message: 'The finalized file is no longer available on disk.' } });
+      return;
+    }
+    const downloadName = `${sub.customerName || 'Customer'} - Financial Model.xlsx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName.replace(/"/g, '')}"`);
+    res.sendFile(abs);
+  },
+
+  /**
+   * GET /api/admin/notifications/count
+   * Used by the homepage badge — returns count of pending submissions.
+   */
+  adminPendingCount(_req: Request, res: Response): void {
+    res.json({ pending: partnerSubmissionRepo.countPending() });
+  },
+
+  /**
+   * POST /api/admin/customer-keys
+   * Body: { customerName }   →  generates a new VV-XXXXXX key.
+   */
+  adminCreateKey(req: Request, res: Response): void {
+    const parsed = z.object({ customerName: z.string().trim().min(1).max(200) }).safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'customerName is required.' } });
+      return;
+    }
+    const row = customerKeyRepo.create({ customerName: parsed.data.customerName });
+    res.status(201).json({
+      id:           row.id,
+      key:          row.key,
+      customerName: row.customer_name,
+      createdAt:    row.created_at,
+    });
+  },
+
+  /**
+   * GET /api/admin/customer-keys
+   */
+  adminListKeys(_req: Request, res: Response): void {
+    const rows = customerKeyRepo.list();
+    res.json({
+      keys: rows.map(r => ({
+        id:           r.id,
+        key:          r.key,
+        customerName: r.customer_name,
+        createdAt:    r.created_at,
+        revoked:      r.revoked === 1,
+      })),
+    });
+  },
 };
+
+// Silence unused-import warning when path lib isn't used anywhere else.
+void path;
