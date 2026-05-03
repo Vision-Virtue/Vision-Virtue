@@ -275,7 +275,7 @@ async function sendMessage() {
 }
 
 // ── Claude API call — routed through V&V backend (no CORS issues) ────────────
-const BACKEND_URL = 'https://vv-marketing-api.onrender.com';
+// (BACKEND_URL is declared at the top of this file)
 
 async function callClaude(agentKey, messages) {
   // messages is the full history including the latest user message at the end
@@ -2680,3 +2680,263 @@ async function generatePptxDeck(d) {
   // Write and return as Blob
   return pptx.write({ outputType: 'blob' });
 }
+
+/* ============================================================
+   PARTNER CUSTOMER SUBMISSIONS — Raphael's review panel
+   ============================================================ */
+(function partnerSubsPanel() {
+  const list    = document.getElementById('partnerSubsList');
+  const summary = document.getElementById('partnerSubsSummary');
+  const refresh = document.getElementById('partnerSubsRefresh');
+  if (!list || !summary || !refresh) return;
+
+  const API = 'https://vv-marketing-api.onrender.com';
+
+  function adminPin() { return sessionStorage.getItem('vv_admin_pin') || ''; }
+  function adminHeaders() {
+    return { 'Content-Type': 'application/json', 'X-Admin-Pin': adminPin() };
+  }
+
+  function fmtDate(iso) {
+    if (!iso) return '';
+    try {
+      const d = new Date(iso);
+      return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+    } catch { return iso; }
+  }
+
+  function htmlEsc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function renderSummary(rows) {
+    const total     = rows.length;
+    const review    = rows.filter(r => r.status === 'review').length;
+    const finalized = rows.filter(r => r.status === 'finalized').length;
+    summary.textContent = total === 0
+      ? 'No submissions yet.'
+      : `${total} folder${total === 1 ? '' : 's'} — ${review} pending review · ${finalized} finalized`;
+  }
+
+  function renderEmpty() {
+    list.innerHTML = '<div class="partner-subs-empty">No customer submissions yet. Folders appear here as soon as a partner customer submits the Customer’s Questionnaire.</div>';
+  }
+
+  function renderTable(formData) {
+    const fd = formData && typeof formData === 'object' ? formData : {};
+    const g  = fd.general || {};
+    const customers = Array.isArray(fd.customers) ? fd.customers : [];
+    const products  = Array.isArray(fd.products)  ? fd.products  : [];
+    const letsScale = Array.isArray(fd.letsScale) ? fd.letsScale : [];
+    const unitCosts = Array.isArray(fd.unitCosts) ? fd.unitCosts : [];
+    const fte = fd.fte || {};
+
+    const generalRows = `
+      <tr><td>Sector</td><td>${htmlEsc(g.sector)}</td></tr>
+      <tr><td>Round</td><td>${htmlEsc(g.round)}</td></tr>
+      <tr><td>Capital Raise Goal</td><td>${htmlEsc(g.capitalGoal)}</td></tr>
+      <tr><td>Avg. Years Since Foundation</td><td>${htmlEsc(g.yearsSinceFound)}</td></tr>
+      <tr><td>First Year of Financial Model</td><td>${htmlEsc(g.firstYear)}</td></tr>
+    `;
+
+    const custRows = customers.length === 0
+      ? '<tr><td colspan="3" class="partner-subs-empty-row">No customers</td></tr>'
+      : customers.map(c => `
+          <tr><td>${htmlEsc(c.name)}</td><td>${htmlEsc(c.type)}</td><td>${htmlEsc(c.territory)}</td></tr>
+        `).join('');
+
+    const prodRows = products.length === 0
+      ? '<tr><td colspan="3" class="partner-subs-empty-row">No products</td></tr>'
+      : products.map(p => `
+          <tr><td>${htmlEsc(p.name)}</td><td>${htmlEsc(p.revenueType)}</td><td>${htmlEsc(p.price)}</td></tr>
+        `).join('');
+
+    const lsRows = letsScale.length === 0
+      ? '<tr><td colspan="11" class="partner-subs-empty-row">No deployment plan rows</td></tr>'
+      : letsScale.map(l => `
+          <tr>
+            <td>${htmlEsc(l.customerName)}</td><td>${htmlEsc(l.type)}</td><td>${htmlEsc(l.territory)}</td>
+            <td>${htmlEsc(l.productName)}</td><td>${htmlEsc(l.revenueType)}</td><td>${htmlEsc(l.price)}</td>
+            <td>${htmlEsc(l.q1)}</td><td>${htmlEsc(l.q2)}</td><td>${htmlEsc(l.q3)}</td><td>${htmlEsc(l.q4)}</td>
+            <td>${htmlEsc(l.y2)}</td>
+          </tr>
+        `).join('');
+
+    const ucRows = unitCosts.length === 0
+      ? '<tr><td colspan="2" class="partner-subs-empty-row">No unit costs</td></tr>'
+      : unitCosts.map(u => `
+          <tr><td>${htmlEsc(u.productName)}</td><td>${htmlEsc(u.cost)}</td></tr>
+        `).join('');
+
+    return `
+      <div class="partner-subs-detail">
+        <h5>General</h5>
+        <table class="partner-subs-table"><tbody>${generalRows}</tbody></table>
+
+        <h5>6.a Customers</h5>
+        <table class="partner-subs-table">
+          <thead><tr><th>Name</th><th>Type</th><th>Territory</th></tr></thead>
+          <tbody>${custRows}</tbody>
+        </table>
+
+        <h5>6.b Products</h5>
+        <table class="partner-subs-table">
+          <thead><tr><th>Name</th><th>Revenue Type</th><th>Price</th></tr></thead>
+          <tbody>${prodRows}</tbody>
+        </table>
+
+        <h5>7. Let's Scale</h5>
+        <div class="partner-subs-table-wrap">
+          <table class="partner-subs-table">
+            <thead><tr>
+              <th>Customer</th><th>Type</th><th>Territory</th>
+              <th>Product</th><th>Rev. Type</th><th>Price</th>
+              <th>Q1</th><th>Q2</th><th>Q3</th><th>Q4</th><th>Y+1</th>
+            </tr></thead>
+            <tbody>${lsRows}</tbody>
+          </table>
+        </div>
+
+        <h5>8. Unit Costs</h5>
+        <table class="partner-subs-table">
+          <thead><tr><th>Product</th><th>Unit Cost</th></tr></thead>
+          <tbody>${ucRows}</tbody>
+        </table>
+
+        <h5>9. FTE Headcount</h5>
+        <table class="partner-subs-table">
+          <thead><tr><th>P&amp;L Section</th><th>Year 1</th><th>Year 2</th></tr></thead>
+          <tbody>
+            <tr><td>COGS</td><td>${htmlEsc(fte.cogs_y1)}</td><td>${htmlEsc(fte.cogs_y2)}</td></tr>
+            <tr><td>R&amp;D</td><td>${htmlEsc(fte.rd_y1)}</td><td>${htmlEsc(fte.rd_y2)}</td></tr>
+            <tr><td>S&amp;M</td><td>${htmlEsc(fte.sm_y1)}</td><td>${htmlEsc(fte.sm_y2)}</td></tr>
+            <tr><td>G&amp;A</td><td>${htmlEsc(fte.ga_y1)}</td><td>${htmlEsc(fte.ga_y2)}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  function renderFolder(sub) {
+    const isFinal = sub.status === 'finalized';
+    const pillCls = isFinal ? 'partner-status-finalized' : 'partner-status-review';
+    const pillTxt = isFinal ? 'Finalized' : 'Under Vision’s Review';
+
+    const card = document.createElement('div');
+    card.className = 'partner-subs-folder';
+    card.dataset.subId = sub.id;
+    card.innerHTML = `
+      <button type="button" class="partner-subs-folder-head" aria-expanded="false">
+        <svg class="partner-subs-folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+        <div class="partner-subs-folder-meta">
+          <div class="partner-subs-folder-name">${htmlEsc(sub.customerName) || '(no name)'}</div>
+          <div class="partner-subs-folder-sub">Submitted ${htmlEsc(fmtDate(sub.submittedAt))}${sub.finalizedAt ? ' · Finalized ' + htmlEsc(fmtDate(sub.finalizedAt)) : ''}</div>
+        </div>
+        <span class="partner-status-pill ${pillCls}">${pillTxt}</span>
+        <span class="partner-subs-folder-caret">▾</span>
+      </button>
+      <div class="partner-subs-folder-body" hidden>
+        ${renderTable(sub.formData)}
+        <div class="partner-subs-folder-actions">
+          ${isFinal
+            ? `<button type="button" class="partner-subs-action partner-subs-download" data-action="download">⬇ Download Generated Model</button>`
+            : `<button type="button" class="partner-subs-action partner-subs-finalize" data-action="finalize">Finalize</button>`
+          }
+        </div>
+      </div>
+    `;
+
+    const head = card.querySelector('.partner-subs-folder-head');
+    const body = card.querySelector('.partner-subs-folder-body');
+    head.addEventListener('click', () => {
+      const isOpen = head.getAttribute('aria-expanded') === 'true';
+      head.setAttribute('aria-expanded', String(!isOpen));
+      body.hidden = isOpen;
+    });
+
+    card.querySelector('[data-action="finalize"]')?.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      const btn = ev.currentTarget;
+      const original = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Finalizing…';
+      try {
+        const res = await fetch(`${API}/api/admin/submissions/${encodeURIComponent(sub.id)}/finalize`, {
+          method: 'POST',
+          headers: adminHeaders(),
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error(`HTTP ${res.status} ${text.slice(0, 160)}`);
+        }
+        await loadSubmissions();
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = original;
+        alert('Finalize failed.\n\n' + (err && err.message ? err.message : ''));
+      }
+    });
+
+    card.querySelector('[data-action="download"]')?.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      const btn = ev.currentTarget;
+      const original = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Downloading…';
+      try {
+        const res = await fetch(`${API}/api/admin/submissions/${encodeURIComponent(sub.id)}/xlsx`, {
+          headers: { 'X-Admin-Pin': adminPin() },
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error(`HTTP ${res.status} ${text.slice(0, 160)}`);
+        }
+        const blob = await res.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url;
+        a.download = `${sub.customerName || 'Customer'} - Financial Model.xlsx`;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      } catch (err) {
+        alert('Download failed.\n\n' + (err && err.message ? err.message : ''));
+      } finally {
+        btn.disabled = false;
+        btn.textContent = original;
+      }
+    });
+
+    return card;
+  }
+
+  async function loadSubmissions() {
+    list.innerHTML = '';
+    summary.textContent = 'Loading…';
+    try {
+      const res = await fetch(`${API}/api/admin/submissions`, {
+        headers: { 'X-Admin-Pin': adminPin() },
+      });
+      if (!res.ok) {
+        summary.textContent = `Failed to load submissions (${res.status})`;
+        return;
+      }
+      const data = await res.json();
+      const rows = Array.isArray(data.submissions) ? data.submissions : [];
+      renderSummary(rows);
+      if (rows.length === 0) { renderEmpty(); return; }
+      const frag = document.createDocumentFragment();
+      rows.forEach(s => frag.appendChild(renderFolder(s)));
+      list.appendChild(frag);
+    } catch (err) {
+      summary.textContent = 'Connection error — could not reach the API.';
+      console.warn('[partner-subs]', err);
+    }
+  }
+
+  refresh.addEventListener('click', loadSubmissions);
+  loadSubmissions();
+})();

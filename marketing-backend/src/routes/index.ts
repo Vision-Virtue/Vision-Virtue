@@ -4,7 +4,7 @@ import { linkedInController } from '../controllers/linkedin.controller';
 import { authController, verifyPin } from '../controllers/auth.controller';
 import { chatController } from '../controllers/chat.controller';
 import { partnerController } from '../controllers/partner.controller';
-import { requireRaphael, requireLinkedIn } from '../middleware/auth.middleware';
+import { requireRaphael, requireLinkedIn, requireAdminPin } from '../middleware/auth.middleware';
 
 const router = Router();
 
@@ -152,6 +152,48 @@ router.post('/submissions', (req, res) => partnerController.createSubmission(req
 
 // List the authenticated customer's submissions
 router.get('/customer/me/submissions', (req, res) => partnerController.listMySubmissions(req, res));
+
+// Customer downloads their own finalized xlsx
+router.get('/customer/me/submissions/:id/xlsx', (req, res) => partnerController.downloadMyXlsx(req, res));
+
+// ─── Admin (Raphael) — Partner Submissions ──────────────────────────────────
+// All admin endpoints require an X-Admin-Pin header matching ACCESS_CODE.
+
+router.get(
+  '/admin/submissions',
+  requireAdminPin,
+  (req, res) => partnerController.adminListSubmissions(req, res),
+);
+router.get(
+  '/admin/submissions/:id',
+  requireAdminPin,
+  (req, res) => partnerController.adminGetSubmission(req, res),
+);
+router.post(
+  '/admin/submissions/:id/finalize',
+  requireAdminPin,
+  asyncHandler(async (req, res) => { await partnerController.adminFinalize(req, res); }),
+);
+router.get(
+  '/admin/submissions/:id/xlsx',
+  requireAdminPin,
+  (req, res) => partnerController.adminDownloadXlsx(req, res),
+);
+router.get(
+  '/admin/notifications/count',
+  requireAdminPin,
+  (req, res) => partnerController.adminPendingCount(req, res),
+);
+router.post(
+  '/admin/customer-keys',
+  requireAdminPin,
+  (req, res) => partnerController.adminCreateKey(req, res),
+);
+router.get(
+  '/admin/customer-keys',
+  requireAdminPin,
+  (req, res) => partnerController.adminListKeys(req, res),
+);
 
 // ─── LinkedIn Routes ──────────────────────────────────────────────────────────
 

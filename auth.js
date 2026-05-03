@@ -117,6 +117,9 @@ async function tryAuth() {
 
     const target = apEnterBtn.dataset.target;
     sessionStorage.setItem('vv_auth', '1');
+    // Stash the verified PIN so admin-only API calls (e.g. partner submissions
+    // panel) can include it in the X-Admin-Pin header without re-prompting.
+    sessionStorage.setItem('vv_admin_pin', pin);
     closeGate();
     window.location.href = target === 'marketing' ? 'marketing.html' : 'agents.html';
   } catch {
@@ -127,6 +130,4 @@ async function tryAuth() {
 }
 
 apEnterBtn.addEventListener('click', tryAuth);
-[apPin, apKey].forEach(el =>
-  el.addEventListener('keydown', e => { if (e.key === 'Enter') tryAuth(); })
-);
+apPin.addEventListener('keydown', e => { if (e.key === 'Enter') tryAuth(); });

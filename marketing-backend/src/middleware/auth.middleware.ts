@@ -79,6 +79,37 @@ export function requireRaphael(req: Request, res: Response, next: NextFunction):
   next();
 }
 
+// ─── Require Admin PIN (Authorized Personnel) ─────────────────────────────────
+//
+// Protects admin/Raphael endpoints. Reads the master PIN from the
+// X-Admin-Pin header and constant-time compares against ACCESS_CODE.
+
+export function requireAdminPin(req: Request, res: Response, next: NextFunction): void {
+  const expected = process.env.ACCESS_CODE;
+  if (!expected) {
+    res.status(500).json({
+      error: { code: 'NOT_CONFIGURED', message: 'ACCESS_CODE is not configured on the server.' },
+    });
+    return;
+  }
+  const provided = req.header('x-admin-pin');
+  if (!provided) {
+    res.status(401).json({
+      error: { code: 'ADMIN_PIN_REQUIRED', message: 'X-Admin-Pin header is required.' },
+    });
+    return;
+  }
+  const a = createHash('sha256').update(provided).digest();
+  const b = createHash('sha256').update(expected).digest();
+  if (!timingSafeEqual(a, b)) {
+    res.status(403).json({
+      error: { code: 'ADMIN_PIN_INVALID', message: 'Invalid admin PIN.' },
+    });
+    return;
+  }
+  next();
+}
+
 // ─── Global Error Handler ─────────────────────────────────────────────────────
 
 export function errorHandler(
