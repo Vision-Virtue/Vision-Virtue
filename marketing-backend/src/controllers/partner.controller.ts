@@ -252,6 +252,39 @@ export const partnerController = {
   },
 
   /**
+   * POST /api/admin/submissions/:id/generate-xlsx
+   * Manually (re)generates the personalized xlsx without changing status.
+   * Useful for older submissions whose xlsx wasn't created at submit time,
+   * or to refresh after a template/cell-mapping fix.
+   */
+  async adminGenerateXlsx(req: Request, res: Response): Promise<void> {
+    const sub = partnerSubmissionRepo.getById(req.params.id);
+    if (!sub) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
+      return;
+    }
+    try {
+      const result  = await generateFinalizedXlsx(sub.id, sub.customerName, sub.formData as never);
+      const updated = partnerSubmissionRepo.setXlsxPath(sub.id, result.fileName);
+      res.json({
+        submission: {
+          id:      updated?.id,
+          status:  updated?.status,
+          hasXlsx: !!updated?.finalizedXlsxPath,
+        },
+      });
+    } catch (err) {
+      console.error('[partner] xlsx generation failed:', err);
+      res.status(500).json({
+        error: {
+          code: 'XLSX_GENERATION_FAILED',
+          message: err instanceof Error ? err.message : 'xlsx generation failed.',
+        },
+      });
+    }
+  },
+
+  /**
    * GET /api/admin/submissions/:id/xlsx
    * Streams the generated xlsx for any submission (admin / Raphael view).
    * Available regardless of status because the xlsx is created on submit.

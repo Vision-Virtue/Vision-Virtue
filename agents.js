@@ -2728,11 +2728,11 @@ async function generatePptxDeck(d) {
     const isFinal = sub.status === 'finalized';
     const xlsxReady = sub.hasXlsx === true;
 
-    // Excel row actions: Download (always when xlsx exists) + Finalize (only when not finalized)
+    // Excel row actions: Download (when xlsx exists) or Generate (when missing) + Finalize/Finalized
     const excelActions = `
       ${xlsxReady
         ? `<button type="button" class="partner-subs-action partner-subs-download" data-action="download" data-product="excel">⬇ Download</button>`
-        : `<span class="partner-subs-action-disabled">xlsx not ready</span>`}
+        : `<button type="button" class="partner-subs-action partner-subs-generate" data-action="generate">Generate xlsx</button>`}
       ${isFinal
         ? `<span class="partner-status-pill partner-status-finalized">Finalized</span>`
         : `<button type="button" class="partner-subs-action partner-subs-finalize" data-action="finalize">Finalize</button>`}
@@ -2826,6 +2826,29 @@ async function generatePptxDeck(d) {
         btn.disabled = false;
         btn.textContent = original;
         alert('Finalize failed.\n\n' + (err && err.message ? err.message : ''));
+      }
+    });
+
+    card.querySelector('[data-action="generate"]')?.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      const btn = ev.currentTarget;
+      const original = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Generating…';
+      try {
+        const res = await fetch(`${API}/api/admin/submissions/${encodeURIComponent(sub.id)}/generate-xlsx`, {
+          method: 'POST',
+          headers: adminHeaders(),
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error(`HTTP ${res.status} ${text.slice(0, 200)}`);
+        }
+        await loadSubmissions();
+      } catch (err) {
+        btn.disabled = false;
+        btn.textContent = original;
+        alert('Generate xlsx failed.\n\n' + (err && err.message ? err.message : ''));
       }
     });
 

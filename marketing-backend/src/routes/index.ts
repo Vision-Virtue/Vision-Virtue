@@ -179,6 +179,11 @@ router.post(
   requireAdminPin,
   asyncHandler(async (req, res) => { await partnerController.adminFinalize(req, res); }),
 );
+router.post(
+  '/admin/submissions/:id/generate-xlsx',
+  requireAdminPin,
+  asyncHandler(async (req, res) => { await partnerController.adminGenerateXlsx(req, res); }),
+);
 router.get(
   '/admin/submissions/:id/xlsx',
   requireAdminPin,

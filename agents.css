@@ -1447,3 +1447,13 @@
   color: rgba(255, 255, 255, 0.45);
   font-style: italic;
 }
+
+.partner-subs-generate {
+  background: rgba(58, 107, 196, 0.20);
+  color: #9bbdf2;
+  border: 1px solid rgba(58, 107, 196, 0.4);
+}
+.partner-subs-generate:hover:not(:disabled) {
+  background: rgba(58, 107, 196, 0.32);
+  transform: translateY(-1px);
+}
