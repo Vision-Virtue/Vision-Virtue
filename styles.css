@@ -242,6 +242,45 @@ body {
   transform: rotate(180deg);
 }
 
+/* ── Notification badge on Authorized Personnel button ─────── */
+.nav-auth-btn { position: relative; }
+
+.auth-notif-badge {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: #d43d3d;
+  color: #fff;
+  font-family: var(--font-sans);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 18px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--navy-900, #0a1226);
+  animation: auth-notif-pulse 2s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.auth-notif-badge-mobile {
+  position: relative;
+  top: 0;
+  right: 0;
+  margin-left: 0.6rem;
+  display: inline-block;
+  vertical-align: middle;
+  box-shadow: none;
+}
+
+@keyframes auth-notif-pulse {
+  0%, 100% { box-shadow: 0 0 0 2px var(--navy-900, #0a1226), 0 0 0 0 rgba(212, 61, 61, 0.55); }
+  50%      { box-shadow: 0 0 0 2px var(--navy-900, #0a1226), 0 0 0 6px rgba(212, 61, 61, 0); }
+}
+
 /* ── Dropdown panel ── */
 .auth-dropdown {
   position: absolute;
