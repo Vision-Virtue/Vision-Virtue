@@ -81,8 +81,14 @@ export function requireRaphael(req: Request, res: Response, next: NextFunction):
 
 // ─── Require Admin PIN (Authorized Personnel) ─────────────────────────────────
 //
-// Protects admin/Raphael endpoints. Reads the master PIN from the
-// X-Admin-Pin header and constant-time compares against ACCESS_CODE.
+// Protects admin/Raphael endpoints. Reads the master PIN from either the
+// X-Admin-Pin header OR the ?pin= query parameter (whichever is present),
+// and constant-time compares against ACCESS_CODE.
+//
+// Accepting the PIN via query parameter lets the frontend send "simple"
+// CORS requests (no custom headers, no JSON body) which avoids the
+// preflight roundtrip — preflights have been intermittently failing
+// from some browser/proxy combos.
 
 export function requireAdminPin(req: Request, res: Response, next: NextFunction): void {
   const expected = process.env.ACCESS_CODE;
@@ -92,10 +98,12 @@ export function requireAdminPin(req: Request, res: Response, next: NextFunction)
     });
     return;
   }
-  const provided = req.header('x-admin-pin');
+  const headerPin = req.header('x-admin-pin') || '';
+  const queryPin  = typeof req.query.pin === 'string' ? req.query.pin : '';
+  const provided  = headerPin || queryPin;
   if (!provided) {
     res.status(401).json({
-      error: { code: 'ADMIN_PIN_REQUIRED', message: 'X-Admin-Pin header is required.' },
+      error: { code: 'ADMIN_PIN_REQUIRED', message: 'Admin PIN is required.' },
     });
     return;
   }

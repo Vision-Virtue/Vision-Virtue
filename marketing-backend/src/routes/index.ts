@@ -162,7 +162,17 @@ router.get('/customer/me/submissions/:id/xlsx', (req, res) => partnerController.
 router.get('/notifications/pending-count', (req, res) => partnerController.adminPendingCount(req, res));
 
 // ─── Admin (Raphael) — Partner Submissions ──────────────────────────────────
-// All admin endpoints require an X-Admin-Pin header matching ACCESS_CODE.
+// All admin endpoints require X-Admin-Pin header OR ?pin= query (matching
+// ACCESS_CODE). Query-param form lets the frontend send simple CORS
+// requests with no preflight.
+
+// Self-test: a tiny endpoint that just confirms the admin PIN is good.
+// Used by the frontend / for manual diagnosis.
+router.get(
+  '/admin/me',
+  requireAdminPin,
+  (_req, res) => res.json({ ok: true, role: 'admin' }),
+);
 
 router.get(
   '/admin/submissions',

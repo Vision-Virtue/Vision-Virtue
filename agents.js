@@ -2693,8 +2693,11 @@ async function generatePptxDeck(d) {
   const API = 'https://vv-marketing-api.onrender.com';
 
   function adminPin() { return sessionStorage.getItem('vv_admin_pin') || ''; }
-  function adminHeaders() {
-    return { 'Content-Type': 'application/json', 'X-Admin-Pin': adminPin() };
+  // Build an admin URL with the PIN as a query param. Avoids custom headers
+  // and JSON content-type so requests stay "simple" (no CORS preflight).
+  function adminUrl(path) {
+    const sep = path.includes('?') ? '&' : '?';
+    return `${API}${path}${sep}pin=${encodeURIComponent(adminPin())}`;
   }
 
   function fmtDate(iso) {
@@ -2813,9 +2816,8 @@ async function generatePptxDeck(d) {
       btn.disabled = true;
       btn.textContent = 'Finalizing…';
       try {
-        const res = await fetch(`${API}/api/admin/submissions/${encodeURIComponent(sub.id)}/finalize`, {
+        const res = await fetch(adminUrl(`/api/admin/submissions/${encodeURIComponent(sub.id)}/finalize`), {
           method: 'POST',
-          headers: adminHeaders(),
         });
         if (!res.ok) {
           const text = await res.text().catch(() => '');
@@ -2836,9 +2838,8 @@ async function generatePptxDeck(d) {
       btn.disabled = true;
       btn.textContent = 'Generating…';
       try {
-        const res = await fetch(`${API}/api/admin/submissions/${encodeURIComponent(sub.id)}/generate-xlsx`, {
+        const res = await fetch(adminUrl(`/api/admin/submissions/${encodeURIComponent(sub.id)}/generate-xlsx`), {
           method: 'POST',
-          headers: adminHeaders(),
         });
         if (!res.ok) {
           const text = await res.text().catch(() => '');
@@ -2859,9 +2860,7 @@ async function generatePptxDeck(d) {
       btn.disabled = true;
       btn.textContent = 'Downloading…';
       try {
-        const res = await fetch(`${API}/api/admin/submissions/${encodeURIComponent(sub.id)}/xlsx`, {
-          headers: { 'X-Admin-Pin': adminPin() },
-        });
+        const res = await fetch(adminUrl(`/api/admin/submissions/${encodeURIComponent(sub.id)}/xlsx`));
         if (!res.ok) {
           const text = await res.text().catch(() => '');
           throw new Error(`HTTP ${res.status} ${text.slice(0, 160)}`);
@@ -2888,9 +2887,7 @@ async function generatePptxDeck(d) {
     list.innerHTML = '';
     summary.textContent = 'Loading…';
     try {
-      const res = await fetch(`${API}/api/admin/submissions`, {
-        headers: { 'X-Admin-Pin': adminPin() },
-      });
+      const res = await fetch(adminUrl('/api/admin/submissions'));
       if (!res.ok) {
         summary.textContent = `Failed to load submissions (${res.status})`;
         return;
