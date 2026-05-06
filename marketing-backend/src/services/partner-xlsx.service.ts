@@ -147,7 +147,26 @@ export interface PopulateResult {
   fileName: string;
 }
 
-export async function generateFinalizedXlsx(
+// Loading the v5 template peaks a few hundred MB on Render's 512 MB Starter
+// instance. Two parallel generations are enough to exceed V8's heap limit and
+// crash the worker (FATAL ERROR: Reached heap limit). Serialize all calls
+// through a single chain so concurrent requests queue instead of racing.
+let xlsxQueue: Promise<unknown> = Promise.resolve();
+
+export function generateFinalizedXlsx(
+  submissionId: string,
+  customerName: string,
+  formData: SubmissionFormData,
+): Promise<PopulateResult> {
+  const next = xlsxQueue.then(
+    () => generateFinalizedXlsxImpl(submissionId, customerName, formData),
+    () => generateFinalizedXlsxImpl(submissionId, customerName, formData),
+  );
+  xlsxQueue = next.catch(() => undefined);
+  return next;
+}
+
+async function generateFinalizedXlsxImpl(
   submissionId: string,
   customerName: string,
   formData: SubmissionFormData,
@@ -157,7 +176,7 @@ export async function generateFinalizedXlsx(
     throw new Error(`Template not found at ${tplPath}`);
   }
 
-  const wb = new ExcelJS.Workbook();
+  let wb: ExcelJS.Workbook | null = new ExcelJS.Workbook();
   await wb.xlsx.readFile(tplPath);
 
   const ws = wb.getWorksheet(SHEET_NAME);
@@ -239,6 +258,10 @@ export async function generateFinalizedXlsx(
   const fileName = `${safeName}__${submissionId}.xlsx`;
   const filePath = path.join(outDir, fileName);
   await wb.xlsx.writeFile(filePath);
+
+  // Drop the workbook reference so V8 can reclaim its (large) backing
+  // structures before the response is sent and the next queued job runs.
+  wb = null;
 
   return { filePath, fileName };
 }

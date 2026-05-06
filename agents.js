@@ -2700,6 +2700,11 @@ async function generatePptxDeck(d) {
     return `${API}${path}${sep}pin=${encodeURIComponent(adminPin())}`;
   }
 
+  // The xlsx generator loads a 2.5 MB template into ExcelJS — two parallel
+  // calls exceed the Render Starter heap. Guard against firing more than one
+  // generate request at a time across the whole admin panel.
+  let xlsxGenerating = false;
+
   function fmtDate(iso) {
     if (!iso) return '';
     try {
@@ -2834,7 +2839,12 @@ async function generatePptxDeck(d) {
     card.querySelector('[data-action="generate"]')?.addEventListener('click', async (ev) => {
       ev.stopPropagation();
       const btn = ev.currentTarget;
+      if (xlsxGenerating) {
+        alert('Another xlsx is being generated. Please wait for it to finish.');
+        return;
+      }
       const original = btn.textContent;
+      xlsxGenerating = true;
       btn.disabled = true;
       btn.textContent = 'Generating…';
       try {
@@ -2850,6 +2860,8 @@ async function generatePptxDeck(d) {
         btn.disabled = false;
         btn.textContent = original;
         alert('Generate xlsx failed.\n\n' + (err && err.message ? err.message : ''));
+      } finally {
+        xlsxGenerating = false;
       }
     });
 

@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "ts-node-dev --respawn src/server.ts",
-    "start": "node dist/server.js"
+    "start": "node --max-old-space-size=460 dist/server.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",
