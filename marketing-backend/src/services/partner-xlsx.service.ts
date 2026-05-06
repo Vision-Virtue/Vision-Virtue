@@ -3,7 +3,7 @@
 
    The actual ExcelJS work runs in a forked child process
    (src/workers/xlsx-worker.ts) so a heap blow-up while loading
-   the Financial Model v5 template can never take the API down.
+   the Financial Model v7 template can never take the API down.
 
    This file is responsible for: locating the template,
    resolving output paths, serializing concurrent requests
@@ -28,7 +28,7 @@ function ensureDir(p: string): void {
 }
 
 function templatePath(): string {
-  return path.resolve(process.cwd(), 'templates', 'Financial Model v5.xlsx');
+  return path.resolve(process.cwd(), 'templates', 'Financial Model v7.xlsx');
 }
 
 function workerPath(): string {
@@ -171,4 +171,38 @@ export function resolveStoredXlsx(filePath: string): string | null {
     ? filePath
     : path.join(customerXlsxDir(), filePath);
   return fs.existsSync(candidate) ? candidate : null;
+}
+
+// ─── Reupload — admin manually edits the xlsx and uploads it back ────────────
+
+/**
+ * Persists an admin-uploaded xlsx for a submission, overwriting any
+ * previously generated/uploaded file. Returns the bare file name so the
+ * caller can store it in `finalized_xlsx_path`.
+ *
+ * The buffer is validated as a zip (xlsx is a zip) — anything else is
+ * rejected outright before we touch disk.
+ */
+export function storeUploadedXlsx(
+  submissionId: string,
+  customerName: string,
+  buffer: Buffer,
+): { filePath: string; fileName: string } {
+  // xlsx files are always zip — magic bytes 'PK\x03\x04' (or 'PK\x05\x06'
+  // for an empty archive, which we shouldn't accept).
+  if (
+    buffer.length < 4 ||
+    buffer[0] !== 0x50 || buffer[1] !== 0x4b ||
+    buffer[2] !== 0x03 || buffer[3] !== 0x04
+  ) {
+    throw new Error('Uploaded file is not a valid xlsx (zip) file');
+  }
+
+  const outDir = customerXlsxDir();
+  ensureDir(outDir);
+  const safeName = customerName.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 60) || 'customer';
+  const fileName = `${safeName}__${submissionId}.xlsx`;
+  const filePath = path.join(outDir, fileName);
+  fs.writeFileSync(filePath, buffer);
+  return { filePath, fileName };
 }

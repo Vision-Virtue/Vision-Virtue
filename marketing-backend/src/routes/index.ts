@@ -1,4 +1,4 @@
-import { Router, Request, Response, NextFunction } from 'express';
+import { Router, Request, Response, NextFunction, raw } from 'express';
 import { contentController } from '../controllers/content.controller';
 import { linkedInController } from '../controllers/linkedin.controller';
 import { authController, verifyPin } from '../controllers/auth.controller';
@@ -193,6 +193,16 @@ router.post(
   '/admin/submissions/:id/generate-xlsx',
   requireAdminPin,
   asyncHandler(async (req, res) => { await partnerController.adminGenerateXlsx(req, res); }),
+);
+// Reupload — admin overwrites the stored xlsx with a manually-edited file.
+// raw() takes the place of express.json() for this one route so we can
+// receive the binary body. Cap at 15 MB to leave headroom over the ~3 MB
+// template size while still rejecting absurdly large uploads.
+router.post(
+  '/admin/submissions/:id/upload-xlsx',
+  requireAdminPin,
+  raw({ type: '*/*', limit: '15mb' }),
+  (req, res) => partnerController.adminUploadXlsx(req, res),
 );
 router.get(
   '/admin/submissions/:id/xlsx',

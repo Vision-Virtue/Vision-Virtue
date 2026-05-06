@@ -1,7 +1,7 @@
 /* ============================================================
    xlsx generation worker — JSZip + XML surgical editor.
 
-   Background: ExcelJS loaded the v5 template at ~500 MB peak
+   Background: ExcelJS loaded the v7 template at ~500 MB peak
    heap, which is more than Render's 512 MB Starter container
    can give us (kernel cgroup OOM-killed the process before V8
    even saw the limit). This worker avoids ExcelJS entirely.
@@ -26,7 +26,7 @@ import { XMLParser, XMLBuilder } from 'fast-xml-parser';
 
 const SHEET_NAME = "Customer's Questionnaire";
 
-// Cell layout — matches the v5 template.
+// Cell layout — matches the v7 template.
 //
 // Section 1–5 sit in column I, sections 6.a / 6.b in columns H–J,
 // and section 7 splits Let's-Scale rows by revenueType into three

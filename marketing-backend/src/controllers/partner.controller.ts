@@ -8,7 +8,7 @@
 import { Request, Response } from 'express';
 import path from 'path';
 import { customerKeyRepo, partnerSubmissionRepo, CustomerKeyRow } from '../db/partner.repository';
-import { generateFinalizedXlsx, resolveStoredXlsx } from '../services/partner-xlsx.service';
+import { generateFinalizedXlsx, resolveStoredXlsx, storeUploadedXlsx } from '../services/partner-xlsx.service';
 import { z } from 'zod';
 
 // ─── Request validation schemas ──────────────────────────────────────────────
@@ -279,6 +279,48 @@ export const partnerController = {
         error: {
           code: 'XLSX_GENERATION_FAILED',
           message: err instanceof Error ? err.message : 'xlsx generation failed.',
+        },
+      });
+    }
+  },
+
+  /**
+   * POST /api/admin/submissions/:id/upload-xlsx
+   * Replaces the stored xlsx with a manually-edited file uploaded by the
+   * admin. The body is the raw .xlsx bytes (Content-Type doesn't matter,
+   * we validate the zip magic bytes). Used after Raphael edits the
+   * generated model in Excel and wants the customer to download that
+   * version on Finalize.
+   */
+  adminUploadXlsx(req: Request, res: Response): void {
+    const sub = partnerSubmissionRepo.getById(req.params.id);
+    if (!sub) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
+      return;
+    }
+    const buf = req.body;
+    if (!Buffer.isBuffer(buf) || buf.length === 0) {
+      res.status(400).json({
+        error: { code: 'EMPTY_BODY', message: 'Upload body is empty or not binary.' },
+      });
+      return;
+    }
+    try {
+      const result  = storeUploadedXlsx(sub.id, sub.customerName, buf);
+      const updated = partnerSubmissionRepo.setXlsxPath(sub.id, result.fileName);
+      res.json({
+        submission: {
+          id:      updated?.id,
+          status:  updated?.status,
+          hasXlsx: !!updated?.finalizedXlsxPath,
+        },
+      });
+    } catch (err) {
+      console.error('[partner] xlsx upload failed:', err);
+      res.status(400).json({
+        error: {
+          code: 'INVALID_XLSX',
+          message: err instanceof Error ? err.message : 'Upload failed.',
         },
       });
     }

@@ -2736,13 +2736,15 @@ async function generatePptxDeck(d) {
     const isFinal = sub.status === 'finalized';
     const xlsxReady = sub.hasXlsx === true;
 
-    // Excel row actions: Download + Regenerate (when xlsx exists), or
-    // Generate (when missing). Regenerate lets us rebuild the file after
-    // template/cell-mapping fixes without re-submitting.
+    // Excel row actions: Download + Regenerate + Reupload (when xlsx
+    // exists), or Generate (when missing). Reupload lets the admin
+    // replace the stored file with a manually-edited copy before
+    // finalizing for the customer.
     const excelActions = `
       ${xlsxReady
         ? `<button type="button" class="partner-subs-action partner-subs-download" data-action="download" data-product="excel">⬇ Download</button>
-           <button type="button" class="partner-subs-action partner-subs-generate" data-action="generate">↻ Regenerate</button>`
+           <button type="button" class="partner-subs-action partner-subs-generate" data-action="generate">↻ Regenerate</button>
+           <button type="button" class="partner-subs-action partner-subs-reupload" data-action="reupload">⤴ Reupload</button>`
         : `<button type="button" class="partner-subs-action partner-subs-generate" data-action="generate">Generate xlsx</button>`}
       ${isFinal
         ? `<span class="partner-status-pill partner-status-finalized">Finalized</span>`
@@ -2866,6 +2868,43 @@ async function generatePptxDeck(d) {
       } finally {
         xlsxGenerating = false;
       }
+    });
+
+    card.querySelector('[data-action="reupload"]')?.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      const btn = ev.currentTarget;
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      input.style.display = 'none';
+      input.addEventListener('change', async () => {
+        const file = input.files && input.files[0];
+        if (!file) return;
+        const original = btn.textContent;
+        btn.disabled = true;
+        btn.textContent = 'Uploading…';
+        try {
+          const res = await fetch(adminUrl(`/api/admin/submissions/${encodeURIComponent(sub.id)}/upload-xlsx`), {
+            method: 'POST',
+            // Browser sends as application/octet-stream — backend accepts
+            // any content-type and validates the zip magic bytes.
+            body: file,
+          });
+          if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            throw new Error(`HTTP ${res.status} ${text.slice(0, 200)}`);
+          }
+          await loadSubmissions();
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = original;
+          alert('Reupload failed.\n\n' + (err && err.message ? err.message : ''));
+        }
+      });
+      document.body.appendChild(input);
+      input.click();
+      // Defer cleanup so the file picker can settle first.
+      setTimeout(() => input.remove(), 0);
     });
 
     card.querySelector('[data-action="download"]')?.addEventListener('click', async (ev) => {
