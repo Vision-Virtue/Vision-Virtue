@@ -2700,6 +2700,11 @@ async function generatePptxDeck(d) {
     return `${API}${path}${sep}pin=${encodeURIComponent(adminPin())}`;
   }
 
+  // The xlsx generator loads a 2.5 MB template into ExcelJS — two parallel
+  // calls exceed the Render Starter heap. Guard against firing more than one
+  // generate request at a time across the whole admin panel.
+  let xlsxGenerating = false;
+
   function fmtDate(iso) {
     if (!iso) return '';
     try {
@@ -2731,10 +2736,13 @@ async function generatePptxDeck(d) {
     const isFinal = sub.status === 'finalized';
     const xlsxReady = sub.hasXlsx === true;
 
-    // Excel row actions: Download (when xlsx exists) or Generate (when missing) + Finalize/Finalized
+    // Excel row actions: Download + Regenerate (when xlsx exists), or
+    // Generate (when missing). Regenerate lets us rebuild the file after
+    // template/cell-mapping fixes without re-submitting.
     const excelActions = `
       ${xlsxReady
-        ? `<button type="button" class="partner-subs-action partner-subs-download" data-action="download" data-product="excel">⬇ Download</button>`
+        ? `<button type="button" class="partner-subs-action partner-subs-download" data-action="download" data-product="excel">⬇ Download</button>
+           <button type="button" class="partner-subs-action partner-subs-generate" data-action="generate">↻ Regenerate</button>`
         : `<button type="button" class="partner-subs-action partner-subs-generate" data-action="generate">Generate xlsx</button>`}
       ${isFinal
         ? `<span class="partner-status-pill partner-status-finalized">Finalized</span>`
@@ -2834,9 +2842,14 @@ async function generatePptxDeck(d) {
     card.querySelector('[data-action="generate"]')?.addEventListener('click', async (ev) => {
       ev.stopPropagation();
       const btn = ev.currentTarget;
+      if (xlsxGenerating) {
+        alert('Another xlsx is being generated. Please wait for it to finish.');
+        return;
+      }
       const original = btn.textContent;
+      xlsxGenerating = true;
       btn.disabled = true;
-      btn.textContent = 'Generating…';
+      btn.textContent = original.includes('Regenerate') ? 'Regenerating…' : 'Generating…';
       try {
         const res = await fetch(adminUrl(`/api/admin/submissions/${encodeURIComponent(sub.id)}/generate-xlsx`), {
           method: 'POST',
@@ -2850,6 +2863,8 @@ async function generatePptxDeck(d) {
         btn.disabled = false;
         btn.textContent = original;
         alert('Generate xlsx failed.\n\n' + (err && err.message ? err.message : ''));
+      } finally {
+        xlsxGenerating = false;
       }
     });
 

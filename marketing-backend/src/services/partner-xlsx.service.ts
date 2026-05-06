@@ -1,64 +1,19 @@
 /* ============================================================
-   Partner Customer Area — xlsx generator
-   Loads the Financial Model v5 template, populates the
-   "Customer's Questionnaire" sheet with the customer's
-   responses, and saves it under the Render persistent disk.
+   Partner Customer Area — xlsx generator (parent side)
+
+   The actual ExcelJS work runs in a forked child process
+   (src/workers/xlsx-worker.ts) so a heap blow-up while loading
+   the Financial Model v5 template can never take the API down.
+
+   This file is responsible for: locating the template,
+   resolving output paths, serializing concurrent requests
+   through a single-flight queue, and forking + supervising
+   the worker.
    ============================================================ */
 
-import ExcelJS from 'exceljs';
+import { fork } from 'child_process';
 import path from 'path';
 import fs from 'fs';
-
-// ─── Layout — cell coordinates inside the "Customer's Questionnaire" sheet ───
-//
-// These match the visible layout in the v5 template (column C is the value
-// column for sections 1–5; column B begins the table headers; 6.a starts at
-// row 13 etc.). If a cell is off by a row, adjust the constants here — no
-// other code change needed.
-
-const SHEET_NAME = "Customer's Questionnaire";
-
-// Section 1–5: single-value cells in column C (value column on the right)
-const CELLS = {
-  customerName: 'C2',
-  sector:        'C5',
-  round:         'C6',
-  capitalGoal:   'C7',
-  yearsSince:    'C8',
-  firstYear:     'C9',
-};
-
-// Tables — start row, row range to clear (so re-finalizing doesn't leave
-// stale rows behind), and column letter for each field.
-const CUSTOMERS = {
-  startRow: 13,                  // first data row of 6.a
-  maxRows:  50,                  // clear up to this many rows on each fill
-  cols: { name: 'B', type: 'C', territory: 'D' },
-};
-const PRODUCTS = {
-  startRow: 13,                  // first data row of 6.b (same template
-                                 // layout has products to the right of customers)
-  maxRows:  50,
-  cols: { name: 'F', revenueType: 'G', price: 'H' },
-};
-const LETSSCALE = {
-  startRow: 67,                  // first data row of section 7 (Let's Scale)
-  maxRows:  100,
-  cols: {
-    customerName: 'B', type: 'C', territory: 'D',
-    productName: 'E', revenueType: 'F', price: 'G',
-    q1: 'H', q2: 'I', q3: 'J', q4: 'K', y2: 'L',
-  },
-};
-const UNITCOSTS = {
-  startRow: 175,                 // section 8 unit costs
-  maxRows:  50,
-  cols: { name: 'B', cost: 'C' },
-};
-const FTE = {
-  startRow: 188,                 // 4 rows: COGS, R&D, S&M, G&A
-  cols: { y1: 'C', y2: 'D' },
-};
 
 // ─── Storage location for generated xlsx ─────────────────────────────────────
 
@@ -73,20 +28,25 @@ function ensureDir(p: string): void {
 }
 
 function templatePath(): string {
-  // Always look relative to the backend root (one directory above /dist
-  // when running compiled, or the cwd in dev — we resolve via cwd).
   return path.resolve(process.cwd(), 'templates', 'Financial Model v5.xlsx');
 }
 
-// ─── Types we accept (loose — must match the partner.js submission shape) ───
+function workerPath(): string {
+  // After tsc, this file lives at dist/services/partner-xlsx.service.js
+  // and the worker at dist/workers/xlsx-worker.js. In dev (ts-node) it's
+  // src/services/...; ts-node-dev compiles the worker too so the .js path
+  // would not exist — fall back to .ts for that case.
+  const compiled = path.join(__dirname, '..', 'workers', 'xlsx-worker.js');
+  if (fs.existsSync(compiled)) return compiled;
+  return path.join(__dirname, '..', 'workers', 'xlsx-worker.ts');
+}
+
+// ─── Types ──────────────────────────────────────────────────────────────────
 
 interface SubmissionFormData {
   general?: {
-    sector?: string;
-    round?: string;
-    capitalGoal?: string;
-    yearsSinceFound?: string;
-    firstYear?: string;
+    sector?: string; round?: string; capitalGoal?: string;
+    yearsSinceFound?: string; firstYear?: string;
   };
   customers?: Array<{ name?: string; type?: string; territory?: string }>;
   products?: Array<{ name?: string; revenueType?: string; price?: string }>;
@@ -104,42 +64,6 @@ interface SubmissionFormData {
   };
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-/** Convert a value to a number if it parses cleanly, otherwise the string. */
-function toNumOrText(v: unknown): number | string | null {
-  if (v === undefined || v === null) return null;
-  const s = String(v).trim();
-  if (s === '') return null;
-  // Strip $ and commas before parseFloat
-  const cleaned = s.replace(/[$,\s]/g, '');
-  const n = Number(cleaned);
-  if (Number.isFinite(n) && /^[-+]?\d+(\.\d+)?$/.test(cleaned)) return n;
-  return s;
-}
-
-function setCell(ws: ExcelJS.Worksheet, addr: string, value: unknown): void {
-  const v = toNumOrText(value);
-  if (v === null) {
-    ws.getCell(addr).value = null;
-  } else {
-    ws.getCell(addr).value = v as ExcelJS.CellValue;
-  }
-}
-
-function clearRange(
-  ws: ExcelJS.Worksheet,
-  startRow: number,
-  endRow: number,
-  cols: string[],
-): void {
-  for (let r = startRow; r <= endRow; r++) {
-    for (const c of cols) ws.getCell(`${c}${r}`).value = null;
-  }
-}
-
-// ─── Public entry point ──────────────────────────────────────────────────────
-
 export interface PopulateResult {
   /** Absolute path to the saved file. */
   filePath: string;
@@ -147,101 +71,97 @@ export interface PopulateResult {
   fileName: string;
 }
 
-export async function generateFinalizedXlsx(
+// ─── Single-flight queue ─────────────────────────────────────────────────────
+//
+// Even with worker isolation, we cap concurrency at one. A single ExcelJS
+// load already peaks ~400 MB; running two children in parallel would
+// approach the container's 512 MB ceiling and risk an OS-level OOM kill.
+
+let xlsxQueue: Promise<unknown> = Promise.resolve();
+
+export function generateFinalizedXlsx(
+  submissionId: string,
+  customerName: string,
+  formData: SubmissionFormData,
+): Promise<PopulateResult> {
+  const next = xlsxQueue.then(
+    () => generateInChild(submissionId, customerName, formData),
+    () => generateInChild(submissionId, customerName, formData),
+  );
+  xlsxQueue = next.catch(() => undefined);
+  return next;
+}
+
+// ─── Worker supervision ──────────────────────────────────────────────────────
+
+function generateInChild(
   submissionId: string,
   customerName: string,
   formData: SubmissionFormData,
 ): Promise<PopulateResult> {
   const tplPath = templatePath();
   if (!fs.existsSync(tplPath)) {
-    throw new Error(`Template not found at ${tplPath}`);
+    return Promise.reject(new Error(`Template not found at ${tplPath}`));
   }
 
-  const wb = new ExcelJS.Workbook();
-  await wb.xlsx.readFile(tplPath);
-
-  const ws = wb.getWorksheet(SHEET_NAME);
-  if (!ws) {
-    throw new Error(`Sheet "${SHEET_NAME}" not found in template`);
-  }
-
-  // Section header: customer name + general (1–5)
-  setCell(ws, CELLS.customerName, customerName);
-  const g = formData.general || {};
-  setCell(ws, CELLS.sector,      g.sector);
-  setCell(ws, CELLS.round,       g.round);
-  setCell(ws, CELLS.capitalGoal, g.capitalGoal);
-  setCell(ws, CELLS.yearsSince,  g.yearsSinceFound);
-  setCell(ws, CELLS.firstYear,   g.firstYear);
-
-  // Section 6.a Customers
-  clearRange(ws, CUSTOMERS.startRow, CUSTOMERS.startRow + CUSTOMERS.maxRows - 1,
-    Object.values(CUSTOMERS.cols));
-  (formData.customers || []).forEach((c, i) => {
-    const r = CUSTOMERS.startRow + i;
-    setCell(ws, `${CUSTOMERS.cols.name}${r}`,      c.name);
-    setCell(ws, `${CUSTOMERS.cols.type}${r}`,      c.type);
-    setCell(ws, `${CUSTOMERS.cols.territory}${r}`, c.territory);
-  });
-
-  // Section 6.b Products
-  clearRange(ws, PRODUCTS.startRow, PRODUCTS.startRow + PRODUCTS.maxRows - 1,
-    Object.values(PRODUCTS.cols));
-  (formData.products || []).forEach((p, i) => {
-    const r = PRODUCTS.startRow + i;
-    setCell(ws, `${PRODUCTS.cols.name}${r}`,        p.name);
-    setCell(ws, `${PRODUCTS.cols.revenueType}${r}`, p.revenueType);
-    setCell(ws, `${PRODUCTS.cols.price}${r}`,       p.price);
-  });
-
-  // Section 7 Let's Scale
-  clearRange(ws, LETSSCALE.startRow, LETSSCALE.startRow + LETSSCALE.maxRows - 1,
-    Object.values(LETSSCALE.cols));
-  (formData.letsScale || []).forEach((l, i) => {
-    const r = LETSSCALE.startRow + i;
-    setCell(ws, `${LETSSCALE.cols.customerName}${r}`, l.customerName);
-    setCell(ws, `${LETSSCALE.cols.type}${r}`,         l.type);
-    setCell(ws, `${LETSSCALE.cols.territory}${r}`,    l.territory);
-    setCell(ws, `${LETSSCALE.cols.productName}${r}`,  l.productName);
-    setCell(ws, `${LETSSCALE.cols.revenueType}${r}`,  l.revenueType);
-    setCell(ws, `${LETSSCALE.cols.price}${r}`,        l.price);
-    setCell(ws, `${LETSSCALE.cols.q1}${r}`,           l.q1);
-    setCell(ws, `${LETSSCALE.cols.q2}${r}`,           l.q2);
-    setCell(ws, `${LETSSCALE.cols.q3}${r}`,           l.q3);
-    setCell(ws, `${LETSSCALE.cols.q4}${r}`,           l.q4);
-    setCell(ws, `${LETSSCALE.cols.y2}${r}`,           l.y2);
-  });
-
-  // Section 8 Unit Costs
-  clearRange(ws, UNITCOSTS.startRow, UNITCOSTS.startRow + UNITCOSTS.maxRows - 1,
-    Object.values(UNITCOSTS.cols));
-  (formData.unitCosts || []).forEach((u, i) => {
-    const r = UNITCOSTS.startRow + i;
-    setCell(ws, `${UNITCOSTS.cols.name}${r}`, u.productName);
-    setCell(ws, `${UNITCOSTS.cols.cost}${r}`, u.cost);
-  });
-
-  // Section 9 FTE Headcount — fixed 4 rows: COGS, R&D, S&M, G&A
-  const f = formData.fte || {};
-  setCell(ws, `${FTE.cols.y1}${FTE.startRow + 0}`, f.cogs_y1);
-  setCell(ws, `${FTE.cols.y2}${FTE.startRow + 0}`, f.cogs_y2);
-  setCell(ws, `${FTE.cols.y1}${FTE.startRow + 1}`, f.rd_y1);
-  setCell(ws, `${FTE.cols.y2}${FTE.startRow + 1}`, f.rd_y2);
-  setCell(ws, `${FTE.cols.y1}${FTE.startRow + 2}`, f.sm_y1);
-  setCell(ws, `${FTE.cols.y2}${FTE.startRow + 2}`, f.sm_y2);
-  setCell(ws, `${FTE.cols.y1}${FTE.startRow + 3}`, f.ga_y1);
-  setCell(ws, `${FTE.cols.y2}${FTE.startRow + 3}`, f.ga_y2);
-
-  // Persist to disk
   const outDir = customerXlsxDir();
   ensureDir(outDir);
   const safeName = customerName.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 60) || 'customer';
   const fileName = `${safeName}__${submissionId}.xlsx`;
   const filePath = path.join(outDir, fileName);
-  await wb.xlsx.writeFile(filePath);
 
-  return { filePath, fileName };
+  return new Promise<PopulateResult>((resolve, reject) => {
+    const child = fork(workerPath(), [], {
+      // Independent V8 heap for the child. Pushed close to the container
+      // limit (512 MB) since we serialize via the queue — only one child
+      // is ever alive at a time, so we don't have to share with another
+      // generator. Parent baseline is ~80 MB so 460 + 80 ≈ 540 MB is
+      // tight; we accept that the OS may swap briefly during the peak.
+      execArgv: ['--max-old-space-size=460'],
+      // Strip any inherited NODE_OPTIONS so the parent's --max-old-space-size
+      // doesn't override our execArgv setting in the child.
+      env: { ...process.env, NODE_OPTIONS: '' },
+      stdio: ['ignore', 'inherit', 'inherit', 'ipc'],
+    });
+
+    let settled = false;
+    const settle = (fn: () => void): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn();
+    };
+
+    const timer = setTimeout(() => {
+      settle(() => {
+        try { child.kill('SIGKILL'); } catch { /* noop */ }
+        reject(new Error('xlsx generation timed out after 90s'));
+      });
+    }, 90_000);
+
+    child.on('message', (msg: unknown) => {
+      const m = msg as { ok?: boolean; error?: string } | null;
+      settle(() => {
+        if (m && m.ok) resolve({ filePath, fileName });
+        else reject(new Error(m?.error || 'xlsx worker failed'));
+      });
+    });
+
+    child.on('exit', (code, signal) => {
+      settle(() => {
+        reject(new Error(`xlsx worker exited unexpectedly (code=${code}, signal=${signal})`));
+      });
+    });
+
+    child.on('error', (err) => {
+      settle(() => reject(err));
+    });
+
+    child.send({ customerName, formData, templatePath: tplPath, filePath });
+  });
 }
+
+// ─── Lookup helper used by the download endpoint ─────────────────────────────
 
 /** Returns the absolute path for a stored xlsx (or null if missing). */
 export function resolveStoredXlsx(filePath: string): string | null {

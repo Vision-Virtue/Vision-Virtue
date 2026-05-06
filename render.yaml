@@ -12,6 +12,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=460
       - key: FRONTEND_URL
         value: https://visionvirtuepartnership.com
       - key: ANTHROPIC_API_KEY

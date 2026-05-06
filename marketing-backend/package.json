@@ -7,7 +7,7 @@
   "scripts": {
     "build": "tsc",
     "dev": "ts-node-dev --respawn src/server.ts",
-    "start": "node dist/server.js"
+    "start": "node --max-old-space-size=460 dist/server.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",
@@ -25,7 +25,9 @@
     "express": "^4.18.3",
     "express-rate-limit": "^7.5.1",
     "express-session": "^1.18.0",
+    "fast-xml-parser": "^4.4.0",
     "helmet": "^8.1.0",
+    "jszip": "^3.10.1",
     "typescript": "^5.4.2",
     "uuid": "^9.0.1",
     "zod": "^3.22.4"
