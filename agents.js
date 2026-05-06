@@ -2736,10 +2736,13 @@ async function generatePptxDeck(d) {
     const isFinal = sub.status === 'finalized';
     const xlsxReady = sub.hasXlsx === true;
 
-    // Excel row actions: Download (when xlsx exists) or Generate (when missing) + Finalize/Finalized
+    // Excel row actions: Download + Regenerate (when xlsx exists), or
+    // Generate (when missing). Regenerate lets us rebuild the file after
+    // template/cell-mapping fixes without re-submitting.
     const excelActions = `
       ${xlsxReady
-        ? `<button type="button" class="partner-subs-action partner-subs-download" data-action="download" data-product="excel">⬇ Download</button>`
+        ? `<button type="button" class="partner-subs-action partner-subs-download" data-action="download" data-product="excel">⬇ Download</button>
+           <button type="button" class="partner-subs-action partner-subs-generate" data-action="generate">↻ Regenerate</button>`
         : `<button type="button" class="partner-subs-action partner-subs-generate" data-action="generate">Generate xlsx</button>`}
       ${isFinal
         ? `<span class="partner-status-pill partner-status-finalized">Finalized</span>`
@@ -2846,7 +2849,7 @@ async function generatePptxDeck(d) {
       const original = btn.textContent;
       xlsxGenerating = true;
       btn.disabled = true;
-      btn.textContent = 'Generating…';
+      btn.textContent = original.includes('Regenerate') ? 'Regenerating…' : 'Generating…';
       try {
         const res = await fetch(adminUrl(`/api/admin/submissions/${encodeURIComponent(sub.id)}/generate-xlsx`), {
           method: 'POST',
