@@ -26,38 +26,46 @@ import { XMLParser, XMLBuilder } from 'fast-xml-parser';
 
 const SHEET_NAME = "Customer's Questionnaire";
 
-// Cell layout — kept in sync with the v5 template.
+// Cell layout — matches the v5 template.
+//
+// Section 1–5 sit in column I, sections 6.a / 6.b in columns H–J,
+// and section 7 splits Let's-Scale rows by revenueType into three
+// blocks (7.a HW, 7.b SW, 7.c Other), each in columns I/L/M.
 const CELLS = {
-  customerName: 'C2',
-  sector:        'C5',
-  round:         'C6',
-  capitalGoal:   'C7',
-  yearsSince:    'C8',
-  firstYear:     'C9',
+  customerName: 'I6',
+  sector:        'I8',   // Section 1
+  round:         'I9',   // Section 2
+  capitalGoal:   'I10',  // Section 3
+  yearsSince:    'I11',  // Section 4
+  firstYear:     'I12',  // Section 5
 };
+
+// Section 6.a Customers — rows 17–26 (max 10).
 const CUSTOMERS = {
-  startRow: 13, maxRows: 50,
-  cols: { name: 'B', type: 'C', territory: 'D' },
+  startRow: 17, maxRows: 10,
+  cols: { name: 'H', type: 'I', territory: 'J' },
 };
+
+// Section 6.b Products — rows 30–39 (max 10).
 const PRODUCTS = {
-  startRow: 13, maxRows: 50,
-  cols: { name: 'F', revenueType: 'G', price: 'H' },
+  startRow: 30, maxRows: 10,
+  cols: { name: 'H', revenueType: 'I', price: 'J' },
 };
-const LETSSCALE = {
-  startRow: 67, maxRows: 100,
-  cols: {
-    customerName: 'B', type: 'C', territory: 'D',
-    productName: 'E', revenueType: 'F', price: 'G',
-    q1: 'H', q2: 'I', q3: 'J', q4: 'K', y2: 'L',
-  },
+
+// Section 7 Let's Scale — split by revenueType.
+// Each block fills customerName in col I, productName in col L,
+// price in col M.
+const LETSSCALE_HW = {
+  startRow: 44, maxRows: 6,
+  cols: { customerName: 'I', productName: 'L', price: 'M' },
 };
-const UNITCOSTS = {
-  startRow: 175, maxRows: 50,
-  cols: { name: 'B', cost: 'C' },
+const LETSSCALE_SW = {
+  startRow: 52, maxRows: 6,
+  cols: { customerName: 'I', productName: 'L', price: 'M' },
 };
-const FTE = {
-  startRow: 188,
-  cols: { y1: 'C', y2: 'D' },
+const LETSSCALE_OTHER = {
+  startRow: 60, maxRows: 5,
+  cols: { customerName: 'I', productName: 'L', price: 'M' },
 };
 
 interface SubmissionFormData {
@@ -308,7 +316,7 @@ async function run(input: WorkerInput): Promise<void> {
   set(CELLS.yearsSince,  g.yearsSinceFound);
   set(CELLS.firstYear,   g.firstYear);
 
-  // 6.a Customers
+  // 6.a Customers — rows 17–26
   for (let i = 0; i < CUSTOMERS.maxRows; i++) {
     const r = CUSTOMERS.startRow + i;
     const c = (input.formData.customers || [])[i] || {};
@@ -317,7 +325,7 @@ async function run(input: WorkerInput): Promise<void> {
     set(`${CUSTOMERS.cols.territory}${r}`, c.territory);
   }
 
-  // 6.b Products
+  // 6.b Products — rows 30–39
   for (let i = 0; i < PRODUCTS.maxRows; i++) {
     const r = PRODUCTS.startRow + i;
     const p = (input.formData.products || [])[i] || {};
@@ -326,41 +334,28 @@ async function run(input: WorkerInput): Promise<void> {
     set(`${PRODUCTS.cols.price}${r}`,       p.price);
   }
 
-  // 7 Let's Scale
-  for (let i = 0; i < LETSSCALE.maxRows; i++) {
-    const r = LETSSCALE.startRow + i;
-    const l = (input.formData.letsScale || [])[i] || {};
-    set(`${LETSSCALE.cols.customerName}${r}`, l.customerName);
-    set(`${LETSSCALE.cols.type}${r}`,         l.type);
-    set(`${LETSSCALE.cols.territory}${r}`,    l.territory);
-    set(`${LETSSCALE.cols.productName}${r}`,  l.productName);
-    set(`${LETSSCALE.cols.revenueType}${r}`,  l.revenueType);
-    set(`${LETSSCALE.cols.price}${r}`,        l.price);
-    set(`${LETSSCALE.cols.q1}${r}`,           l.q1);
-    set(`${LETSSCALE.cols.q2}${r}`,           l.q2);
-    set(`${LETSSCALE.cols.q3}${r}`,           l.q3);
-    set(`${LETSSCALE.cols.q4}${r}`,           l.q4);
-    set(`${LETSSCALE.cols.y2}${r}`,           l.y2);
-  }
+  // 7 Let's Scale — split rows by revenueType.
+  const all = input.formData.letsScale || [];
+  const hwRows    = all.filter((l) => l.revenueType === 'HW');
+  const swRows    = all.filter((l) => l.revenueType === 'SW');
+  const otherRows = all.filter((l) => l.revenueType === 'Other');
 
-  // 8 Unit Costs
-  for (let i = 0; i < UNITCOSTS.maxRows; i++) {
-    const r = UNITCOSTS.startRow + i;
-    const u = (input.formData.unitCosts || [])[i] || {};
-    set(`${UNITCOSTS.cols.name}${r}`, u.productName);
-    set(`${UNITCOSTS.cols.cost}${r}`, u.cost);
-  }
+  const writeBlock = (
+    block: { startRow: number; maxRows: number; cols: { customerName: string; productName: string; price: string } },
+    items: Array<{ customerName?: string; productName?: string; price?: string }>,
+  ): void => {
+    for (let i = 0; i < block.maxRows; i++) {
+      const r = block.startRow + i;
+      const l = items[i] || {};
+      set(`${block.cols.customerName}${r}`, l.customerName);
+      set(`${block.cols.productName}${r}`,  l.productName);
+      set(`${block.cols.price}${r}`,        l.price);
+    }
+  };
 
-  // 9 FTE — fixed 4 rows: COGS, R&D, S&M, G&A
-  const f = input.formData.fte || {};
-  set(`${FTE.cols.y1}${FTE.startRow + 0}`, f.cogs_y1);
-  set(`${FTE.cols.y2}${FTE.startRow + 0}`, f.cogs_y2);
-  set(`${FTE.cols.y1}${FTE.startRow + 1}`, f.rd_y1);
-  set(`${FTE.cols.y2}${FTE.startRow + 1}`, f.rd_y2);
-  set(`${FTE.cols.y1}${FTE.startRow + 2}`, f.sm_y1);
-  set(`${FTE.cols.y2}${FTE.startRow + 2}`, f.sm_y2);
-  set(`${FTE.cols.y1}${FTE.startRow + 3}`, f.ga_y1);
-  set(`${FTE.cols.y2}${FTE.startRow + 3}`, f.ga_y2);
+  writeBlock(LETSSCALE_HW,    hwRows);     // 7.a — rows 44–49
+  writeBlock(LETSSCALE_SW,    swRows);     // 7.b — rows 52–57
+  writeBlock(LETSSCALE_OTHER, otherRows);  // 7.c — rows 60–64
 
   // Sort rows by row number (Excel requires ascending) and write back.
   rows.sort((a, b) => parseInt(a['@_r'], 10) - parseInt(b['@_r'], 10));
