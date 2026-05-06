@@ -186,6 +186,7 @@ function showQuestionnaire() {
   qSection.hidden = false;
   qForm.hidden = false;
   qThanks.hidden = true;
+  document.body.classList.add('is-questionnaire-open');
   seedQuestionnaireTables();
   syncYearLabels();
   window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -194,6 +195,7 @@ function showQuestionnaire() {
 function showProducts() {
   products.hidden = false;
   qSection.hidden = true;
+  document.body.classList.remove('is-questionnaire-open');
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 

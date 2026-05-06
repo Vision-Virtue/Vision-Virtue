@@ -448,3 +448,117 @@
   .partner-q-block       { padding: 1.25rem 1rem 1.5rem; }
   .partner-q-back        { position: static; display: inline-block; margin-bottom: 0.75rem; }
 }
+
+/* ============================================================
+   DARK THEME — applied while the customer is filling out the
+   Customer's Questionnaire. Body gets `.is-questionnaire-open`
+   from partner.js (showQuestionnaire / showProducts), and the
+   styles below switch the questionnaire view to the same navy
+   palette used on the Finance AI page. The light-theme rules
+   above remain untouched for the rest of the partner area.
+   ============================================================ */
+body.partner-page.is-questionnaire-open {
+  background: var(--navy-900);
+}
+
+.is-questionnaire-open .partner-q-back { color: #9bbdf2; }
+.is-questionnaire-open .partner-q-back:hover { background: rgba(91, 141, 224, 0.15); }
+
+.is-questionnaire-open .partner-q-block {
+  background: var(--navy-800);
+  border: 1px solid rgba(91, 141, 224, 0.18);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
+}
+.is-questionnaire-open .partner-q-block-title { color: #ffffff; }
+.is-questionnaire-open .partner-q-block-sub   { color: rgba(255, 255, 255, 0.55); }
+
+.is-questionnaire-open .partner-q-label       { color: rgba(255, 255, 255, 0.78); }
+.is-questionnaire-open .partner-q-checkline   { color: rgba(255, 255, 255, 0.6); }
+.is-questionnaire-open .partner-q-subblock-title { color: #ffffff; }
+
+/* Inputs & selects — dark with light text. The browser still
+   draws the native <select> dropdown menu in OS colors, which
+   is fine. */
+.is-questionnaire-open .partner-q-input,
+.is-questionnaire-open .partner-q-select {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+.is-questionnaire-open .partner-q-input::placeholder { color: rgba(255, 255, 255, 0.35); }
+.is-questionnaire-open .partner-q-input:focus,
+.is-questionnaire-open .partner-q-select:focus {
+  border-color: rgba(155, 189, 242, 0.7);
+  background: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 0 0 3px rgba(58, 107, 196, 0.25);
+}
+.is-questionnaire-open .partner-q-select option {
+  background: var(--navy-800);
+  color: #ffffff;
+}
+
+/* Tables */
+.is-questionnaire-open .partner-q-table-wrap {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.is-questionnaire-open .partner-q-table thead th {
+  background: rgba(91, 141, 224, 0.10);
+  color: rgba(255, 255, 255, 0.85);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.is-questionnaire-open .partner-q-table tbody td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.is-questionnaire-open .partner-q-rmrow { color: rgba(255, 255, 255, 0.45); }
+.is-questionnaire-open .partner-q-rmrow:hover {
+  color: #ff9c9c;
+  background: rgba(255, 80, 80, 0.12);
+}
+
+.is-questionnaire-open .partner-q-addrow {
+  border: 1px dashed rgba(155, 189, 242, 0.5);
+  color: #9bbdf2;
+}
+.is-questionnaire-open .partner-q-addrow:hover {
+  background: rgba(91, 141, 224, 0.12);
+  border-color: #9bbdf2;
+}
+
+/* Read-only auto-filled cells in section 7 */
+.is-questionnaire-open .partner-q-readonly {
+  background: rgba(91, 141, 224, 0.10);
+  color: rgba(255, 255, 255, 0.85);
+  border: 1px dashed rgba(91, 141, 224, 0.35);
+}
+.is-questionnaire-open .partner-q-readonly-cell {
+  background: rgba(91, 141, 224, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.is-questionnaire-open .partner-q-empty { color: rgba(255, 255, 255, 0.45); }
+
+.is-questionnaire-open .partner-q-disclaimer { color: rgba(255, 255, 255, 0.5); }
+
+/* Thank-you card — same dark treatment so the post-submit view
+   doesn't flash back to a light card. */
+.is-questionnaire-open .partner-q-thanks {
+  background: var(--navy-800);
+  border: 1px solid rgba(91, 141, 224, 0.18);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+.is-questionnaire-open .partner-q-thanks h3 { color: #ffffff; }
+.is-questionnaire-open .partner-q-thanks p  { color: rgba(255, 255, 255, 0.65); }
+.is-questionnaire-open .partner-q-thanks-icon {
+  background: rgba(74, 124, 63, 0.20);
+  color: #8ed47b;
+}
+.is-questionnaire-open .partner-q-back-btn {
+  border-color: #9bbdf2;
+  color: #9bbdf2;
+}
+.is-questionnaire-open .partner-q-back-btn:hover {
+  background: #9bbdf2;
+  color: var(--navy-900);
+}
