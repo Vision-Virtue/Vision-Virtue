@@ -108,8 +108,13 @@ function clearRange(
 }
 
 async function run(input: WorkerInput): Promise<void> {
+  const mb = (n: number): number => Math.round(n / 1024 / 1024);
+  const heap = (): string => `${mb(process.memoryUsage().heapUsed)}/${mb(process.memoryUsage().heapTotal)} MB`;
+
+  console.log(`[xlsx-worker] start  heap=${heap()}`);
   const wb = new ExcelJS.Workbook();
   await wb.xlsx.readFile(input.templatePath);
+  console.log(`[xlsx-worker] read   heap=${heap()}`);
 
   const ws = wb.getWorksheet(SHEET_NAME);
   if (!ws) throw new Error(`Sheet "${SHEET_NAME}" not found in template`);
@@ -175,7 +180,9 @@ async function run(input: WorkerInput): Promise<void> {
   setCell(ws, `${FTE.cols.y1}${FTE.startRow + 3}`, f.ga_y1);
   setCell(ws, `${FTE.cols.y2}${FTE.startRow + 3}`, f.ga_y2);
 
+  console.log(`[xlsx-worker] populated heap=${heap()}`);
   await wb.xlsx.writeFile(input.filePath);
+  console.log(`[xlsx-worker] wrote  heap=${heap()}`);
 }
 
 process.on('message', (input: WorkerInput) => {

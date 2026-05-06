@@ -112,9 +112,12 @@ function generateInChild(
 
   return new Promise<PopulateResult>((resolve, reject) => {
     const child = fork(workerPath(), [], {
-      // Independent V8 heap for the child. Combined parent (~80 MB peak)
-      // + child (≤400 MB peak) stays under the 512 MB container limit.
-      execArgv: ['--max-old-space-size=400'],
+      // Independent V8 heap for the child. Pushed close to the container
+      // limit (512 MB) since we serialize via the queue — only one child
+      // is ever alive at a time, so we don't have to share with another
+      // generator. Parent baseline is ~80 MB so 460 + 80 ≈ 540 MB is
+      // tight; we accept that the OS may swap briefly during the peak.
+      execArgv: ['--max-old-space-size=460'],
       // Strip any inherited NODE_OPTIONS so the parent's --max-old-space-size
       // doesn't override our execArgv setting in the child.
       env: { ...process.env, NODE_OPTIONS: '' },
