@@ -2682,6 +2682,78 @@ async function generatePptxDeck(d) {
 }
 
 /* ============================================================
+   PARTNER CUSTOMER KEYS — generate VV-XXXXXX keys
+   ============================================================ */
+(function partnerKeysPanel() {
+  const form    = document.getElementById('partnerKeysForm');
+  const nameInp = document.getElementById('partnerKeysCustomerName');
+  const submit  = document.getElementById('partnerKeysSubmit');
+  const result  = document.getElementById('partnerKeysResult');
+  if (!form || !nameInp || !submit || !result) return;
+
+  const API = 'https://vv-marketing-api.onrender.com';
+  function pin() { return sessionStorage.getItem('vv_admin_pin') || ''; }
+  function adminUrl(path) {
+    const sep = path.includes('?') ? '&' : '?';
+    return `${API}${path}${sep}pin=${encodeURIComponent(pin())}`;
+  }
+  function htmlEsc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const customerName = nameInp.value.trim();
+    if (!customerName) return;
+    submit.disabled = true;
+    const original = submit.textContent;
+    submit.textContent = 'Generating…';
+    result.hidden = true;
+    try {
+      const res = await fetch(adminUrl('/api/admin/customer-keys'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ customerName }),
+      });
+      if (!res.ok) {
+        const text = await res.text().catch(() => '');
+        throw new Error(`HTTP ${res.status} ${text.slice(0, 160)}`);
+      }
+      const data = await res.json();
+      result.innerHTML = `
+        <div class="partner-keys-card">
+          <div class="partner-keys-card-label">New key for <strong>${htmlEsc(data.customerName)}</strong></div>
+          <div class="partner-keys-card-row">
+            <code class="partner-keys-code" id="partnerKeysCode">${htmlEsc(data.key)}</code>
+            <button type="button" class="partner-keys-copy" id="partnerKeysCopy">Copy</button>
+          </div>
+          <div class="partner-keys-card-hint">Share this key with the customer. They paste it on the partner page to open their portal.</div>
+        </div>
+      `;
+      result.hidden = false;
+      nameInp.value = '';
+      const copyBtn = result.querySelector('#partnerKeysCopy');
+      copyBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(data.key);
+          copyBtn.textContent = 'Copied ✓';
+          setTimeout(() => { copyBtn.textContent = 'Copy'; }, 1500);
+        } catch {
+          alert('Copy failed — select the key and copy manually.');
+        }
+      });
+    } catch (err) {
+      alert('Generate key failed.\n\n' + (err && err.message ? err.message : ''));
+    } finally {
+      submit.disabled = false;
+      submit.textContent = original;
+    }
+  });
+})();
+
+/* ============================================================
    PARTNER CUSTOMER SUBMISSIONS — Raphael's review panel
    ============================================================ */
 (function partnerSubsPanel() {

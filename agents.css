@@ -1467,3 +1467,91 @@
   background: rgba(196, 134, 58, 0.32);
   transform: translateY(-1px);
 }
+
+/* Customer Keys minter */
+.partner-keys-section { margin-bottom: 1.25rem; }
+.partner-keys-form {
+  display: flex;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+  margin-top: 0.85rem;
+}
+.partner-keys-input {
+  flex: 1 1 280px;
+  min-width: 0;
+  padding: 0.6rem 0.85rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.92rem;
+}
+.partner-keys-input:focus {
+  outline: none;
+  border-color: rgba(155, 189, 242, 0.7);
+  background: rgba(255, 255, 255, 0.09);
+}
+.partner-keys-submit {
+  padding: 0.6rem 1.3rem;
+  border-radius: 6px;
+  border: 1px solid rgba(58, 107, 196, 0.4);
+  background: rgba(58, 107, 196, 0.20);
+  color: #9bbdf2;
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.18s, transform 0.12s;
+}
+.partner-keys-submit:hover:not(:disabled) {
+  background: rgba(58, 107, 196, 0.32);
+  transform: translateY(-1px);
+}
+.partner-keys-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+.partner-keys-result { margin-top: 1rem; }
+.partner-keys-card {
+  padding: 1rem 1.1rem;
+  border-radius: 8px;
+  background: rgba(58, 107, 196, 0.12);
+  border: 1px solid rgba(58, 107, 196, 0.35);
+}
+.partner-keys-card-label {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.75);
+  margin-bottom: 0.5rem;
+}
+.partner-keys-card-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  flex-wrap: wrap;
+}
+.partner-keys-code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #ffffff;
+  padding: 0.5rem 0.85rem;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.32);
+  user-select: all;
+}
+.partner-keys-copy {
+  padding: 0.5rem 0.95rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.partner-keys-copy:hover { background: rgba(255, 255, 255, 0.14); }
+.partner-keys-card-hint {
+  margin-top: 0.55rem;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.55);
+}
