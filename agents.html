@@ -299,6 +299,19 @@
           </button>
         </div>
 
+        <!-- CUSTOMER KEYS (mint new VV-XXXXXX keys) -->
+        <div class="fin-upload-section partner-keys-section">
+          <div class="fin-upload-header">
+            <h3 class="fin-upload-title">Customer Keys</h3>
+            <p class="fin-upload-sub">Generate a one-per-customer access key. Each key opens its own customer portal — the customer enters the key on the partner page and fills out the Customer's Questionnaire.</p>
+          </div>
+          <form class="partner-keys-form" id="partnerKeysForm" autocomplete="off">
+            <input type="text" id="partnerKeysCustomerName" class="partner-keys-input" placeholder="Customer name (e.g. Acme Corp)" required maxlength="200">
+            <button type="submit" class="partner-keys-submit" id="partnerKeysSubmit">Generate Key</button>
+          </form>
+          <div class="partner-keys-result" id="partnerKeysResult" hidden></div>
+        </div>
+
         <!-- CUSTOMER SUBMISSIONS (Partner area folders) -->
         <div class="fin-upload-section partner-subs-section">
           <div class="fin-upload-header">
