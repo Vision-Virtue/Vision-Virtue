@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+import v8 from 'v8';
 import app from './app';
 import { getDb, closeDb } from './db/database';
 
@@ -54,6 +55,8 @@ async function start(): Promise<void> {
     console.log(`  Health:   http://localhost:${PORT}/api/health`);
     console.log(`  Frontend: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
     console.log(`  Env:      ${process.env.NODE_ENV || 'development'}`);
+    const heapLimitMB = Math.round(v8.getHeapStatistics().heap_size_limit / (1024 * 1024));
+    console.log(`  Heap:     ${heapLimitMB} MB (max-old-space-size)`);
     console.log('\n  Agents:');
     console.log('    - Dr. Ethan Ross (Chief Economist)');
     console.log('    - Sofia Chen (Manager of Marketing)');
