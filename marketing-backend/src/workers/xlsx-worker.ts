@@ -54,18 +54,34 @@ const PRODUCTS = {
 
 // Section 7 Let's Scale — split by revenueType.
 // Each block fills customerName in col I, productName in col L,
-// price in col M.
+// price in col M, and quarterly + 2027 numbers in cols N/O/P/Q/R.
 const LETSSCALE_HW = {
   startRow: 44, maxRows: 6,
-  cols: { customerName: 'I', productName: 'L', price: 'M' },
+  cols: { customerName: 'I', productName: 'L', price: 'M',
+          q1: 'N', q2: 'O', q3: 'P', q4: 'Q', y2: 'R' },
 };
 const LETSSCALE_SW = {
   startRow: 52, maxRows: 6,
-  cols: { customerName: 'I', productName: 'L', price: 'M' },
+  cols: { customerName: 'I', productName: 'L', price: 'M',
+          q1: 'N', q2: 'O', q3: 'P', q4: 'Q', y2: 'R' },
 };
 const LETSSCALE_OTHER = {
   startRow: 60, maxRows: 5,
-  cols: { customerName: 'I', productName: 'L', price: 'M' },
+  cols: { customerName: 'I', productName: 'L', price: 'M',
+          q1: 'N', q2: 'O', q3: 'P', q4: 'Q', y2: 'R' },
+};
+
+// Section 8 Unit Costs — rows 69–78 (10 rows).
+const UNITCOSTS = {
+  startRow: 69, maxRows: 10,
+  cols: { name: 'H', cost: 'I' },
+};
+
+// Section 9 FTE — fixed 4 rows starting at 82: COGS, R&D, S&M, G&A.
+// Col I = 2026 quantity (y1), col J = 2027 quantity (y2).
+const FTE = {
+  startRow: 82,
+  cols: { y1: 'I', y2: 'J' },
 };
 
 interface SubmissionFormData {
@@ -341,8 +357,15 @@ async function run(input: WorkerInput): Promise<void> {
   const otherRows = all.filter((l) => l.revenueType === 'Other');
 
   const writeBlock = (
-    block: { startRow: number; maxRows: number; cols: { customerName: string; productName: string; price: string } },
-    items: Array<{ customerName?: string; productName?: string; price?: string }>,
+    block: {
+      startRow: number; maxRows: number;
+      cols: { customerName: string; productName: string; price: string;
+              q1: string; q2: string; q3: string; q4: string; y2: string };
+    },
+    items: Array<{
+      customerName?: string; productName?: string; price?: string;
+      q1?: string; q2?: string; q3?: string; q4?: string; y2?: string;
+    }>,
   ): void => {
     for (let i = 0; i < block.maxRows; i++) {
       const r = block.startRow + i;
@@ -350,12 +373,36 @@ async function run(input: WorkerInput): Promise<void> {
       set(`${block.cols.customerName}${r}`, l.customerName);
       set(`${block.cols.productName}${r}`,  l.productName);
       set(`${block.cols.price}${r}`,        l.price);
+      set(`${block.cols.q1}${r}`,           l.q1);
+      set(`${block.cols.q2}${r}`,           l.q2);
+      set(`${block.cols.q3}${r}`,           l.q3);
+      set(`${block.cols.q4}${r}`,           l.q4);
+      set(`${block.cols.y2}${r}`,           l.y2);
     }
   };
 
   writeBlock(LETSSCALE_HW,    hwRows);     // 7.a — rows 44–49
   writeBlock(LETSSCALE_SW,    swRows);     // 7.b — rows 52–57
   writeBlock(LETSSCALE_OTHER, otherRows);  // 7.c — rows 60–64
+
+  // 8 Unit Costs — rows 69–78
+  for (let i = 0; i < UNITCOSTS.maxRows; i++) {
+    const r = UNITCOSTS.startRow + i;
+    const u = (input.formData.unitCosts || [])[i] || {};
+    set(`${UNITCOSTS.cols.name}${r}`, u.productName);
+    set(`${UNITCOSTS.cols.cost}${r}`, u.cost);
+  }
+
+  // 9 FTE — fixed 4 rows starting at 82: COGS, R&D, S&M, G&A
+  const f = input.formData.fte || {};
+  set(`${FTE.cols.y1}${FTE.startRow + 0}`, f.cogs_y1);
+  set(`${FTE.cols.y2}${FTE.startRow + 0}`, f.cogs_y2);
+  set(`${FTE.cols.y1}${FTE.startRow + 1}`, f.rd_y1);
+  set(`${FTE.cols.y2}${FTE.startRow + 1}`, f.rd_y2);
+  set(`${FTE.cols.y1}${FTE.startRow + 2}`, f.sm_y1);
+  set(`${FTE.cols.y2}${FTE.startRow + 2}`, f.sm_y2);
+  set(`${FTE.cols.y1}${FTE.startRow + 3}`, f.ga_y1);
+  set(`${FTE.cols.y2}${FTE.startRow + 3}`, f.ga_y2);
 
   // Sort rows by row number (Excel requires ascending) and write back.
   rows.sort((a, b) => parseInt(a['@_r'], 10) - parseInt(b['@_r'], 10));
