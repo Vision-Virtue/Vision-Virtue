@@ -1,0 +1,276 @@
+# Visibility Offering — Budget Module Spec
+
+_Source of truth: the Excel workbook (Flow, Financial Structure, Organizational Structure, Salaries & Benefits, Budget). This file consolidates the rules captured there + clarifications._
+
+---
+
+## 1. Access & Customer Key
+
+- Entry point: a marketing CTA "Are you a customer…" routes the user to the **Visibility** offering.
+- The user must enter a **Customer Key** issued by authorized personnel via the existing Authorized Personnel tab. **No change to that flow.**
+- One customer key = one user with edit permissions. (Multi-user / view-only is out of scope for v1.)
+
+---
+
+## 2. Financial Structure
+
+### 2.1 GL upload
+- The customer uploads their ERP GL list via a button **"GLs upload here"**.
+- Accepted formats: **.xlsx and .csv**.
+- Max **500 rows** per upload.
+- Required column layout: **Column A = GL Number**, **Column B = GL Name**.
+- Validation errors **block** the upload (the customer must fix the file and re-upload).
+- On re-upload: the system **remembers** the P&L Section and Budget Category mappings the customer previously assigned to GLs that match by GL Number.
+- GLs present in a budget but missing from a re-upload remain in the system as **orphan GLs** — a non-blocking **notification banner** alerts the customer.
+
+### 2.2 Mapping each GL
+After upload, every GL row must be assigned:
+- **P&L Section** (dropdown — fixed list, see 2.3)
+- **Budget Category** (dropdown — conditional on P&L Section, see 2.3)
+
+If "Your Budget Category" is selected, the customer can overwrite it with **free-text** of their choice.
+
+### 2.3 P&L → Budget Category mapping (conditional dropdown source-of-truth)
+
+| P&L Section | Allowed Budget Categories |
+|---|---|
+| **Revenues** | License, Subscription, POC/NRE, Maintenance, Support, Other |
+| **COGS** | Salaries and benefits, Subcontractors, Materials, Cloud/Hosting, Royalties, Depreciation, Other |
+| **R&D** | Salaries and benefits, Subcontractors, Tools/Licenses, Cloud/Hosting, Materials, Travel, Other |
+| **S&M** | Salaries and benefits, Marketing, Conferences, Travel, Commissions, Advertising, Other |
+| **G&A** | Salaries and benefits, Professional services, Office, Insurance, Travel, Other |
+| **Financial Income/(Expenses)** | Interest income, Interest expense, FX, Bank fees, Other |
+| **Tax** | Current tax, Deferred tax, Other |
+| **Other Income/(Expenses)** | One-time gains, One-time losses, Other |
+
+(Use this table to drive the conditional dropdown.)
+
+### 2.4 Completion
+- Button **"Complete"** finalizes the Financial Structure.
+- Button **"Edit"** is available afterward — edits propagate to the **currently active** budget.
+
+---
+
+## 3. Organizational Structure
+
+Five independent dimension lists. Each entry is one row. All five are **optional** (a budget line may leave a dimension blank).
+
+| Dimension | Notes |
+|---|---|
+| **Companies** | Legal entities in the group |
+| **Divisions** | |
+| **Departments** | |
+| **Products** | |
+| **Activities** | |
+
+- "Complete" / "Edit" buttons same pattern as Financial Structure.
+- Org structure is **editable at any time**, including after a budget is finalized.
+- If a budget references an org value that was later deleted, the cell renders as **"blank"** (not an error).
+
+---
+
+## 4. Budget Structure — setup options
+
+The customer must choose, in order, before the entry table appears:
+
+1. **Year** (markbox) — current year or next year, derived from system date. Today = 2026 → options are 2026, 2027.
+2. **Period granularity** (markbox) — Monthly / Quarterly / Yearly.
+   - Monthly → 12 columns: Jan-2X … Dec-2X + FY-2X total
+   - Quarterly → 4 columns: Q1-2X … Q4-2X + FY-2X total
+   - Yearly → 1 column: FY-2X
+3. **Currency** (markbox) — USD / EUR / GBP / ILS. Single FX per budget.
+4. **Scale** (markbox) — Standard or Thousands. Numbers always render with thousands separator (e.g. 1,000,000 standard; 1,000 in thousands).
+5. **Salaries & Benefits route** (markbox, NEW — section 17) — "Do you want to use the Salaries & Benefits tab for Product-Activity % allocation of employee salaries?"
+   - **Yes** → user is routed to the S&B tab first (see Section 7).
+   - **No** → user goes directly to Budget Structure entry.
+
+---
+
+## 5. Budget Structure table
+
+### 5.1 Columns (left → right)
+
+| # | Column | Source / behavior |
+|---|---|---|
+| 1 | Company | Dropdown from Org Structure (optional) |
+| 2 | **Service Provider Name** | **Free text** (NEW) |
+| 3 | **Service Description** | **Free text** (NEW) |
+| 4 | Division | Dropdown from Org Structure (optional) |
+| 5 | Department | Dropdown from Org Structure (optional) |
+| 6 | Product | Dropdown from Org Structure (optional) |
+| 7 | Activity | Dropdown from Org Structure (optional) |
+| 8 | Account/GL Name | Dropdown from Financial Structure |
+| 9 | Account/GL Number | **Auto-pulled** from Financial Structure |
+| 10 | P&L Section | **Auto-pulled** from Financial Structure |
+| 11 | Budget Category | **Auto-pulled** from Financial Structure |
+| 12+ | Period columns | 12 / 4 / 1 columns per granularity choice |
+| Last | FY total | =SUM of period columns; auto-calculated, read-only |
+
+### 5.2 Entry rules
+- A GL may repeat across multiple rows (different Org dimensions, different vendor, etc.).
+- Blank period cells = **0** at compute time.
+- **No paste.** Manual entry only.
+- **"Duplicate amount" button per row**: fills all remaining period cells in that row with the value just entered.
+- Auto-save runs continuously while the user types.
+
+### 5.3 Salaries-rolled-in rows (from S&B Finalize)
+When a Salaries & Benefits group is finalized, it lands here as one or more rows:
+- Service Provider Name = **"Employees Salaries"**
+- Service Description = **"Employees Salaries"**
+- All other columns populated per S&B aggregation (Section 7).
+- Period amounts populated per granularity rule in 7.5.
+
+### 5.4 Finalize
+- Button **"Finalize"** saves and creates the budget.
+- A modal asks the customer to **name** the budget.
+- The named budget is stored as a file in the customer's personal area.
+- A finalized budget is **editable** (saves overwrite the same budget; no version history).
+- **Cap: 5 budgets per customer.** If the customer hits the cap, they must delete one before creating a new one.
+- Budgets can be deleted from the personal area.
+
+---
+
+## 6. Period & Currency change behavior (post-entry)
+
+| Change | Effect on entered numbers |
+|---|---|
+| Currency change (e.g. USD → EUR) | **No conversion.** Numbers stay as typed; only the displayed currency symbol changes. |
+| Scale change (Standard ↔ Thousands) | Display only — underlying values untouched. |
+| Granularity Monthly → Quarterly | **Auto-aggregates** (Jan+Feb+Mar → Q1, etc.). |
+| Granularity Quarterly → Yearly | Auto-aggregates Q1+Q2+Q3+Q4 → FY. |
+| Granularity Yearly → Monthly | Cannot reverse-split — system warns and clears period cells, preserving FY total in a help cell. _(If the team disagrees, flag this.)_ |
+
+---
+
+## 7. Salaries & Benefits tab (NEW)
+
+### 7.1 Purpose
+Lets the customer enter individual employees, allocate each one across the Org dimensions and a Product-Activity %, and then **finalize** them into Budget Structure rows.
+
+### 7.2 Upload (optional shortcut)
+- Accepted formats: **.xlsx and .csv**.
+- Required column layout in upload file:
+  - **Column A = Employee Name**
+  - **Column B = Monthly Salary**
+  - **Column C = Department**
+- The system maps these into the corresponding columns in the S&B table; the customer fills the rest manually.
+
+### 7.3 S&B table columns
+
+| # | Column | Source / behavior |
+|---|---|---|
+| 1 | Company | Dropdown from Org Structure |
+| 2 | Employee Name | Free text (or from upload) |
+| 3 | Division | Dropdown from Org Structure |
+| 4 | Department | Dropdown from Org Structure (or from upload) |
+| 5 | Product | Dropdown from Org Structure |
+| 6 | Activity | Dropdown from Org Structure |
+| 7 | Product-Activity % | Numeric % entered by user |
+| 8 | Monthly Salary | Numeric (or from upload) |
+| 9 | Allocated Monthly Salary | **Auto** = Monthly Salary × Product-Activity % |
+| 10 | Account/GL Name | Dropdown from Financial Structure |
+
+Numbers display with thousands separator.
+
+### 7.4 Validation rules
+- **Per employee, the sum of Product-Activity % across all rows must = 100%.**
+- If the same Employee Name appears with rows that push cumulative % **beyond 100%**, the system treats the surplus rows as a **second employee with the same name** and starts a fresh 100% counter. A non-blocking notification informs the customer.
+- **An employee cannot work in different Companies, Divisions, or Departments.** All rows for one employee must share the same Company, Division, and Department. (Product and Activity may differ — that's the point of the allocation.)
+- **Currency translation**: if Monthly Salary is in a currency different from the budget's chosen currency, the value translates automatically using the configured FX rate.
+
+### 7.5 Finalize → roll into Budget Structure
+
+The S&B tab has its **own "Finalize" button**, separate from the Budget Structure Finalize. It can be re-opened and edited at any time.
+
+On Finalize, the S&B rows are **pivot-aggregated** into Budget Structure rows.
+
+**Pivot key** (rows with all of these identical merge into one Budget Structure row):
+> **Company + Division + Department + Product + Activity + Account/GL Name**
+
+If any of those six values differ between two S&B rows, they become **two separate** Budget Structure rows. Employee Name and Monthly Salary are **not** part of the pivot key.
+
+In the resulting Budget Structure row(s):
+- Service Provider Name = "Employees Salaries"
+- Service Description = "Employees Salaries"
+- Period amounts come from the **Allocated Monthly Salary** of the matching pivot group:
+  - Monthly granularity → same Allocated Monthly Salary in every month column
+  - Quarterly → Allocated Monthly Salary × 3 in every quarter column
+  - Yearly → Allocated Monthly Salary × 12 in the FY column
+
+### 7.6 Worked example (matches the workbook)
+
+S&B input:
+
+| Company | Employee | Division | Department | Product | Activity | P-A % | Monthly Salary | Allocated |
+|---|---|---|---|---|---|---|---|---|
+| Company B | John Johnny | Division N | Department F | AI | Development | 50% | 20,000 | 10,000 |
+| Company B | John Johnny | Division N | Department F | AI | Research | 50% | 20,000 | 10,000 |
+| Company A | Yossi Yehusha | Divison O | Department 5 | ARC Z | Maintenance | 100% | 50,000 | 50,000 |
+
+After Finalize → 3 rows in Budget Structure (Activity differs between John's two rows, so they don't merge):
+
+| Company | Service Provider | Description | Division | Department | Product | Activity | GL Name | Monthly amt |
+|---|---|---|---|---|---|---|---|---|
+| Company B | Employees Salaries | Employees Salaries | Division N | Department F | AI | Development | Salaries R&D | 10,000 |
+| Company B | Employees Salaries | Employees Salaries | Division N | Department F | AI | Research | Salaries R&D | 10,000 |
+| Company A | Employees Salaries | Employees Salaries | Divison O | Department 5 | ARC Z | Maintenance | Salaries COGS | 50,000 |
+
+---
+
+## 8. Personal area — saved budgets
+
+Each finalized budget appears in two formats:
+
+### 8.1 Budget Structure view
+The full editable table from Section 5.
+
+### 8.2 P&L Pivot view
+Pivot grouped by: P&L Section → Budget Category → (rows aggregated). Period columns match the granularity. Includes:
+- **Gross Margin %** row — recalculates dynamically when filters change.
+- **FY total** column.
+
+### 8.3 Filters (P&L Pivot view)
+Multi-select, pivot-style:
+- Company, Division, Department, Product, Activity (each is multi-select)
+- **Period filter** — rolls up months → quarters → FY as the user changes granularity.
+- GM % recalculates against the filtered slice.
+
+### 8.4 Export
+A single **Export to Excel** action exports both:
+- Sheet 1: Budget Structure (raw)
+- Sheet 2: P&L Pivot (with current filter applied)
+
+---
+
+## 9. Help & onboarding
+
+- **Pre-upload help screen** before the first GL upload, explaining the Column A / B requirement.
+- **Step validation** at every "Complete" / "Finalize" — clear inline errors before the user can proceed.
+
+---
+
+## 10. Entity model (approved)
+
+```
+Customer
+  ├── GLAccount (number, name, P&LSection, BudgetCategory)
+  ├── OrgEntity (dimension: Company|Division|Department|Product|Activity, name)
+  └── Budget (name, year, granularity, currency, scale, status)
+        ├── BudgetLine (Company, ServiceProviderName, ServiceDescription,
+        │                Division, Department, Product, Activity, GLAccountId,
+        │                source: manual | salaries)
+        │     └── BudgetCell (period, amount)
+        └── SalariesGroup (one per budget; finalized = pivots into BudgetLines)
+              └── SalariesRow (Company, Employee, Division, Department,
+                               Product, Activity, ProductActivityPct,
+                               MonthlySalary, GLAccountId)
+```
+
+---
+
+## 11. Open / TBD
+
+- Granularity Yearly → Monthly: behavior on reverse-split (currently: clear + warn).
+- Orphan GL banner copy.
+- Whether deleting an Org dimension that is referenced in a finalized budget should warn the user pre-delete (currently: silent — cells render "blank").
+
