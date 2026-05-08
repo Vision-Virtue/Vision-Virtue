@@ -123,10 +123,11 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
   const ckClose    = document.getElementById('ckClose');
   const ckKey      = document.getElementById('ckKey');
   const ckEnterBtn = document.getElementById('ckEnterBtn');
-  const ckError    = document.getElementById('ckError');
-  const partnerCta = document.getElementById('partnerCustomerCta');
+  const ckError      = document.getElementById('ckError');
+  const partnerCta   = document.getElementById('partnerCustomerCta');
+  const visibilityCta = document.getElementById('visibilityCustomerCta');
 
-  if (!ckOverlay || !partnerCta) return;
+  if (!ckOverlay || (!partnerCta && !visibilityCta)) return;
 
   let pendingTarget = null;
 
@@ -147,6 +148,7 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 
   function targetUrl(t) {
     if (t === 'partner') return 'partner.html';
+    if (t === 'visibility') return 'visibility.html';
     return null;
   }
 
@@ -211,7 +213,8 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     if (url) window.location.href = url;
   }
 
-  partnerCta.addEventListener('click', () => openCk('partner'));
+  partnerCta?.addEventListener('click', () => openCk('partner'));
+  visibilityCta?.addEventListener('click', () => openCk('visibility'));
   ckClose.addEventListener('click', closeCk);
   ckOverlay.addEventListener('click', e => { if (e.target === ckOverlay) closeCk(); });
   ckEnterBtn.addEventListener('click', submitKey);

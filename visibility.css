@@ -1,0 +1,384 @@
+/* ============================================================
+   VISION & VIRTUE — Visibility customer area
+   Dark navy theme, mirrors the Finance AI panels.
+   Inherits root tokens (--navy-*, --accent, --gray-*, --font-*)
+   from styles.css.
+   ============================================================ */
+
+.vis-page {
+  background: var(--navy-900);
+  color: rgba(255, 255, 255, 0.85);
+  min-height: 100vh;
+}
+
+.vis-nav .vis-nav-badge {
+  background: rgba(91, 141, 224, 0.20);
+  color: #cfe0ff;
+  border: 1px solid rgba(91, 141, 224, 0.35);
+}
+
+/* ── HERO ───────────────────────────────────────────────── */
+.vis-hero {
+  position: relative;
+  padding: 6.5rem 2rem 3.5rem;
+  background-color: var(--navy-900);
+  background-image:
+    linear-gradient(180deg, rgba(10,18,38,0.92) 0%, rgba(10,18,38,0.85) 100%),
+    url('bg_arrows.jpg');
+  background-size: cover;
+  background-position: center;
+  text-align: center;
+}
+.vis-hero-content { max-width: 900px; margin: 0 auto; }
+.vis-hero-title {
+  font-family: var(--font-head);
+  font-size: clamp(2.2rem, 4.5vw, 3.4rem);
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.02em;
+  margin: 0.4rem 0 0.8rem;
+  line-height: 1.1;
+}
+.vis-hero-sub {
+  font-size: 1rem;
+  color: rgba(255, 255, 255, 0.72);
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+/* ── WORKSPACE ──────────────────────────────────────────── */
+.vis-workspace {
+  padding: 3rem 2rem 5rem;
+}
+.vis-workspace-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+/* Module tabs */
+.vis-tabs {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid rgba(91, 141, 224, 0.18);
+}
+.vis-tab {
+  position: relative;
+  padding: 0.85rem 1.25rem;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  border: none;
+  font-family: inherit;
+  font-size: 0.92rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px;
+  transition: color 0.15s, border-color 0.15s;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.vis-tab:hover:not(.is-disabled) {
+  color: #ffffff;
+}
+.vis-tab.is-active {
+  color: #ffffff;
+  border-bottom-color: #9bbdf2;
+}
+.vis-tab.is-disabled {
+  color: rgba(255, 255, 255, 0.32);
+  cursor: not-allowed;
+}
+.vis-tab-pill {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* Panel = one module's content */
+.vis-panel {
+  background: var(--navy-800);
+  border: 1px solid rgba(91, 141, 224, 0.18);
+  border-radius: 14px;
+  padding: 2rem 2rem 1.75rem;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+
+.vis-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+.vis-panel-title {
+  font-family: var(--font-head);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 0.4rem;
+}
+.vis-panel-sub {
+  font-size: 0.86rem;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.6;
+  max-width: 680px;
+  margin: 0;
+}
+
+.vis-status-pill {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.35rem 0.7rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.vis-status-pill[data-status="editing"] {
+  background: rgba(217, 156, 33, 0.15);
+  color: #f0c763;
+  border: 1px solid rgba(217, 156, 33, 0.4);
+}
+.vis-status-pill[data-status="completed"] {
+  background: rgba(74, 124, 63, 0.15);
+  color: #8ed47b;
+  border: 1px solid rgba(74, 124, 63, 0.4);
+}
+
+/* Help / details block */
+.vis-help {
+  background: rgba(91, 141, 224, 0.08);
+  border: 1px solid rgba(91, 141, 224, 0.18);
+  border-radius: 8px;
+  padding: 0.9rem 1.1rem;
+  margin-bottom: 1.25rem;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.86rem;
+}
+.vis-help summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #ffffff;
+}
+.vis-help[open] summary { margin-bottom: 0.5rem; }
+.vis-help ul { margin: 0; padding-left: 1.2rem; line-height: 1.7; }
+
+/* Upload bar */
+.vis-upload-bar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin-bottom: 1rem;
+}
+.vis-upload-hint {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Buttons */
+.vis-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-family: inherit;
+  font-size: 0.88rem;
+  font-weight: 700;
+  padding: 0.65rem 1.4rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: background 0.18s, transform 0.12s, border-color 0.18s;
+}
+.vis-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.vis-btn-primary {
+  background: rgba(58, 107, 196, 0.30);
+  color: #cfe0ff;
+  border-color: rgba(91, 141, 224, 0.5);
+}
+.vis-btn-primary:hover:not(:disabled) {
+  background: rgba(58, 107, 196, 0.45);
+  transform: translateY(-1px);
+}
+.vis-btn-ghost {
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.vis-btn-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+/* Banners */
+.vis-banner {
+  padding: 0.75rem 1rem;
+  border-radius: 6px;
+  font-size: 0.86rem;
+  line-height: 1.5;
+  margin-bottom: 1rem;
+}
+.vis-banner-error {
+  background: rgba(220, 60, 60, 0.12);
+  border: 1px solid rgba(220, 60, 60, 0.4);
+  color: #ff9c9c;
+}
+.vis-banner-warn {
+  background: rgba(217, 156, 33, 0.12);
+  border: 1px solid rgba(217, 156, 33, 0.4);
+  color: #f0c763;
+}
+.vis-banner-info {
+  background: rgba(91, 141, 224, 0.10);
+  border: 1px solid rgba(91, 141, 224, 0.35);
+  color: #cfe0ff;
+}
+
+/* Empty state */
+.vis-empty {
+  padding: 3rem 1rem;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.4);
+  font-style: italic;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+}
+
+/* GL mapping table */
+.vis-table-wrap {
+  overflow-x: auto;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.vis-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 880px;
+  font-size: 0.85rem;
+}
+.vis-table thead th {
+  background: rgba(91, 141, 224, 0.14);
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+  text-align: left;
+  padding: 0.7rem 0.85rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  white-space: nowrap;
+}
+.vis-table tbody td {
+  padding: 0.45rem 0.65rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  vertical-align: middle;
+}
+.vis-table tbody tr:hover { background: rgba(255, 255, 255, 0.025); }
+.vis-table tbody tr.is-orphan {
+  background: rgba(217, 156, 33, 0.06);
+}
+.vis-table tbody tr.is-orphan td.vis-col-glnum::before {
+  content: '⚠ ';
+  color: #f0c763;
+}
+.vis-table tbody tr.is-incomplete td.vis-col-glnum::before {
+  content: '• ';
+  color: #ff9c9c;
+}
+
+.vis-col-num    { width: 36px; color: rgba(255, 255, 255, 0.4); font-variant-numeric: tabular-nums; }
+.vis-col-glnum  { width: 130px; font-weight: 600; color: #ffffff; font-variant-numeric: tabular-nums; }
+.vis-col-glname { color: rgba(255, 255, 255, 0.85); }
+.vis-col-pl     { width: 200px; }
+.vis-col-bc     { width: 280px; }
+.vis-col-row-actions { width: 38px; text-align: right; }
+
+/* Inline editors (selects + text input) */
+.vis-table select,
+.vis-table input[type="text"] {
+  width: 100%;
+  padding: 0.4rem 0.55rem;
+  font-family: inherit;
+  font-size: 0.84rem;
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.vis-table select:focus,
+.vis-table input[type="text"]:focus {
+  border-color: rgba(155, 189, 242, 0.7);
+  background: rgba(255, 255, 255, 0.10);
+}
+.vis-table select option { background: var(--navy-800); color: #ffffff; }
+.vis-table input[type="text"]::placeholder { color: rgba(255, 255, 255, 0.35); }
+.vis-table select:disabled,
+.vis-table input[type="text"]:disabled {
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.45);
+  cursor: not-allowed;
+}
+
+.vis-bc-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.vis-row-rm {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.35);
+  cursor: pointer;
+  padding: 0.25rem 0.45rem;
+  border-radius: 4px;
+  font-size: 1rem;
+}
+.vis-row-rm:hover { color: #ff9c9c; background: rgba(255, 80, 80, 0.10); }
+
+/* Panel footer actions */
+.vis-panel-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: 1.5rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.vis-validation-summary {
+  margin-right: auto;
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.55);
+}
+.vis-validation-summary.is-error { color: #ff9c9c; }
+.vis-validation-summary.is-ready { color: #8ed47b; }
+
+/* When status = completed, gray everything out except Edit. */
+.vis-page.is-fs-completed .vis-table select,
+.vis-page.is-fs-completed .vis-table input[type="text"],
+.vis-page.is-fs-completed #fsUploadBtn,
+.vis-page.is-fs-completed #fsCompleteBtn {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+/* Responsive */
+@media (max-width: 700px) {
+  .vis-hero        { padding: 5rem 1.25rem 3rem; }
+  .vis-workspace   { padding: 2rem 1rem 4rem; }
+  .vis-panel       { padding: 1.5rem 1.25rem 1.25rem; }
+  .vis-panel-header { flex-direction: column; }
+  .vis-status-pill { align-self: flex-start; }
+  .vis-tab         { flex: 1; padding: 0.7rem 0.75rem; font-size: 0.85rem; }
+}

@@ -102,6 +102,36 @@ function initializeSchema(database: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_partner_subs_status     ON partner_submissions(status);
     CREATE INDEX IF NOT EXISTS idx_partner_subs_key_id     ON partner_submissions(customer_key_id);
     CREATE INDEX IF NOT EXISTS idx_partner_subs_submitted  ON partner_submissions(submitted_at);
+
+    -- Visibility offering — Financial Structure (Phase 1).
+    -- One row per GL line for a given customer key. budget_category may be
+    -- one of the fixed dropdown options, or 'Your Budget Category' with a
+    -- free-text override stored in budget_category_custom.
+    CREATE TABLE IF NOT EXISTS gl_accounts (
+      id                       TEXT PRIMARY KEY,
+      customer_key_id          TEXT NOT NULL,
+      gl_number                TEXT NOT NULL,
+      gl_name                  TEXT NOT NULL,
+      pl_section               TEXT,
+      budget_category          TEXT,
+      budget_category_custom   TEXT,
+      order_index              INTEGER NOT NULL DEFAULT 0,
+      orphan                   INTEGER NOT NULL DEFAULT 0,
+      created_at               TEXT NOT NULL,
+      updated_at               TEXT NOT NULL,
+      FOREIGN KEY (customer_key_id) REFERENCES customer_keys(id) ON DELETE CASCADE,
+      UNIQUE (customer_key_id, gl_number)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_gl_accounts_key_id ON gl_accounts(customer_key_id);
+
+    -- Tracks Financial Structure status (editing | completed).
+    CREATE TABLE IF NOT EXISTS financial_structure_state (
+      customer_key_id  TEXT PRIMARY KEY,
+      status           TEXT NOT NULL DEFAULT 'editing',
+      updated_at       TEXT NOT NULL,
+      FOREIGN KEY (customer_key_id) REFERENCES customer_keys(id) ON DELETE CASCADE
+    );
   `);
 
   // Migrations — add new columns to existing tables

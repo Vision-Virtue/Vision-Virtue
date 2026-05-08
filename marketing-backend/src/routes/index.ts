@@ -4,6 +4,7 @@ import { linkedInController } from '../controllers/linkedin.controller';
 import { authController, verifyPin } from '../controllers/auth.controller';
 import { chatController } from '../controllers/chat.controller';
 import { partnerController } from '../controllers/partner.controller';
+import { visibilityController } from '../controllers/visibility.controller';
 import { requireRaphael, requireLinkedIn, requireAdminPin } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -160,6 +161,40 @@ router.get('/customer/me/submissions/:id/xlsx', (req, res) => partnerController.
 // badge on the Authorized Personnel button. Returns just `{ pending: N }`,
 // no PII, so it doesn't need auth.
 router.get('/notifications/pending-count', (req, res) => partnerController.adminPendingCount(req, res));
+
+// ─── Visibility offering — Phase 1: Financial Structure ────────────────────
+
+router.get(
+  '/visibility/dropdowns',
+  (req, res) => visibilityController.dropdowns(req, res),
+);
+router.get(
+  '/visibility/financial-structure',
+  (req, res) => visibilityController.getFinancialStructure(req, res),
+);
+// Raw upload for the GL file. Customer key arrives via ?key= so we don't
+// trigger a CORS preflight on a binary POST.
+router.post(
+  '/visibility/gl/upload',
+  raw({ type: '*/*', limit: '5mb' }),
+  asyncHandler(async (req, res) => { await visibilityController.uploadGL(req, res); }),
+);
+router.patch(
+  '/visibility/gl/:id',
+  (req, res) => visibilityController.updateGL(req, res),
+);
+router.delete(
+  '/visibility/gl/:id',
+  (req, res) => visibilityController.deleteGL(req, res),
+);
+router.post(
+  '/visibility/financial-structure/complete',
+  (req, res) => visibilityController.completeFinancialStructure(req, res),
+);
+router.post(
+  '/visibility/financial-structure/edit',
+  (req, res) => visibilityController.editFinancialStructure(req, res),
+);
 
 // ─── Admin (Raphael) — Partner Submissions ──────────────────────────────────
 // All admin endpoints require X-Admin-Pin header OR ?pin= query (matching
