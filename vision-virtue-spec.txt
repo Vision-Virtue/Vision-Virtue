@@ -138,7 +138,7 @@ When a Salaries & Benefits group is finalized, it lands here as one or more rows
 | Scale change (Standard ↔ Thousands) | Display only — underlying values untouched. |
 | Granularity Monthly → Quarterly | **Auto-aggregates** (Jan+Feb+Mar → Q1, etc.). |
 | Granularity Quarterly → Yearly | Auto-aggregates Q1+Q2+Q3+Q4 → FY. |
-| Granularity Yearly → Monthly | Cannot reverse-split — system warns and clears period cells, preserving FY total in a help cell. _(If the team disagrees, flag this.)_ |
+| Granularity Yearly → Monthly | **Auto-splits evenly** (FY ÷ 12 into each month). User can then edit individual months. |
 
 ---
 
@@ -268,9 +268,8 @@ Customer
 
 ---
 
-## 11. Open / TBD
+## 11. Resolved decisions (formerly TBD)
 
-- Granularity Yearly → Monthly: behavior on reverse-split (currently: clear + warn).
-- Orphan GL banner copy.
-- Whether deleting an Org dimension that is referenced in a finalized budget should warn the user pre-delete (currently: silent — cells render "blank").
-
+- **Granularity Yearly → Monthly:** auto-split evenly. The FY value is divided by 12 and placed in each month column; the user may then edit individual months.
+- **Orphan GL banner copy:** _"X GL(s) from your previous upload are not in this new file. They remain in your budgets as orphan GLs. Review them in Financial Structure."_
+- **Org dimension delete with references:** pre-delete warning required. When the user attempts to delete a Company/Division/Department/Product/Activity that is referenced in any finalized budget or active S&B group, show: _"This [dimension] is used in N budget row(s). Deleting it will leave those cells blank. Continue?"_ — user must confirm to proceed.
