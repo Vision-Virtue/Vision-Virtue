@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vision &amp; Virtue | Visibility</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="visibility.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
+</head>
+<body class="vis-page">
+
+  <!-- NAV -->
+  <nav class="navbar vis-nav" id="navbar">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">
+        <span class="logo-v">V</span>
+        <span class="logo-text">VISION &amp; VIRTUE</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="index.html">← Main Site</a></li>
+        <li><span class="nav-badge vis-nav-badge">Visibility</span></li>
+        <li><button class="nav-reset-btn" id="signOutBtn" title="Sign out">⟳ Sign Out</button></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="vis-hero">
+    <div class="vis-hero-content">
+      <p class="hero-eyebrow">Customer Portal</p>
+      <h1 class="vis-hero-title">Visibility</h1>
+      <p class="vis-hero-sub" id="visHelloSub">A tailor-made budget integrated with your ERP — for ultimate visibility, growth, and efficiency.</p>
+    </div>
+  </section>
+
+  <!-- WORKSPACE -->
+  <section class="vis-workspace">
+    <div class="vis-workspace-inner">
+
+      <!-- Module tabs (Phase 1: only Financial Structure is active). -->
+      <nav class="vis-tabs" role="tablist">
+        <button type="button" class="vis-tab is-active" data-tab="financial-structure" role="tab" aria-selected="true">
+          1. Financial Structure
+        </button>
+        <button type="button" class="vis-tab is-disabled" data-tab="org-structure" role="tab" aria-selected="false" aria-disabled="true">
+          2. Organizational Structure
+          <span class="vis-tab-pill">Coming soon</span>
+        </button>
+        <button type="button" class="vis-tab is-disabled" data-tab="budget" role="tab" aria-selected="false" aria-disabled="true">
+          3. Budget
+          <span class="vis-tab-pill">Coming soon</span>
+        </button>
+      </nav>
+
+      <!-- ── Financial Structure ─────────────────────────────────── -->
+      <div class="vis-panel" id="panelFinancialStructure" role="tabpanel">
+
+        <header class="vis-panel-header">
+          <div>
+            <h2 class="vis-panel-title">Financial Structure</h2>
+            <p class="vis-panel-sub">Upload your ERP General Ledger list, then map each GL to a P&amp;L Section and Budget Category. The mapping is the foundation for all your budgets.</p>
+          </div>
+          <span class="vis-status-pill" id="fsStatusPill" data-status="editing">Editing</span>
+        </header>
+
+        <!-- Pre-upload help (collapsible). Shown once; the customer can
+             reopen it from the (?) link. -->
+        <details class="vis-help" id="fsHelp" open>
+          <summary>How to prepare your file</summary>
+          <ul>
+            <li>Accepted formats: <strong>.xlsx</strong> or <strong>.csv</strong></li>
+            <li>Maximum <strong>500 rows</strong> per upload</li>
+            <li><strong>Column A = GL Number</strong></li>
+            <li><strong>Column B = GL Name</strong></li>
+            <li>Re-uploads remember your previous P&amp;L Section / Budget Category mappings (matched by GL Number).</li>
+          </ul>
+        </details>
+
+        <!-- Upload bar -->
+        <div class="vis-upload-bar">
+          <input type="file" id="fsFileInput" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden />
+          <button type="button" class="vis-btn vis-btn-primary" id="fsUploadBtn">GLs upload here</button>
+          <span class="vis-upload-hint">.xlsx or .csv · ≤500 rows · A=GL#, B=GL Name</span>
+        </div>
+
+        <!-- Validation / status messages -->
+        <div class="vis-banner vis-banner-error" id="fsErrorBanner" hidden></div>
+        <div class="vis-banner vis-banner-warn"  id="fsOrphanBanner" hidden></div>
+        <div class="vis-banner vis-banner-info"  id="fsInfoBanner"   hidden></div>
+
+        <!-- GL mapping table -->
+        <div class="vis-table-wrap" id="fsTableWrap" hidden>
+          <table class="vis-table" id="fsTable">
+            <thead>
+              <tr>
+                <th class="vis-col-num">#</th>
+                <th class="vis-col-glnum">GL Number</th>
+                <th class="vis-col-glname">GL Name</th>
+                <th class="vis-col-pl">P&amp;L Section</th>
+                <th class="vis-col-bc">Budget Category</th>
+                <th class="vis-col-row-actions"></th>
+              </tr>
+            </thead>
+            <tbody id="fsTableBody"></tbody>
+          </table>
+        </div>
+
+        <div class="vis-empty" id="fsEmpty">
+          No GLs yet. Upload your ERP GL list to begin.
+        </div>
+
+        <!-- Footer actions -->
+        <footer class="vis-panel-actions">
+          <span class="vis-validation-summary" id="fsValidationSummary"></span>
+          <button type="button" class="vis-btn vis-btn-ghost"   id="fsEditBtn"     hidden>Edit</button>
+          <button type="button" class="vis-btn vis-btn-primary" id="fsCompleteBtn" disabled>Complete</button>
+        </footer>
+
+      </div>
+
+    </div>
+  </section>
+
+  <script src="visibility.js" defer></script>
+</body>
+</html>
