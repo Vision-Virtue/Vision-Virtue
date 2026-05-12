@@ -265,7 +265,11 @@ fsTableBody.addEventListener('change', async (ev) => {
     row.budgetCategory       = value;
     row.budgetCategoryCustom = isYour ? (row.budgetCategoryCustom || '') : '';
     render();
+    // Always send the full mapping triple so the server can validate the
+    // combined state. Sending only `budgetCategory` would make the server
+    // see `plSection` as unset and reject the patch.
     const updated = await patchRow(id, {
+      plSection:            row.plSection || null,
       budgetCategory:       value || null,
       budgetCategoryCustom: isYour ? (row.budgetCategoryCustom || '') : null,
     });
@@ -297,8 +301,12 @@ fsTableBody.addEventListener('input', (ev) => {
   row.budgetCategoryCustom = target.value;
   if (customDebounce) clearTimeout(customDebounce);
   customDebounce = setTimeout(async () => {
-    const updated = await patchRow(id, { budgetCategoryCustom: target.value });
-    if (updated) Object.assign(row, updated);
+    const updated = await patchRow(id, {
+      plSection:            row.plSection || null,
+      budgetCategory:       row.budgetCategory || null,
+      budgetCategoryCustom: target.value,
+    });
+    if (updated) Object.assign(row, normalize(updated));
     refreshValidationSummary();
   }, 350);
 });
