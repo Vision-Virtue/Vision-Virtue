@@ -163,33 +163,42 @@ export const visibilityController = {
 
     // Validate the dropdown choices server-side. Empty string normalised
     // to null so the UI can clear a selection.
+    //
+    // PATCH is partial — fields absent from the payload should keep the
+    // row's current value, so the cross-field validation (P&L required
+    // before Budget Category, BC must be allowed under the P&L) operates
+    // on the merged state, not on the patch alone.
     const norm = <T,>(v: T | null | undefined): T | null => (v === '' || v == null ? null : v);
-    const plSection = norm(parsed.data.plSection);
-    const bc        = norm(parsed.data.budgetCategory);
-    const bcCustom  = norm(parsed.data.budgetCategoryCustom);
+    const patchedPL       = 'plSection'            in parsed.data ? norm(parsed.data.plSection)            : existing.plSection;
+    const patchedBC       = 'budgetCategory'       in parsed.data ? norm(parsed.data.budgetCategory)       : existing.budgetCategory;
+    const patchedBCCustom = 'budgetCategoryCustom' in parsed.data ? norm(parsed.data.budgetCategoryCustom) : existing.budgetCategoryCustom;
 
-    if (plSection !== null && !(PL_SECTIONS as readonly string[]).includes(plSection)) {
-      res.status(400).json({ error: { code: 'BAD_PL_SECTION', message: `Unknown P&L Section "${plSection}".` } });
+    if (patchedPL !== null && !(PL_SECTIONS as readonly string[]).includes(patchedPL)) {
+      res.status(400).json({ error: { code: 'BAD_PL_SECTION', message: `Unknown P&L Section "${patchedPL}".` } });
       return;
     }
-    if (bc !== null && plSection === null) {
+    if (patchedBC !== null && patchedPL === null) {
       res.status(400).json({ error: { code: 'PL_SECTION_REQUIRED', message: 'Pick a P&L Section before a Budget Category.' } });
       return;
     }
-    if (bc !== null && plSection !== null) {
-      const allowed = BUDGET_CATEGORIES_BY_SECTION[plSection as PLSection];
-      if (!allowed.includes(bc)) {
-        res.status(400).json({ error: { code: 'BAD_BUDGET_CATEGORY', message: `"${bc}" is not allowed under ${plSection}.` } });
+    if (patchedBC !== null && patchedPL !== null) {
+      const allowed = BUDGET_CATEGORIES_BY_SECTION[patchedPL as PLSection];
+      if (!allowed.includes(patchedBC)) {
+        res.status(400).json({ error: { code: 'BAD_BUDGET_CATEGORY', message: `"${patchedBC}" is not allowed under ${patchedPL}.` } });
         return;
       }
     }
     // Free-text override is only meaningful when budgetCategory === Your Budget Category.
-    const finalCustom = bc === YOUR_BUDGET ? (bcCustom ?? '') : null;
+    const finalCustom = patchedBC === YOUR_BUDGET ? (patchedBCCustom ?? '') : null;
 
+    // Persist only the fields that were actually in the patch — that
+    // keeps the audit trail honest about what changed.
     const updated = glAccountRepo.updateMapping(req.params.id, {
-      plSection,
-      budgetCategory:       bc,
-      budgetCategoryCustom: finalCustom,
+      ...('plSection'            in parsed.data ? { plSection:            patchedPL } : {}),
+      ...('budgetCategory'       in parsed.data ? { budgetCategory:       patchedBC } : {}),
+      ...('budgetCategoryCustom' in parsed.data || 'budgetCategory' in parsed.data
+        ? { budgetCategoryCustom: finalCustom }
+        : {}),
     });
     if (!updated) {
       res.status(404).json({ error: { code: 'NOT_FOUND', message: 'GL row not found.' } });
