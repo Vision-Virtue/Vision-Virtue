@@ -53,7 +53,28 @@ async function api(path, opts = {}) {
 }
 
 // ── State ────────────────────────────────────────────────────
-let dropdowns = { plSections: [], budgetCategoriesBySection: {}, yourBudgetCategoryToken: 'Your Budget Category' };
+// Default dropdowns mirror the spec §2.3 table (single source of
+// truth on the backend at visibility.controller.ts). They live here
+// too so the UI keeps working even if the /api/visibility/dropdowns
+// endpoint is briefly unavailable (e.g. the moments after a redeploy).
+const DEFAULT_DROPDOWNS = {
+  plSections: [
+    'Revenues', 'COGS', 'R&D', 'S&M', 'G&A',
+    'Financial Income/(Expenses)', 'Tax', 'Other Income/(Expenses)',
+  ],
+  yourBudgetCategoryToken: 'Your Budget Category',
+  budgetCategoriesBySection: {
+    'Revenues':                    ['License', 'Subscription', 'POC/NRE', 'Maintenance', 'Support', 'Other', 'Your Budget Category'],
+    'COGS':                        ['Salaries and benefits', 'Subcontractors', 'Materials', 'Cloud/Hosting', 'Royalties', 'Depreciation', 'Other', 'Your Budget Category'],
+    'R&D':                         ['Salaries and benefits', 'Subcontractors', 'Tools/Licenses', 'Cloud/Hosting', 'Materials', 'Travel', 'Other', 'Your Budget Category'],
+    'S&M':                         ['Salaries and benefits', 'Marketing', 'Conferences', 'Travel', 'Commissions', 'Advertising', 'Other', 'Your Budget Category'],
+    'G&A':                         ['Salaries and benefits', 'Professional services', 'Office', 'Insurance', 'Travel', 'Other', 'Your Budget Category'],
+    'Financial Income/(Expenses)': ['Interest income', 'Interest expense', 'FX', 'Bank fees', 'Other', 'Your Budget Category'],
+    'Tax':                         ['Current tax', 'Deferred tax', 'Other', 'Your Budget Category'],
+    'Other Income/(Expenses)':     ['One-time gains', 'One-time losses', 'Other', 'Your Budget Category'],
+  },
+};
+let dropdowns = DEFAULT_DROPDOWNS;
 let glRows    = []; // [{id, glNumber, glName, plSection, budgetCategory, budgetCategoryCustom, orphan}]
 let fsStatus  = 'editing';
 
@@ -365,10 +386,22 @@ function toClientRow(r) {
 (async function boot() {
   try {
     const [ddRes, fsRes] = await Promise.all([
-      fetch(`${VIS_API}/api/visibility/dropdowns`),
+      fetch(`${VIS_API}/api/visibility/dropdowns`).catch(() => null),
       api('/api/visibility/financial-structure'),
     ]);
-    if (ddRes.ok) dropdowns = await ddRes.json();
+    // Only adopt server dropdowns if they're well-formed. Falling back to
+    // DEFAULT_DROPDOWNS is safer than wiping them out with an empty payload.
+    if (ddRes && ddRes.ok) {
+      try {
+        const dd = await ddRes.json();
+        if (
+          dd && Array.isArray(dd.plSections) && dd.plSections.length > 0 &&
+          dd.budgetCategoriesBySection && typeof dd.budgetCategoriesBySection === 'object'
+        ) {
+          dropdowns = dd;
+        }
+      } catch { /* keep defaults */ }
+    }
     if (fsRes.ok) {
       const data = await fsRes.json();
       fsStatus = data.status || 'editing';
