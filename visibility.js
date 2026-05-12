@@ -241,26 +241,48 @@ fsTableBody.addEventListener('change', async (ev) => {
   const field = target.getAttribute('data-field');
   if (!field) return;
 
+  // Optimistic UI: apply the change locally and re-render BEFORE the
+  // PATCH round-trip so the dependent dropdowns/inputs update instantly.
+  // If the server rejects, we revert from the snapshot below.
+  const snapshot = { ...row };
+
   if (field === 'plSection') {
     // Changing P&L Section invalidates Budget Category.
-    const updated = await patchRow(id, { plSection: target.value || null, budgetCategory: null, budgetCategoryCustom: null });
-    if (updated) {
-      Object.assign(row, updated);
-      render();
-    }
-  } else if (field === 'budgetCategory') {
-    const value = target.value || null;
-    const isYour = value === dropdowns.yourBudgetCategoryToken;
+    row.plSection            = target.value || '';
+    row.budgetCategory       = '';
+    row.budgetCategoryCustom = '';
+    render();
     const updated = await patchRow(id, {
-      budgetCategory:       value,
+      plSection:            target.value || null,
+      budgetCategory:       null,
+      budgetCategoryCustom: null,
+    });
+    if (updated) { Object.assign(row, normalize(updated)); render(); }
+    else        { Object.assign(row, snapshot); render(); }
+  } else if (field === 'budgetCategory') {
+    const value  = target.value || '';
+    const isYour = value === dropdowns.yourBudgetCategoryToken;
+    row.budgetCategory       = value;
+    row.budgetCategoryCustom = isYour ? (row.budgetCategoryCustom || '') : '';
+    render();
+    const updated = await patchRow(id, {
+      budgetCategory:       value || null,
       budgetCategoryCustom: isYour ? (row.budgetCategoryCustom || '') : null,
     });
-    if (updated) {
-      Object.assign(row, updated);
-      render();
-    }
+    if (updated) { Object.assign(row, normalize(updated)); render(); }
+    else        { Object.assign(row, snapshot); render(); }
   }
 });
+
+function normalize(r) {
+  return {
+    ...r,
+    plSection:            r.plSection || '',
+    budgetCategory:       r.budgetCategory || '',
+    budgetCategoryCustom: r.budgetCategoryCustom || '',
+    orphan:               !!r.orphan,
+  };
+}
 
 // debounce free-text edits to avoid one PATCH per keystroke
 let customDebounce = null;
