@@ -384,24 +384,12 @@ function toClientRow(r) {
 }
 
 (async function boot() {
+  // dropdowns is initialized to DEFAULT_DROPDOWNS at module load — no
+  // need to fetch them. Spec §2.3 is a fixed table; the server keeps its
+  // own authoritative copy for validation, but the UI doesn't depend on
+  // the network to render the selects.
   try {
-    const [ddRes, fsRes] = await Promise.all([
-      fetch(`${VIS_API}/api/visibility/dropdowns`).catch(() => null),
-      api('/api/visibility/financial-structure'),
-    ]);
-    // Only adopt server dropdowns if they're well-formed. Falling back to
-    // DEFAULT_DROPDOWNS is safer than wiping them out with an empty payload.
-    if (ddRes && ddRes.ok) {
-      try {
-        const dd = await ddRes.json();
-        if (
-          dd && Array.isArray(dd.plSections) && dd.plSections.length > 0 &&
-          dd.budgetCategoriesBySection && typeof dd.budgetCategoriesBySection === 'object'
-        ) {
-          dropdowns = dd;
-        }
-      } catch { /* keep defaults */ }
-    }
+    const fsRes = await api('/api/visibility/financial-structure');
     if (fsRes.ok) {
       const data = await fsRes.json();
       fsStatus = data.status || 'editing';
