@@ -379,7 +379,27 @@ fsCompleteBtn.addEventListener('click', async () => {
     const res = await api('/api/visibility/financial-structure/complete', { method: 'POST' });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      showBanner(fsErrorBanner, htmlEsc(body?.error?.message || `Could not complete (${res.status}).`));
+      // Server returns { error: { code, message, glIds? } }. If glIds are
+      // present, re-fetch the GL list so the table reflects the actual
+      // server-side state (any rows that look mapped locally but failed
+      // earlier PATCHes will show as empty again, making the problem
+      // obvious instead of invisible).
+      const ids = Array.isArray(body?.error?.glIds) ? body.error.glIds : [];
+      showBanner(
+        fsErrorBanner,
+        htmlEsc(body?.error?.message || `Could not complete (${res.status}).`)
+        + (ids.length > 0 ? ' Refreshing the table to show the server\'s current state…' : ''),
+      );
+      if (ids.length > 0) {
+        try {
+          const fresh = await api('/api/visibility/financial-structure');
+          if (fresh.ok) {
+            const data = await fresh.json();
+            glRows = (data.glAccounts || []).map(toClientRow);
+            render();
+          }
+        } catch { /* keep existing local state */ }
+      }
       return;
     }
     const data = await res.json();

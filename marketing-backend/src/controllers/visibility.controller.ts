@@ -169,9 +169,10 @@ export const visibilityController = {
     // before Budget Category, BC must be allowed under the P&L) operates
     // on the merged state, not on the patch alone.
     const norm = <T,>(v: T | null | undefined): T | null => (v === '' || v == null ? null : v);
-    const patchedPL       = 'plSection'            in parsed.data ? norm(parsed.data.plSection)            : existing.plSection;
-    const patchedBC       = 'budgetCategory'       in parsed.data ? norm(parsed.data.budgetCategory)       : existing.budgetCategory;
-    const patchedBCCustom = 'budgetCategoryCustom' in parsed.data ? norm(parsed.data.budgetCategoryCustom) : existing.budgetCategoryCustom;
+    const has = <K extends keyof typeof parsed.data>(k: K): boolean => parsed.data[k] !== undefined;
+    const patchedPL       = has('plSection')            ? norm(parsed.data.plSection)            : existing.plSection;
+    const patchedBC       = has('budgetCategory')       ? norm(parsed.data.budgetCategory)       : existing.budgetCategory;
+    const patchedBCCustom = has('budgetCategoryCustom') ? norm(parsed.data.budgetCategoryCustom) : existing.budgetCategoryCustom;
 
     if (patchedPL !== null && !(PL_SECTIONS as readonly string[]).includes(patchedPL)) {
       res.status(400).json({ error: { code: 'BAD_PL_SECTION', message: `Unknown P&L Section "${patchedPL}".` } });
@@ -194,9 +195,9 @@ export const visibilityController = {
     // Persist only the fields that were actually in the patch — that
     // keeps the audit trail honest about what changed.
     const updated = glAccountRepo.updateMapping(req.params.id, {
-      ...('plSection'            in parsed.data ? { plSection:            patchedPL } : {}),
-      ...('budgetCategory'       in parsed.data ? { budgetCategory:       patchedBC } : {}),
-      ...('budgetCategoryCustom' in parsed.data || 'budgetCategory' in parsed.data
+      ...(has('plSection')            ? { plSection:            patchedPL } : {}),
+      ...(has('budgetCategory')       ? { budgetCategory:       patchedBC } : {}),
+      ...(has('budgetCategoryCustom') || has('budgetCategory')
         ? { budgetCategoryCustom: finalCustom }
         : {}),
     });
