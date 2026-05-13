@@ -425,9 +425,15 @@ fsCompleteBtn.addEventListener('click', async () => {
       }
       return;
     }
-    const data = await res.json();
-    fsStatus = data.status || 'completed';
+    // 2xx from /complete is enough — the server already flipped state to
+    // 'completed'. Don't trust the response shape to confirm it.
+    await res.json().catch(() => ({}));
+    fsStatus = 'completed';
     refreshStatusUi();
+    showBanner(
+      fsInfoBanner,
+      `Financial Structure marked as <strong>completed</strong>. Use Edit to re-open it later.`,
+    );
   } finally {
     fsCompleteBtn.textContent = original;
     fsCompleteBtn.disabled = false;
