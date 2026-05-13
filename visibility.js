@@ -206,8 +206,14 @@ function refreshValidationSummary() {
 }
 
 function refreshStatusUi() {
+  // Clear any inline styles set by the Complete success path so the
+  // pill/buttons can re-style themselves via CSS based on data-status.
+  fsStatusPill.style.cssText  = '';
+  fsCompleteBtn.style.display = '';
+  fsEditBtn.style.display     = '';
+
   fsStatusPill.dataset.status = fsStatus;
-  fsStatusPill.textContent = fsStatus === 'completed' ? 'Completed' : 'Editing';
+  fsStatusPill.textContent    = fsStatus === 'completed' ? 'Completed' : 'Editing';
   document.body.classList.toggle('is-fs-completed', fsStatus === 'completed');
   fsEditBtn.hidden     = fsStatus !== 'completed';
   fsCompleteBtn.hidden = fsStatus === 'completed';
@@ -453,6 +459,9 @@ fsEditBtn.addEventListener('click', async () => {
   if (res.ok) {
     fsStatus = 'editing';
     refreshStatusUi();
+    // Drop the success banner + any remaining inline overrides on it.
+    fsInfoBanner.style.cssText = '';
+    showBanner(fsInfoBanner, '');
   }
 });
 
