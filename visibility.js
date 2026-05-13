@@ -430,10 +430,17 @@ fsCompleteBtn.addEventListener('click', async () => {
     await res.json().catch(() => ({}));
     fsStatus = 'completed';
     refreshStatusUi();
-    showBanner(
-      fsInfoBanner,
-      `Financial Structure marked as <strong>completed</strong>. Use Edit to re-open it later.`,
-    );
+    // Belt-and-suspenders: set pill + banner via inline style so they
+    // visibly update even if a stale cached CSS doesn't have the
+    // [data-status="completed"] color rule yet.
+    fsStatusPill.textContent     = 'Completed';
+    fsStatusPill.style.cssText   = 'background: rgba(74,124,63,0.15); color: #8ed47b; border: 1px solid rgba(74,124,63,0.4);';
+    fsCompleteBtn.style.display  = 'none';
+    fsEditBtn.style.display      = 'inline-flex';
+    fsInfoBanner.innerHTML = '<strong>✓ Financial Structure marked as completed.</strong> Use Edit to re-open it later.';
+    fsInfoBanner.style.cssText   = 'display: block; padding: 0.75rem 1rem; border-radius: 6px; background: rgba(91,141,224,0.10); border: 1px solid rgba(91,141,224,0.35); color: #cfe0ff; margin-bottom: 1rem;';
+    fsInfoBanner.removeAttribute('hidden');
+    console.log('[visibility] Financial Structure completed.');
   } finally {
     fsCompleteBtn.textContent = original;
     fsCompleteBtn.disabled = false;
