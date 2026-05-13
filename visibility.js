@@ -374,16 +374,39 @@ fsCompleteBtn.addEventListener('click', async () => {
   clearError();
   fsCompleteBtn.disabled = true;
   const original = fsCompleteBtn.textContent;
-  fsCompleteBtn.textContent = 'Completing…';
+  fsCompleteBtn.textContent = 'Saving rows…';
+
   try {
+    // Sweep-save every non-orphan row from the current local state
+    // before validating server-side. This catches any rows whose
+    // individual PATCHes during typing silently failed (e.g. during
+    // a Render redeploy) so the server's view matches the UI before
+    // we ask it to validate completion.
+    let sweepFailures = 0;
+    for (const row of glRows) {
+      if (row.orphan) continue;
+      const updated = await patchRow(row.id, {
+        plSection:            row.plSection            || null,
+        budgetCategory:       row.budgetCategory       || null,
+        budgetCategoryCustom: row.budgetCategoryCustom || null,
+      });
+      if (!updated) { sweepFailures++; continue; }
+      Object.assign(row, normalize(updated));
+    }
+    if (sweepFailures > 0) {
+      render();
+      showBanner(
+        fsErrorBanner,
+        `Could not save ${sweepFailures} row${sweepFailures === 1 ? '' : 's'} — server rejected the mapping. Check each highlighted row above.`,
+      );
+      return;
+    }
+    render();
+
+    fsCompleteBtn.textContent = 'Completing…';
     const res = await api('/api/visibility/financial-structure/complete', { method: 'POST' });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      // Server returns { error: { code, message, glIds? } }. If glIds are
-      // present, re-fetch the GL list so the table reflects the actual
-      // server-side state (any rows that look mapped locally but failed
-      // earlier PATCHes will show as empty again, making the problem
-      // obvious instead of invisible).
       const ids = Array.isArray(body?.error?.glIds) ? body.error.glIds : [];
       showBanner(
         fsErrorBanner,
