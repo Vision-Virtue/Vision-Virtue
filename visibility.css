@@ -202,6 +202,9 @@
   transition: background 0.18s, transform 0.12s, border-color 0.18s;
 }
 .vis-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Class display values override the `hidden` attribute's default
+   `display: none`; restore it explicitly. */
+.vis-btn[hidden] { display: none !important; }
 .vis-btn-primary {
   background: rgba(58, 107, 196, 0.30);
   color: #cfe0ff;
