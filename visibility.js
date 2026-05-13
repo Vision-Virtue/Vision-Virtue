@@ -222,11 +222,19 @@ function refreshStatusUi() {
 // ── Inline edit handlers ─────────────────────────────────────
 async function patchRow(id, fields) {
   clearError();
-  const res = await api(`/api/visibility/gl/${encodeURIComponent(id)}`, {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(fields),
-  });
+  let res;
+  try {
+    res = await api(`/api/visibility/gl/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(fields),
+    });
+  } catch (err) {
+    // Network / CORS errors throw before producing a Response. Surface
+    // them so the user sees something instead of a silently-failing UI.
+    showBanner(fsErrorBanner, htmlEsc(`Save failed: ${(err && err.message) || err}`));
+    return null;
+  }
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
     showBanner(fsErrorBanner, htmlEsc(body?.error?.message || `Save failed (${res.status}).`));
