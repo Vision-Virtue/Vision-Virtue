@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0" />
   <title>Vision &amp; Virtue | Visibility</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="visibility.css?v=3" />
+  <link rel="stylesheet" href="visibility.css?v=4" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
@@ -52,9 +52,8 @@
         <button type="button" class="vis-tab" data-tab="org-structure" role="tab" aria-selected="false">
           2. Organizational Structure
         </button>
-        <button type="button" class="vis-tab is-disabled" data-tab="budget" role="tab" aria-selected="false" aria-disabled="true">
+        <button type="button" class="vis-tab" data-tab="budget" role="tab" aria-selected="false">
           3. Budget
-          <span class="vis-tab-pill">Coming soon</span>
         </button>
       </nav>
 
@@ -209,6 +208,103 @@
 
       </div>
 
+      <!-- ── Budget (Phase 3a) ──────────────────────────────────── -->
+      <div class="vis-panel" id="panelBudget" role="tabpanel" hidden>
+
+        <!-- LIST sub-view -->
+        <div class="vis-budget-list-view" id="budgetListView">
+          <header class="vis-panel-header">
+            <div>
+              <h2 class="vis-panel-title">Budgets</h2>
+              <p class="vis-panel-sub">Each budget locks in its setup (year, granularity, currency, scale). You can save up to <strong>5 budgets</strong>; delete one to make room.</p>
+            </div>
+            <button type="button" class="vis-btn vis-btn-primary" id="newBudgetBtn">+ New Budget</button>
+          </header>
+
+          <div class="vis-banner vis-banner-error" id="bgListErrorBanner" hidden></div>
+          <div class="vis-banner vis-banner-info"  id="bgListInfoBanner"  hidden></div>
+
+          <div class="vis-budget-list" id="budgetList"></div>
+          <div class="vis-empty" id="budgetEmpty">No budgets yet. Click <strong>+ New Budget</strong> to set one up.</div>
+        </div>
+
+        <!-- EDITOR sub-view -->
+        <div class="vis-budget-editor-view" id="budgetEditorView" hidden>
+          <header class="vis-panel-header">
+            <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="budgetBackBtn">← Back to budgets</button>
+            <span class="vis-status-pill" id="budgetStatusPill" data-status="draft">Draft</span>
+          </header>
+
+          <!-- Setup options (spec §4) -->
+          <section class="vis-budget-setup">
+            <h3 class="vis-budget-setup-title">Setup</h3>
+            <div class="vis-budget-setup-grid">
+              <div class="vis-budget-setup-field">
+                <label>1. Year</label>
+                <div class="vis-pillgroup" data-setup="year"></div>
+              </div>
+              <div class="vis-budget-setup-field">
+                <label>2. Period granularity</label>
+                <div class="vis-pillgroup" data-setup="granularity">
+                  <button type="button" data-value="monthly">Monthly</button>
+                  <button type="button" data-value="quarterly">Quarterly</button>
+                  <button type="button" data-value="yearly">Yearly</button>
+                </div>
+              </div>
+              <div class="vis-budget-setup-field">
+                <label>3. Currency</label>
+                <div class="vis-pillgroup" data-setup="currency">
+                  <button type="button" data-value="USD">USD</button>
+                  <button type="button" data-value="EUR">EUR</button>
+                  <button type="button" data-value="GBP">GBP</button>
+                  <button type="button" data-value="ILS">ILS</button>
+                </div>
+              </div>
+              <div class="vis-budget-setup-field">
+                <label>4. Scale</label>
+                <div class="vis-pillgroup" data-setup="scale">
+                  <button type="button" data-value="standard">Standard</button>
+                  <button type="button" data-value="thousands">Thousands</button>
+                </div>
+              </div>
+              <div class="vis-budget-setup-field">
+                <label>5. Use Salaries &amp; Benefits tab for Product-Activity % allocation?</label>
+                <div class="vis-pillgroup" data-setup="sbEnabled">
+                  <button type="button" data-value="true">Yes</button>
+                  <button type="button" data-value="false">No</button>
+                </div>
+              </div>
+            </div>
+            <p class="vis-budget-setup-note">Changing granularity will auto-aggregate or evenly split your entered amounts (spec §6).</p>
+          </section>
+
+          <div class="vis-banner vis-banner-error" id="bgEditorErrorBanner" hidden></div>
+          <div class="vis-banner vis-banner-info"  id="bgEditorInfoBanner"  hidden></div>
+
+          <!-- Budget Structure table -->
+          <section class="vis-budget-table-section">
+            <div class="vis-budget-table-header">
+              <h3>Budget Structure</h3>
+              <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="addBudgetLineBtn">+ Add row</button>
+            </div>
+            <div class="vis-table-wrap vis-budget-table-wrap">
+              <table class="vis-table vis-budget-table" id="budgetTable">
+                <thead id="budgetTableHead"></thead>
+                <tbody id="budgetTableBody"></tbody>
+              </table>
+            </div>
+            <div class="vis-empty" id="budgetTableEmpty">No rows yet. Click <strong>+ Add row</strong> to begin.</div>
+          </section>
+
+          <footer class="vis-panel-actions">
+            <span class="vis-validation-summary" id="bgFooterSummary"></span>
+            <button type="button" class="vis-btn vis-btn-ghost"   id="budgetDeleteBtn">Delete budget</button>
+            <button type="button" class="vis-btn vis-btn-primary" id="budgetFinalizeBtn">Finalize</button>
+          </footer>
+        </div>
+
+      </div>
+
     </div>
   </section>
 
@@ -224,6 +320,19 @@
     </div>
   </div>
 
-  <script src="visibility.js?v=13" defer></script>
+  <!-- Generic prompt modal (re-used; one text input) -->
+  <div class="vis-modal" id="visPromptModal" hidden>
+    <div class="vis-modal-card">
+      <h3 class="vis-modal-title" id="visPromptTitle">Name</h3>
+      <p class="vis-modal-body" id="visPromptBody"></p>
+      <input type="text" class="vis-modal-input" id="visPromptInput" maxlength="200" />
+      <div class="vis-modal-actions">
+        <button type="button" class="vis-btn vis-btn-ghost"   id="visPromptCancel">Cancel</button>
+        <button type="button" class="vis-btn vis-btn-primary" id="visPromptOk">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="visibility.js?v=14" defer></script>
 </body>
 </html>
