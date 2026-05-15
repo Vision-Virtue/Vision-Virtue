@@ -519,6 +519,9 @@ function activateTab(tabName) {
   }
   if (panelFS) panelFS.hidden = tabName !== 'financial-structure';
   if (panelOS) panelOS.hidden = tabName !== 'org-structure';
+  const panelB = document.getElementById('panelBudget');
+  if (panelB) panelB.hidden = tabName !== 'budget';
+  if (tabName === 'budget') void loadBudgetList();
 }
 for (const t of tabs) {
   t.addEventListener('click', () => {
@@ -753,6 +756,597 @@ function confirmModal(title, body) {
     modalOk.addEventListener('click', onOk);
     modalCancel.addEventListener('click', onCancel);
     modal.addEventListener('click', onBackdrop);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+//  PHASE 3a — Budgets
+// ─────────────────────────────────────────────────────────────
+
+const BUDGET_PERIOD_LABELS = {
+  M01: 'Jan', M02: 'Feb', M03: 'Mar', M04: 'Apr', M05: 'May', M06: 'Jun',
+  M07: 'Jul', M08: 'Aug', M09: 'Sep', M10: 'Oct', M11: 'Nov', M12: 'Dec',
+  Q1: 'Q1', Q2: 'Q2', Q3: 'Q3', Q4: 'Q4',
+  FY: 'FY',
+};
+
+const CURRENCY_SYMBOL = { USD: '$', EUR: '€', GBP: '£', ILS: '₪' };
+
+const bgListView         = document.getElementById('budgetListView');
+const bgEditorView       = document.getElementById('budgetEditorView');
+const bgList             = document.getElementById('budgetList');
+const bgEmpty            = document.getElementById('budgetEmpty');
+const bgListError        = document.getElementById('bgListErrorBanner');
+const bgListInfo         = document.getElementById('bgListInfoBanner');
+const bgEditorError      = document.getElementById('bgEditorErrorBanner');
+const bgEditorInfo       = document.getElementById('bgEditorInfoBanner');
+const newBudgetBtn       = document.getElementById('newBudgetBtn');
+const budgetBackBtn      = document.getElementById('budgetBackBtn');
+const budgetStatusPill   = document.getElementById('budgetStatusPill');
+const budgetTableHead    = document.getElementById('budgetTableHead');
+const budgetTableBody    = document.getElementById('budgetTableBody');
+const budgetTableEmpty   = document.getElementById('budgetTableEmpty');
+const addBudgetLineBtn   = document.getElementById('addBudgetLineBtn');
+const budgetFinalizeBtn  = document.getElementById('budgetFinalizeBtn');
+const budgetDeleteBtn    = document.getElementById('budgetDeleteBtn');
+const bgFooterSummary    = document.getElementById('bgFooterSummary');
+
+let budgetList = [];      // list-view cache
+let currentBudget = null; // editor-view: { budget, periodKeys, lines: [{...,cells}] }
+let bgCap = 5, bgRemaining = 5;
+
+// ── List view ──────────────────────────────────────────────
+async function loadBudgetList() {
+  showBanner(bgListError, '');
+  try {
+    const res = await api('/api/visibility/budgets');
+    if (!res.ok) {
+      showBanner(bgListError, `Could not load budgets (${res.status}).`);
+      return;
+    }
+    const data = await res.json();
+    budgetList = data.budgets || [];
+    bgCap = data.cap || 5;
+    bgRemaining = data.remaining ?? Math.max(0, bgCap - budgetList.length);
+    renderBudgetList();
+  } catch (err) {
+    showBanner(bgListError, htmlEsc(`Could not load budgets: ${(err && err.message) || err}`));
+  }
+}
+
+function renderBudgetList() {
+  bgList.innerHTML = '';
+  bgEmpty.hidden = budgetList.length > 0;
+  newBudgetBtn.disabled = bgRemaining <= 0;
+  newBudgetBtn.title = bgRemaining > 0
+    ? ''
+    : `You've hit the ${bgCap}-budget cap. Delete one to make room.`;
+  for (const b of budgetList) {
+    const li = document.createElement('div');
+    li.className = 'vis-budget-list-item';
+    li.dataset.id = b.id;
+    const sym = CURRENCY_SYMBOL[b.currency] || b.currency;
+    const name = b.name || '(unnamed draft)';
+    const statusBadge = b.status === 'finalized'
+      ? '<span class="vis-status-pill" data-status="finalized">Finalized</span>'
+      : '<span class="vis-status-pill" data-status="draft">Draft</span>';
+    li.innerHTML = `
+      <div class="vis-budget-list-info">
+        <div class="vis-budget-list-name">${htmlEsc(name)}</div>
+        <div class="vis-budget-list-meta">FY ${b.year} · ${b.granularity} · ${sym}${b.currency} · ${b.scale}${b.sbEnabled ? ' · S&B' : ''}</div>
+      </div>
+      ${statusBadge}
+      <div class="vis-budget-list-actions">
+        <button type="button" class="vis-btn vis-btn-primary vis-btn-sm" data-action="open">Open</button>
+        <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" data-action="delete">Delete</button>
+      </div>
+    `;
+    bgList.appendChild(li);
+  }
+}
+
+bgList.addEventListener('click', async (ev) => {
+  const target = ev.target;
+  if (!(target instanceof HTMLElement)) return;
+  const action = target.dataset.action;
+  const item = target.closest('.vis-budget-list-item');
+  const id = item?.dataset.id;
+  if (!id || !action) return;
+  if (action === 'open') {
+    await openBudget(id);
+  } else if (action === 'delete') {
+    const b = budgetList.find(x => x.id === id);
+    const ok = await confirmModal('Delete budget', `Delete "${b?.name || '(unnamed draft)'}"? This can't be undone.`);
+    if (!ok) return;
+    try {
+      const res = await api(`/api/visibility/budgets/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        showBanner(bgListError, htmlEsc(body?.error?.message || `Delete failed (${res.status}).`));
+        return;
+      }
+      await loadBudgetList();
+    } catch (err) {
+      showBanner(bgListError, htmlEsc(`Delete failed: ${(err && err.message) || err}`));
+    }
+  }
+});
+
+// ── Create new budget ──────────────────────────────────────
+newBudgetBtn.addEventListener('click', async () => {
+  showBanner(bgListError, '');
+  if (bgRemaining <= 0) return;
+  const thisYear = new Date().getFullYear();
+  const body = {
+    year: thisYear, granularity: 'monthly', currency: 'USD',
+    scale: 'standard', sbEnabled: false,
+  };
+  try {
+    const res = await api('/api/visibility/budgets', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const er = await res.json().catch(() => ({}));
+      showBanner(bgListError, htmlEsc(er?.error?.message || `Create failed (${res.status}).`));
+      return;
+    }
+    const data = await res.json();
+    await openBudget(data.budget.id);
+  } catch (err) {
+    showBanner(bgListError, htmlEsc(`Create failed: ${(err && err.message) || err}`));
+  }
+});
+
+// ── Editor view ────────────────────────────────────────────
+async function openBudget(id) {
+  showBanner(bgEditorError, '');
+  showBanner(bgEditorInfo, '');
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(id)}`);
+    if (!res.ok) {
+      const er = await res.json().catch(() => ({}));
+      showBanner(bgListError, htmlEsc(er?.error?.message || `Open failed (${res.status}).`));
+      return;
+    }
+    currentBudget = await res.json();
+    bgListView.hidden = true;
+    bgEditorView.hidden = false;
+    renderEditor();
+  } catch (err) {
+    showBanner(bgListError, htmlEsc(`Open failed: ${(err && err.message) || err}`));
+  }
+}
+
+budgetBackBtn.addEventListener('click', async () => {
+  bgEditorView.hidden = true;
+  bgListView.hidden = false;
+  currentBudget = null;
+  await loadBudgetList();
+});
+
+function renderEditor() {
+  if (!currentBudget) return;
+  renderSetupPills();
+  renderStatusPill();
+  renderBudgetTable();
+  renderFooterSummary();
+}
+
+function renderStatusPill() {
+  const status = currentBudget.budget.status;
+  budgetStatusPill.dataset.status = status;
+  budgetStatusPill.textContent = status === 'finalized' ? 'Finalized' : 'Draft';
+  budgetFinalizeBtn.textContent = status === 'finalized' ? 'Rename / re-save' : 'Finalize';
+}
+
+function renderSetupPills() {
+  const setup = currentBudget.budget;
+  // Year pillgroup is filled dynamically: current year, next year.
+  const yearGroup = document.querySelector('.vis-pillgroup[data-setup="year"]');
+  if (yearGroup) {
+    yearGroup.innerHTML = '';
+    const yr = new Date().getFullYear();
+    for (const y of [yr, yr + 1]) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.dataset.value = String(y);
+      b.textContent = String(y);
+      yearGroup.appendChild(b);
+    }
+  }
+  // Highlight active pills based on the current budget setup.
+  const map = {
+    year: String(setup.year),
+    granularity: setup.granularity,
+    currency: setup.currency,
+    scale: setup.scale,
+    sbEnabled: String(setup.sbEnabled),
+  };
+  for (const group of document.querySelectorAll('.vis-pillgroup')) {
+    const key = group.dataset.setup;
+    for (const btn of group.querySelectorAll('button')) {
+      btn.classList.toggle('is-active', btn.dataset.value === map[key]);
+    }
+  }
+}
+
+// Setup pill change → PATCH budget
+document.querySelectorAll('.vis-pillgroup').forEach(group => {
+  group.addEventListener('click', async (ev) => {
+    const btn = ev.target.closest('button');
+    if (!btn || !currentBudget) return;
+    const key = group.dataset.setup;
+    const raw = btn.dataset.value;
+    if (!key || raw == null) return;
+    let value;
+    if (key === 'year') value = parseInt(raw, 10);
+    else if (key === 'sbEnabled') value = raw === 'true';
+    else value = raw;
+    const payload = { [key]: value };
+    try {
+      const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const er = await res.json().catch(() => ({}));
+        showBanner(bgEditorError, htmlEsc(er?.error?.message || `Save failed (${res.status}).`));
+        return;
+      }
+      // Granularity change requires a full reload because cells get remapped server-side.
+      if (key === 'granularity') {
+        await openBudget(currentBudget.budget.id);
+        return;
+      }
+      const data = await res.json();
+      currentBudget.budget = data.budget;
+      renderSetupPills();
+      renderStatusPill();
+    } catch (err) {
+      showBanner(bgEditorError, htmlEsc(`Save failed: ${(err && err.message) || err}`));
+    }
+  });
+});
+
+// ── Budget Structure table ────────────────────────────────
+function buildOrgOptions(dim, selectedId) {
+  const list = (osEntities[dim] || []);
+  let html = '<option value="">—</option>';
+  for (const e of list) {
+    html += `<option value="${htmlEsc(e.id)}"${selectedId === e.id ? ' selected' : ''}>${htmlEsc(e.name)}</option>`;
+  }
+  return html;
+}
+function buildGLOptions(selectedId) {
+  let html = '<option value="">—</option>';
+  for (const g of glRows.filter(r => !r.orphan)) {
+    const label = `${g.glNumber} ${g.glName}`;
+    html += `<option value="${htmlEsc(g.id)}"${selectedId === g.id ? ' selected' : ''}>${htmlEsc(label)}</option>`;
+  }
+  return html;
+}
+function findGL(id) { return glRows.find(r => r.id === id) || null; }
+
+function renderBudgetTable() {
+  if (!currentBudget) return;
+  const periods = currentBudget.periodKeys || [];
+  // Head
+  const head = ['#', 'Company', 'Service Provider Name', 'Service Description',
+    'Division', 'Department', 'Product', 'Activity',
+    'Account/GL Name', 'GL #', 'P&L Section', 'Budget Category',
+    ...periods.map(p => BUDGET_PERIOD_LABELS[p] || p), 'FY total', ''];
+  budgetTableHead.innerHTML = '<tr>' + head.map(h => `<th>${htmlEsc(h)}</th>`).join('') + '</tr>';
+
+  // Body
+  budgetTableBody.innerHTML = '';
+  const lines = currentBudget.lines || [];
+  budgetTableEmpty.hidden = lines.length > 0;
+
+  lines.forEach((l, idx) => {
+    const tr = document.createElement('tr');
+    tr.dataset.id = l.id;
+    if (l.source === 'salaries') tr.classList.add('is-salaries-row');
+    const gl = findGL(l.glAccountId);
+    const totalFY = periods.reduce((s, p) => s + (Number(l.cells[p]) || 0), 0);
+
+    const cellsHtml = periods.map(p => `
+      <td class="is-period">
+        <input type="number" step="any" data-field="cell" data-period="${htmlEsc(p)}" value="${l.cells[p] != null ? l.cells[p] : ''}" />
+      </td>`).join('');
+
+    tr.innerHTML = `
+      <td>${idx + 1}</td>
+      <td><select data-field="companyId">${buildOrgOptions('company', l.companyId)}</select></td>
+      <td><input type="text" data-field="serviceProviderName" value="${htmlEsc(l.serviceProviderName)}" maxlength="200" /></td>
+      <td><input type="text" data-field="serviceDescription" value="${htmlEsc(l.serviceDescription)}" maxlength="500" /></td>
+      <td><select data-field="divisionId">${buildOrgOptions('division', l.divisionId)}</select></td>
+      <td><select data-field="departmentId">${buildOrgOptions('department', l.departmentId)}</select></td>
+      <td><select data-field="productId">${buildOrgOptions('product', l.productId)}</select></td>
+      <td><select data-field="activityId">${buildOrgOptions('activity', l.activityId)}</select></td>
+      <td><select data-field="glAccountId">${buildGLOptions(l.glAccountId)}</select></td>
+      <td class="is-readonly">${gl ? htmlEsc(gl.glNumber) : '—'}</td>
+      <td class="is-readonly">${gl ? htmlEsc(gl.plSection || '—') : '—'}</td>
+      <td class="is-readonly">${gl ? htmlEsc((gl.budgetCategory === 'Your Budget Category' ? gl.budgetCategoryCustom : gl.budgetCategory) || '—') : '—'}</td>
+      ${cellsHtml}
+      <td class="is-total">${fmtAmount(totalFY)}</td>
+      <td class="is-actions">
+        <button type="button" class="vis-budget-line-dup" data-action="duplicate" title="Fill remaining periods with the first non-zero value">Duplicate</button>
+        <button type="button" class="vis-budget-line-rm" data-action="remove" aria-label="Remove">×</button>
+      </td>
+    `;
+    budgetTableBody.appendChild(tr);
+  });
+}
+
+function fmtAmount(n) {
+  if (!Number.isFinite(n) || n === 0) return '—';
+  return n.toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
+function renderFooterSummary() {
+  if (!currentBudget) return;
+  const lines = currentBudget.lines || [];
+  const periods = currentBudget.periodKeys || [];
+  const grand = lines.reduce((s, l) => s + periods.reduce((a, p) => a + (Number(l.cells[p]) || 0), 0), 0);
+  const sym = CURRENCY_SYMBOL[currentBudget.budget.currency] || currentBudget.budget.currency;
+  bgFooterSummary.textContent = `${lines.length} row${lines.length === 1 ? '' : 's'} · Total ${sym}${fmtAmount(grand)}`;
+}
+
+// Per-row edit handlers (delegated)
+budgetTableBody.addEventListener('change', async (ev) => {
+  const target = ev.target;
+  if (!(target instanceof HTMLElement)) return;
+  const tr = target.closest('tr');
+  if (!tr) return;
+  const lineId = tr.dataset.id;
+  const line = currentBudget?.lines.find(l => l.id === lineId);
+  if (!line || line.source === 'salaries') return;
+  const field = target.dataset.field;
+  if (!field) return;
+
+  if (field === 'cell') {
+    const period = target.dataset.period;
+    const raw = target.value;
+    const num = raw === '' ? 0 : Number(raw);
+    if (!Number.isFinite(num)) return;
+    line.cells[period] = num;
+    debouncedSaveCells(lineId);
+    // Update FY total + footer summary live (no waiting for server).
+    refreshRowTotal(tr, line);
+    renderFooterSummary();
+  } else if (field === 'glAccountId') {
+    line.glAccountId = target.value || null;
+    // Refresh the read-only auto-pulled columns by re-rendering the row.
+    renderBudgetTable();
+    await patchLine(lineId, { glAccountId: line.glAccountId });
+  } else if (field === 'companyId' || field === 'divisionId' ||
+             field === 'departmentId' || field === 'productId' || field === 'activityId') {
+    line[field] = target.value || null;
+    await patchLine(lineId, { [field]: line[field] });
+  }
+});
+
+budgetTableBody.addEventListener('input', (ev) => {
+  const target = ev.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  const tr = target.closest('tr');
+  const lineId = tr?.dataset.id;
+  const line = currentBudget?.lines.find(l => l.id === lineId);
+  if (!line || line.source === 'salaries') return;
+  const field = target.dataset.field;
+  if (field === 'serviceProviderName' || field === 'serviceDescription') {
+    line[field] = target.value;
+    debouncedSaveMeta(lineId);
+  }
+});
+
+function refreshRowTotal(tr, line) {
+  const periods = currentBudget.periodKeys || [];
+  const total = periods.reduce((s, p) => s + (Number(line.cells[p]) || 0), 0);
+  const totalCell = tr.querySelector('td.is-total');
+  if (totalCell) totalCell.textContent = fmtAmount(total);
+}
+
+// Row-action buttons (duplicate / remove)
+budgetTableBody.addEventListener('click', async (ev) => {
+  const target = ev.target;
+  if (!(target instanceof HTMLElement)) return;
+  const tr = target.closest('tr');
+  if (!tr) return;
+  const lineId = tr.dataset.id;
+  const line = currentBudget?.lines.find(l => l.id === lineId);
+  if (!line || line.source === 'salaries') return;
+
+  if (target.dataset.action === 'duplicate') {
+    const periods = currentBudget.periodKeys || [];
+    // "Duplicate amount" per spec §5.2: take the first non-zero entry
+    // and copy it across all empty/zero cells in the same row.
+    let seed = 0;
+    for (const p of periods) {
+      const v = Number(line.cells[p]);
+      if (Number.isFinite(v) && v !== 0) { seed = v; break; }
+    }
+    if (seed === 0) return;
+    for (const p of periods) {
+      const v = Number(line.cells[p]);
+      if (!Number.isFinite(v) || v === 0) line.cells[p] = seed;
+    }
+    // Re-render this row's inputs + total.
+    for (const inp of tr.querySelectorAll('input[data-field="cell"]')) {
+      inp.value = line.cells[inp.dataset.period] != null ? line.cells[inp.dataset.period] : '';
+    }
+    refreshRowTotal(tr, line);
+    renderFooterSummary();
+    debouncedSaveCells(lineId);
+  } else if (target.dataset.action === 'remove') {
+    const ok = await confirmModal('Remove row', 'Remove this budget row?');
+    if (!ok) return;
+    try {
+      const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/lines/${encodeURIComponent(lineId)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const er = await res.json().catch(() => ({}));
+        showBanner(bgEditorError, htmlEsc(er?.error?.message || `Remove failed (${res.status}).`));
+        return;
+      }
+      currentBudget.lines = currentBudget.lines.filter(l => l.id !== lineId);
+      renderBudgetTable();
+      renderFooterSummary();
+    } catch (err) {
+      showBanner(bgEditorError, htmlEsc(`Remove failed: ${(err && err.message) || err}`));
+    }
+  }
+});
+
+// ── Autosave (debounced) ──────────────────────────────────
+const bgDebouncers = new Map();
+function debounce(key, fn, ms) {
+  if (bgDebouncers.has(key)) clearTimeout(bgDebouncers.get(key));
+  bgDebouncers.set(key, setTimeout(fn, ms));
+}
+function debouncedSaveCells(lineId) {
+  debounce(`cells:${lineId}`, async () => {
+    const line = currentBudget?.lines.find(l => l.id === lineId);
+    if (!line) return;
+    await patchLine(lineId, { cells: { ...line.cells } });
+  }, 400);
+}
+function debouncedSaveMeta(lineId) {
+  debounce(`meta:${lineId}`, async () => {
+    const line = currentBudget?.lines.find(l => l.id === lineId);
+    if (!line) return;
+    await patchLine(lineId, {
+      serviceProviderName: line.serviceProviderName,
+      serviceDescription:  line.serviceDescription,
+    });
+  }, 350);
+}
+
+async function patchLine(lineId, payload) {
+  if (!currentBudget) return;
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/lines/${encodeURIComponent(lineId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const er = await res.json().catch(() => ({}));
+      showBanner(bgEditorError, htmlEsc(er?.error?.message || `Save failed (${res.status}).`));
+    } else {
+      showBanner(bgEditorError, '');
+    }
+  } catch (err) {
+    showBanner(bgEditorError, htmlEsc(`Save failed: ${(err && err.message) || err}`));
+  }
+}
+
+// ── Add row / Finalize / Delete ────────────────────────────
+addBudgetLineBtn.addEventListener('click', async () => {
+  if (!currentBudget) return;
+  showBanner(bgEditorError, '');
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/lines`, { method: 'POST' });
+    if (!res.ok) {
+      const er = await res.json().catch(() => ({}));
+      showBanner(bgEditorError, htmlEsc(er?.error?.message || `Add row failed (${res.status}).`));
+      return;
+    }
+    const data = await res.json();
+    currentBudget.lines.push(data.line);
+    renderBudgetTable();
+    renderFooterSummary();
+  } catch (err) {
+    showBanner(bgEditorError, htmlEsc(`Add row failed: ${(err && err.message) || err}`));
+  }
+});
+
+budgetFinalizeBtn.addEventListener('click', async () => {
+  if (!currentBudget) return;
+  showBanner(bgEditorError, '');
+  const currentName = currentBudget.budget.name || '';
+  const name = await promptModal(
+    currentBudget.budget.status === 'finalized' ? 'Rename budget' : 'Name this budget',
+    'Saved budgets appear in the list and can be re-opened later. You can rename anytime.',
+    currentName,
+  );
+  if (!name) return;
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/finalize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: name.trim() }),
+    });
+    if (!res.ok) {
+      const er = await res.json().catch(() => ({}));
+      showBanner(bgEditorError, htmlEsc(er?.error?.message || `Finalize failed (${res.status}).`));
+      return;
+    }
+    const data = await res.json();
+    currentBudget.budget = data.budget;
+    renderStatusPill();
+    showBanner(
+      bgEditorInfo,
+      `<strong>✓ "${htmlEsc(data.budget.name)}" saved.</strong> You can keep editing — every change auto-saves and overwrites the same budget.`,
+    );
+  } catch (err) {
+    showBanner(bgEditorError, htmlEsc(`Finalize failed: ${(err && err.message) || err}`));
+  }
+});
+
+budgetDeleteBtn.addEventListener('click', async () => {
+  if (!currentBudget) return;
+  const ok = await confirmModal('Delete budget', `Delete "${currentBudget.budget.name || '(unnamed draft)'}"? This can't be undone.`);
+  if (!ok) return;
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}`, { method: 'DELETE' });
+    if (res.ok) {
+      bgEditorView.hidden = true;
+      bgListView.hidden = false;
+      currentBudget = null;
+      await loadBudgetList();
+    } else {
+      const er = await res.json().catch(() => ({}));
+      showBanner(bgEditorError, htmlEsc(er?.error?.message || `Delete failed (${res.status}).`));
+    }
+  } catch (err) {
+    showBanner(bgEditorError, htmlEsc(`Delete failed: ${(err && err.message) || err}`));
+  }
+});
+
+// ── Prompt modal ───────────────────────────────────────────
+const promptEl     = document.getElementById('visPromptModal');
+const promptTitle  = document.getElementById('visPromptTitle');
+const promptBody   = document.getElementById('visPromptBody');
+const promptInput  = document.getElementById('visPromptInput');
+const promptOk     = document.getElementById('visPromptOk');
+const promptCancel = document.getElementById('visPromptCancel');
+
+function promptModal(title, body, initialValue) {
+  return new Promise((resolve) => {
+    promptTitle.textContent = title;
+    promptBody.textContent  = body;
+    promptInput.value       = initialValue || '';
+    promptEl.hidden = false;
+    setTimeout(() => promptInput.focus(), 30);
+    const close = (result) => {
+      promptEl.hidden = true;
+      promptOk.removeEventListener('click', onOk);
+      promptCancel.removeEventListener('click', onCancel);
+      promptInput.removeEventListener('keydown', onKey);
+      promptEl.removeEventListener('click', onBackdrop);
+      resolve(result);
+    };
+    const onOk      = () => close((promptInput.value || '').trim() || null);
+    const onCancel  = () => close(null);
+    const onKey     = (ev) => { if (ev.key === 'Enter') onOk(); else if (ev.key === 'Escape') onCancel(); };
+    const onBackdrop = (ev) => { if (ev.target === promptEl) onCancel(); };
+    promptOk.addEventListener('click', onOk);
+    promptCancel.addEventListener('click', onCancel);
+    promptInput.addEventListener('keydown', onKey);
+    promptEl.addEventListener('click', onBackdrop);
   });
 }
 
