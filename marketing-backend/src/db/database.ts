@@ -159,6 +159,64 @@ function initializeSchema(database: Database.Database): void {
       updated_at       TEXT NOT NULL,
       FOREIGN KEY (customer_key_id) REFERENCES customer_keys(id) ON DELETE CASCADE
     );
+
+    -- Visibility offering — Budgets (Phase 3a).
+    -- One row per budget owned by a customer. The five setup choices
+    -- (year, granularity, currency, scale, sb_enabled) come from
+    -- spec §4. status flips draft → finalized when the user names it
+    -- and saves; finalized budgets remain editable (overwrite in
+    -- place, no version history per §5.4).
+    CREATE TABLE IF NOT EXISTS budgets (
+      id              TEXT PRIMARY KEY,
+      customer_key_id TEXT NOT NULL,
+      name            TEXT NOT NULL DEFAULT '',
+      year            INTEGER NOT NULL,
+      granularity     TEXT NOT NULL,
+      currency        TEXT NOT NULL,
+      scale           TEXT NOT NULL,
+      sb_enabled      INTEGER NOT NULL DEFAULT 0,
+      status          TEXT NOT NULL DEFAULT 'draft',
+      created_at      TEXT NOT NULL,
+      updated_at      TEXT NOT NULL,
+      FOREIGN KEY (customer_key_id) REFERENCES customer_keys(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_budgets_key_id ON budgets(customer_key_id);
+
+    -- One row per row in the Budget Structure table (spec §5.1).
+    -- 5 nullable org-entity FKs + 1 GL FK + free-text service provider
+    -- / description + source flag. Period amounts live in
+    -- budget_cells so the row stays narrow regardless of granularity.
+    CREATE TABLE IF NOT EXISTS budget_lines (
+      id                      TEXT PRIMARY KEY,
+      budget_id               TEXT NOT NULL,
+      company_id              TEXT,
+      service_provider_name   TEXT NOT NULL DEFAULT '',
+      service_description     TEXT NOT NULL DEFAULT '',
+      division_id             TEXT,
+      department_id           TEXT,
+      product_id              TEXT,
+      activity_id             TEXT,
+      gl_account_id           TEXT,
+      source                  TEXT NOT NULL DEFAULT 'manual',
+      order_index             INTEGER NOT NULL DEFAULT 0,
+      created_at              TEXT NOT NULL,
+      updated_at              TEXT NOT NULL,
+      FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_budget_lines_budget_id ON budget_lines(budget_id);
+
+    -- One amount per (line, period). period_key is M01..M12 / Q1..Q4 /
+    -- FY depending on the budget's granularity. FY for monthly/quarterly
+    -- budgets is NOT stored (computed on read).
+    CREATE TABLE IF NOT EXISTS budget_cells (
+      budget_line_id  TEXT NOT NULL,
+      period_key      TEXT NOT NULL,
+      amount          REAL NOT NULL DEFAULT 0,
+      PRIMARY KEY (budget_line_id, period_key),
+      FOREIGN KEY (budget_line_id) REFERENCES budget_lines(id) ON DELETE CASCADE
+    );
   `);
 
   // Migrations — add new columns to existing tables

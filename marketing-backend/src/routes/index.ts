@@ -4,7 +4,7 @@ import { linkedInController } from '../controllers/linkedin.controller';
 import { authController, verifyPin } from '../controllers/auth.controller';
 import { chatController } from '../controllers/chat.controller';
 import { partnerController } from '../controllers/partner.controller';
-import { visibilityController } from '../controllers/visibility.controller';
+import { visibilityController, budgetsController } from '../controllers/visibility.controller';
 import { requireRaphael, requireLinkedIn, requireAdminPin } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -225,6 +225,17 @@ router.post(
   '/visibility/org-structure/edit',
   (req, res) => visibilityController.editOrgStructure(req, res),
 );
+
+// Phase 3a — Budgets.
+router.get(   '/visibility/budgets',                          (req, res) => budgetsController.list(req, res));
+router.post(  '/visibility/budgets',                          (req, res) => budgetsController.create(req, res));
+router.get(   '/visibility/budgets/:id',                      (req, res) => budgetsController.get(req, res));
+router.patch( '/visibility/budgets/:id',                      (req, res) => budgetsController.patch(req, res));
+router.delete('/visibility/budgets/:id',                      (req, res) => budgetsController.remove(req, res));
+router.post(  '/visibility/budgets/:id/finalize',             (req, res) => budgetsController.finalize(req, res));
+router.post(  '/visibility/budgets/:id/lines',                (req, res) => budgetsController.createLine(req, res));
+router.patch( '/visibility/budgets/:id/lines/:lineId',        (req, res) => budgetsController.patchLine(req, res));
+router.delete('/visibility/budgets/:id/lines/:lineId',        (req, res) => budgetsController.removeLine(req, res));
 
 // ─── Admin (Raphael) — Partner Submissions ──────────────────────────────────
 // All admin endpoints require X-Admin-Pin header OR ?pin= query (matching

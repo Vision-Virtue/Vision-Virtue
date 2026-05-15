@@ -306,3 +306,343 @@ export const orgStructureRepo = {
       .run(customerKeyId, status, now);
   },
 };
+
+// ─── Budgets (Phase 3a) ─────────────────────────────────────────────────────
+
+export const GRANULARITIES = ['monthly', 'quarterly', 'yearly'] as const;
+export type Granularity = typeof GRANULARITIES[number];
+export const CURRENCIES = ['USD', 'EUR', 'GBP', 'ILS'] as const;
+export type Currency = typeof CURRENCIES[number];
+export const SCALES = ['standard', 'thousands'] as const;
+export type Scale = typeof SCALES[number];
+export type BudgetStatus = 'draft' | 'finalized';
+
+export const BUDGET_CAP_PER_CUSTOMER = 5; // spec §5.4
+
+/** Period keys for a given granularity. */
+export function periodKeysFor(granularity: Granularity): string[] {
+  switch (granularity) {
+    case 'monthly':   return ['M01','M02','M03','M04','M05','M06','M07','M08','M09','M10','M11','M12'];
+    case 'quarterly': return ['Q1','Q2','Q3','Q4'];
+    case 'yearly':    return ['FY'];
+  }
+}
+
+export interface BudgetRow {
+  id: string;
+  customerKeyId: string;
+  name: string;
+  year: number;
+  granularity: Granularity;
+  currency: Currency;
+  scale: Scale;
+  sbEnabled: boolean;
+  status: BudgetStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface DbBudgetRow {
+  id: string;
+  customer_key_id: string;
+  name: string;
+  year: number;
+  granularity: Granularity;
+  currency: Currency;
+  scale: Scale;
+  sb_enabled: number;
+  status: BudgetStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+function toBudgetDomain(r: DbBudgetRow): BudgetRow {
+  return {
+    id:            r.id,
+    customerKeyId: r.customer_key_id,
+    name:          r.name,
+    year:          r.year,
+    granularity:   r.granularity,
+    currency:      r.currency,
+    scale:         r.scale,
+    sbEnabled:     r.sb_enabled === 1,
+    status:        r.status,
+    createdAt:     r.created_at,
+    updatedAt:     r.updated_at,
+  };
+}
+
+export interface BudgetLineRow {
+  id: string;
+  budgetId: string;
+  companyId: string | null;
+  serviceProviderName: string;
+  serviceDescription: string;
+  divisionId: string | null;
+  departmentId: string | null;
+  productId: string | null;
+  activityId: string | null;
+  glAccountId: string | null;
+  source: 'manual' | 'salaries';
+  orderIndex: number;
+}
+
+interface DbBudgetLineRow {
+  id: string;
+  budget_id: string;
+  company_id: string | null;
+  service_provider_name: string;
+  service_description: string;
+  division_id: string | null;
+  department_id: string | null;
+  product_id: string | null;
+  activity_id: string | null;
+  gl_account_id: string | null;
+  source: 'manual' | 'salaries';
+  order_index: number;
+}
+
+function toBudgetLineDomain(r: DbBudgetLineRow): BudgetLineRow {
+  return {
+    id:                  r.id,
+    budgetId:            r.budget_id,
+    companyId:           r.company_id,
+    serviceProviderName: r.service_provider_name,
+    serviceDescription:  r.service_description,
+    divisionId:          r.division_id,
+    departmentId:        r.department_id,
+    productId:           r.product_id,
+    activityId:          r.activity_id,
+    glAccountId:         r.gl_account_id,
+    source:              r.source,
+    orderIndex:          r.order_index,
+  };
+}
+
+export const budgetRepo = {
+  listByCustomer(customerKeyId: string): BudgetRow[] {
+    const rows = getDb()
+      .prepare(`SELECT * FROM budgets WHERE customer_key_id = ?
+                ORDER BY updated_at DESC`)
+      .all(customerKeyId) as DbBudgetRow[];
+    return rows.map(toBudgetDomain);
+  },
+
+  countByCustomer(customerKeyId: string): number {
+    const row = getDb()
+      .prepare(`SELECT COUNT(*) AS n FROM budgets WHERE customer_key_id = ?`)
+      .get(customerKeyId) as { n: number };
+    return row.n;
+  },
+
+  getById(id: string): BudgetRow | null {
+    const row = getDb()
+      .prepare(`SELECT * FROM budgets WHERE id = ?`)
+      .get(id) as DbBudgetRow | undefined;
+    return row ? toBudgetDomain(row) : null;
+  },
+
+  create(
+    customerKeyId: string,
+    setup: {
+      name?: string;
+      year: number;
+      granularity: Granularity;
+      currency: Currency;
+      scale: Scale;
+      sbEnabled: boolean;
+    },
+  ): BudgetRow {
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    getDb()
+      .prepare(
+        `INSERT INTO budgets
+           (id, customer_key_id, name, year, granularity, currency, scale,
+            sb_enabled, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
+      )
+      .run(
+        id, customerKeyId, setup.name ?? '', setup.year, setup.granularity,
+        setup.currency, setup.scale, setup.sbEnabled ? 1 : 0, now, now,
+      );
+    return this.getById(id)!;
+  },
+
+  /** Partial update — pass only fields you want to change. */
+  update(
+    id: string,
+    fields: Partial<{
+      name: string; year: number; granularity: Granularity;
+      currency: Currency; scale: Scale; sbEnabled: boolean;
+      status: BudgetStatus;
+    }>,
+  ): BudgetRow | null {
+    const sets: string[] = [];
+    const vals: Array<string | number> = [];
+    if (fields.name        !== undefined) { sets.push('name = ?');         vals.push(fields.name); }
+    if (fields.year        !== undefined) { sets.push('year = ?');         vals.push(fields.year); }
+    if (fields.granularity !== undefined) { sets.push('granularity = ?');  vals.push(fields.granularity); }
+    if (fields.currency    !== undefined) { sets.push('currency = ?');     vals.push(fields.currency); }
+    if (fields.scale       !== undefined) { sets.push('scale = ?');        vals.push(fields.scale); }
+    if (fields.sbEnabled   !== undefined) { sets.push('sb_enabled = ?');   vals.push(fields.sbEnabled ? 1 : 0); }
+    if (fields.status      !== undefined) { sets.push('status = ?');       vals.push(fields.status); }
+    if (sets.length === 0) return this.getById(id);
+    sets.push('updated_at = ?');
+    vals.push(new Date().toISOString());
+    vals.push(id);
+    getDb()
+      .prepare(`UPDATE budgets SET ${sets.join(', ')} WHERE id = ?`)
+      .run(...vals);
+    return this.getById(id);
+  },
+
+  deleteById(id: string): void {
+    getDb().prepare(`DELETE FROM budgets WHERE id = ?`).run(id);
+  },
+};
+
+export const budgetLineRepo = {
+  listByBudget(budgetId: string): BudgetLineRow[] {
+    const rows = getDb()
+      .prepare(`SELECT * FROM budget_lines WHERE budget_id = ?
+                ORDER BY order_index ASC, created_at ASC`)
+      .all(budgetId) as DbBudgetLineRow[];
+    return rows.map(toBudgetLineDomain);
+  },
+
+  getById(id: string): BudgetLineRow | null {
+    const row = getDb()
+      .prepare(`SELECT * FROM budget_lines WHERE id = ?`)
+      .get(id) as DbBudgetLineRow | undefined;
+    return row ? toBudgetLineDomain(row) : null;
+  },
+
+  create(budgetId: string, source: 'manual' | 'salaries' = 'manual'): BudgetLineRow {
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    const maxIdx = (getDb()
+      .prepare(`SELECT COALESCE(MAX(order_index), -1) AS m FROM budget_lines WHERE budget_id = ?`)
+      .get(budgetId) as { m: number }).m;
+    getDb()
+      .prepare(
+        `INSERT INTO budget_lines
+           (id, budget_id, source, order_index, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, budgetId, source, maxIdx + 1, now, now);
+    return this.getById(id)!;
+  },
+
+  update(
+    id: string,
+    fields: Partial<{
+      companyId: string | null;
+      serviceProviderName: string;
+      serviceDescription: string;
+      divisionId: string | null;
+      departmentId: string | null;
+      productId: string | null;
+      activityId: string | null;
+      glAccountId: string | null;
+    }>,
+  ): BudgetLineRow | null {
+    const sets: string[] = [];
+    const vals: Array<string | null> = [];
+    const norm = (v: string | null | undefined): string | null => (v === '' || v == null ? null : v);
+    if (fields.companyId           !== undefined) { sets.push('company_id = ?');             vals.push(norm(fields.companyId)); }
+    if (fields.serviceProviderName !== undefined) { sets.push('service_provider_name = ?');  vals.push(fields.serviceProviderName); }
+    if (fields.serviceDescription  !== undefined) { sets.push('service_description = ?');    vals.push(fields.serviceDescription); }
+    if (fields.divisionId          !== undefined) { sets.push('division_id = ?');            vals.push(norm(fields.divisionId)); }
+    if (fields.departmentId        !== undefined) { sets.push('department_id = ?');          vals.push(norm(fields.departmentId)); }
+    if (fields.productId           !== undefined) { sets.push('product_id = ?');             vals.push(norm(fields.productId)); }
+    if (fields.activityId          !== undefined) { sets.push('activity_id = ?');            vals.push(norm(fields.activityId)); }
+    if (fields.glAccountId         !== undefined) { sets.push('gl_account_id = ?');          vals.push(norm(fields.glAccountId)); }
+    if (sets.length === 0) return this.getById(id);
+    sets.push('updated_at = ?');
+    vals.push(new Date().toISOString());
+    vals.push(id);
+    getDb()
+      .prepare(`UPDATE budget_lines SET ${sets.join(', ')} WHERE id = ?`)
+      .run(...vals);
+    return this.getById(id);
+  },
+
+  deleteById(id: string): void {
+    getDb().prepare(`DELETE FROM budget_lines WHERE id = ?`).run(id);
+  },
+};
+
+export const budgetCellRepo = {
+  listByLine(lineId: string): Record<string, number> {
+    const rows = getDb()
+      .prepare(`SELECT period_key, amount FROM budget_cells WHERE budget_line_id = ?`)
+      .all(lineId) as Array<{ period_key: string; amount: number }>;
+    const out: Record<string, number> = {};
+    for (const r of rows) out[r.period_key] = r.amount;
+    return out;
+  },
+
+  /** Upsert one cell. */
+  setCell(lineId: string, periodKey: string, amount: number): void {
+    getDb()
+      .prepare(
+        `INSERT INTO budget_cells (budget_line_id, period_key, amount)
+         VALUES (?, ?, ?)
+         ON CONFLICT(budget_line_id, period_key)
+         DO UPDATE SET amount = excluded.amount`,
+      )
+      .run(lineId, periodKey, amount);
+  },
+
+  /** Replace all cells for a line in one transaction. */
+  setAllForLine(lineId: string, cells: Record<string, number>): void {
+    const db = getDb();
+    const tx = db.transaction(() => {
+      db.prepare(`DELETE FROM budget_cells WHERE budget_line_id = ?`).run(lineId);
+      const insert = db.prepare(
+        `INSERT INTO budget_cells (budget_line_id, period_key, amount) VALUES (?, ?, ?)`,
+      );
+      for (const [k, v] of Object.entries(cells)) {
+        insert.run(lineId, k, v);
+      }
+    });
+    tx();
+  },
+
+  /** Re-aggregate cells when the budget granularity changes (spec §6). */
+  remapForGranularity(lineId: string, from: Granularity, to: Granularity): void {
+    if (from === to) return;
+    const existing = this.listByLine(lineId);
+    let next: Record<string, number> = {};
+    if (from === 'monthly' && to === 'quarterly') {
+      next = {
+        Q1: (existing.M01 || 0) + (existing.M02 || 0) + (existing.M03 || 0),
+        Q2: (existing.M04 || 0) + (existing.M05 || 0) + (existing.M06 || 0),
+        Q3: (existing.M07 || 0) + (existing.M08 || 0) + (existing.M09 || 0),
+        Q4: (existing.M10 || 0) + (existing.M11 || 0) + (existing.M12 || 0),
+      };
+    } else if (from === 'monthly' && to === 'yearly') {
+      const fy = ['M01','M02','M03','M04','M05','M06','M07','M08','M09','M10','M11','M12']
+        .reduce((s, k) => s + (existing[k] || 0), 0);
+      next = { FY: fy };
+    } else if (from === 'quarterly' && to === 'yearly') {
+      next = { FY: (existing.Q1||0)+(existing.Q2||0)+(existing.Q3||0)+(existing.Q4||0) };
+    } else if (from === 'quarterly' && to === 'monthly') {
+      // Even-split within each quarter (spec §6 / §11).
+      const split = (q: number): number[] => [q/3, q/3, q/3];
+      const [a, b, c] = split(existing.Q1 || 0);
+      const [d, e, f] = split(existing.Q2 || 0);
+      const [g, h, i] = split(existing.Q3 || 0);
+      const [j, k, l] = split(existing.Q4 || 0);
+      next = { M01:a, M02:b, M03:c, M04:d, M05:e, M06:f, M07:g, M08:h, M09:i, M10:j, M11:k, M12:l };
+    } else if (from === 'yearly' && to === 'quarterly') {
+      const q = (existing.FY || 0) / 4;
+      next = { Q1: q, Q2: q, Q3: q, Q4: q };
+    } else if (from === 'yearly' && to === 'monthly') {
+      const m = (existing.FY || 0) / 12;
+      next = { M01:m, M02:m, M03:m, M04:m, M05:m, M06:m, M07:m, M08:m, M09:m, M10:m, M11:m, M12:m };
+    }
+    this.setAllForLine(lineId, next);
+  },
+};
