@@ -376,6 +376,172 @@
   opacity: 0.55;
 }
 
+/* ── Phase 2: Organizational Structure ─────────────────────── */
+
+.vis-btn-sm {
+  padding: 0.45rem 0.85rem;
+  font-size: 0.82rem;
+}
+
+.vis-org-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin: 0.25rem 0 1.25rem;
+}
+
+.vis-org-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 8px;
+  padding: 1rem 1.1rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+.vis-org-title {
+  font-family: var(--font-head);
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0;
+}
+.vis-org-sub {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.45);
+  margin: 0 0 0.3rem;
+}
+
+.vis-org-add {
+  display: flex;
+  gap: 0.4rem;
+}
+.vis-org-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.5rem 0.65rem;
+  font-family: inherit;
+  font-size: 0.86rem;
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.vis-org-input:focus {
+  border-color: rgba(155, 189, 242, 0.7);
+  background: rgba(255, 255, 255, 0.10);
+}
+.vis-org-input::placeholder { color: rgba(255, 255, 255, 0.32); }
+
+.vis-org-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: 280px;
+  overflow-y: auto;
+}
+.vis-org-list-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  background: rgba(91, 141, 224, 0.08);
+  border: 1px solid rgba(91, 141, 224, 0.18);
+  border-radius: 4px;
+}
+.vis-org-list-name {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.86rem;
+  padding: 0.2rem 0.35rem;
+  border-radius: 3px;
+  outline: none;
+}
+.vis-org-list-name:focus {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(155, 189, 242, 0.55);
+}
+.vis-org-list-rm {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.40);
+  cursor: pointer;
+  padding: 0.2rem 0.4rem;
+  border-radius: 3px;
+  font-size: 1rem;
+  line-height: 1;
+}
+.vis-org-list-rm:hover {
+  color: #ff9c9c;
+  background: rgba(255, 80, 80, 0.10);
+}
+
+.vis-org-empty {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.4);
+  font-style: italic;
+  text-align: center;
+  padding: 0.5rem 0;
+}
+
+/* When os-status is completed, lock the add/rename/remove controls. */
+.vis-page.is-os-completed .vis-org-input,
+.vis-page.is-os-completed .vis-org-add button,
+.vis-page.is-os-completed .vis-org-list-name,
+.vis-page.is-os-completed .vis-org-list-rm,
+.vis-page.is-os-completed #osCompleteBtn {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+/* Confirm modal */
+.vis-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+.vis-modal[hidden] { display: none !important; }
+.vis-modal-card {
+  background: var(--navy-800);
+  border: 1px solid rgba(91, 141, 224, 0.25);
+  border-radius: 10px;
+  padding: 1.5rem 1.6rem;
+  max-width: 460px;
+  width: calc(100% - 2rem);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+.vis-modal-title {
+  font-family: var(--font-head);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 0.6rem;
+}
+.vis-modal-body {
+  font-size: 0.88rem;
+  color: rgba(255, 255, 255, 0.75);
+  margin: 0 0 1.2rem;
+  line-height: 1.55;
+}
+.vis-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.65rem;
+}
+
 /* Responsive */
 @media (max-width: 700px) {
   .vis-hero        { padding: 5rem 1.25rem 3rem; }
@@ -384,4 +550,5 @@
   .vis-panel-header { flex-direction: column; }
   .vis-status-pill { align-self: flex-start; }
   .vis-tab         { flex: 1; padding: 0.7rem 0.75rem; font-size: 0.85rem; }
+  .vis-org-grid    { grid-template-columns: 1fr; }
 }

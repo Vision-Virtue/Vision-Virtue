@@ -196,6 +196,36 @@ router.post(
   (req, res) => visibilityController.editFinancialStructure(req, res),
 );
 
+// Phase 2 — Organizational Structure.
+router.get(
+  '/visibility/org-structure',
+  (req, res) => visibilityController.getOrgStructure(req, res),
+);
+router.post(
+  '/visibility/org-structure/entities',
+  (req, res) => visibilityController.createOrgEntity(req, res),
+);
+router.patch(
+  '/visibility/org-structure/entities/:id',
+  (req, res) => visibilityController.renameOrgEntity(req, res),
+);
+router.delete(
+  '/visibility/org-structure/entities/:id',
+  (req, res) => visibilityController.deleteOrgEntity(req, res),
+);
+router.get(
+  '/visibility/org-structure/entities/:id/references',
+  (req, res) => visibilityController.getOrgEntityReferences(req, res),
+);
+router.post(
+  '/visibility/org-structure/complete',
+  (req, res) => visibilityController.completeOrgStructure(req, res),
+);
+router.post(
+  '/visibility/org-structure/edit',
+  (req, res) => visibilityController.editOrgStructure(req, res),
+);
+
 // ─── Admin (Raphael) — Partner Submissions ──────────────────────────────────
 // All admin endpoints require X-Admin-Pin header OR ?pin= query (matching
 // ACCESS_CODE). Query-param form lets the frontend send simple CORS
