@@ -367,9 +367,12 @@
 .vis-validation-summary.is-error { color: #ff9c9c; }
 .vis-validation-summary.is-ready { color: #8ed47b; }
 
-/* When status = completed, gray everything out except Edit. */
-.vis-page.is-fs-completed .vis-table select,
-.vis-page.is-fs-completed .vis-table input[type="text"],
+/* When status = completed, gray out the Financial Structure controls only.
+   Originally this used `.vis-table select` which also matched the Budget
+   Structure table further down the page, locking budget dropdowns once
+   FS was marked complete. Scope strictly to the FS panel's table. */
+.vis-page.is-fs-completed #fsTable select,
+.vis-page.is-fs-completed #fsTable input[type="text"],
 .vis-page.is-fs-completed #fsUploadBtn,
 .vis-page.is-fs-completed #fsCompleteBtn {
   pointer-events: none;
