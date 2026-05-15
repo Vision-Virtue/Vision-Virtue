@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0" />
   <title>Vision &amp; Virtue | Visibility</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="visibility.css?v=2" />
+  <link rel="stylesheet" href="visibility.css?v=3" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
@@ -43,14 +43,14 @@
   <section class="vis-workspace">
     <div class="vis-workspace-inner">
 
-      <!-- Module tabs (Phase 1: only Financial Structure is active). -->
+      <!-- Module tabs. Financial Structure and Organizational Structure are
+           interactive; Budget arrives in Phase 3. -->
       <nav class="vis-tabs" role="tablist">
         <button type="button" class="vis-tab is-active" data-tab="financial-structure" role="tab" aria-selected="true">
           1. Financial Structure
         </button>
-        <button type="button" class="vis-tab is-disabled" data-tab="org-structure" role="tab" aria-selected="false" aria-disabled="true">
+        <button type="button" class="vis-tab" data-tab="org-structure" role="tab" aria-selected="false">
           2. Organizational Structure
-          <span class="vis-tab-pill">Coming soon</span>
         </button>
         <button type="button" class="vis-tab is-disabled" data-tab="budget" role="tab" aria-selected="false" aria-disabled="true">
           3. Budget
@@ -124,9 +124,106 @@
 
       </div>
 
+      <!-- ── Organizational Structure (Phase 2) ──────────────────── -->
+      <div class="vis-panel" id="panelOrgStructure" role="tabpanel" hidden>
+
+        <header class="vis-panel-header">
+          <div>
+            <h2 class="vis-panel-title">Organizational Structure</h2>
+            <p class="vis-panel-sub">Define the dimensions your budget rows can be tagged by. All five lists are optional — leave any you don't need empty. You can edit the structure at any time, even after a budget is finalized.</p>
+          </div>
+          <span class="vis-status-pill" id="osStatusPill" data-status="editing">Editing</span>
+        </header>
+
+        <div class="vis-org-grid">
+          <!-- Companies -->
+          <section class="vis-org-card" data-dimension="company">
+            <h3 class="vis-org-title">Companies</h3>
+            <p class="vis-org-sub">Legal entities in the group.</p>
+            <form class="vis-org-add" data-dimension="company" autocomplete="off">
+              <input type="text" class="vis-org-input" placeholder="Add a company" maxlength="200" required />
+              <button type="submit" class="vis-btn vis-btn-primary vis-btn-sm">Add</button>
+            </form>
+            <ul class="vis-org-list" data-dimension="company"></ul>
+            <div class="vis-org-empty" data-dimension="company" hidden>No companies yet.</div>
+          </section>
+
+          <!-- Divisions -->
+          <section class="vis-org-card" data-dimension="division">
+            <h3 class="vis-org-title">Divisions</h3>
+            <p class="vis-org-sub">Reporting divisions or business units.</p>
+            <form class="vis-org-add" data-dimension="division" autocomplete="off">
+              <input type="text" class="vis-org-input" placeholder="Add a division" maxlength="200" required />
+              <button type="submit" class="vis-btn vis-btn-primary vis-btn-sm">Add</button>
+            </form>
+            <ul class="vis-org-list" data-dimension="division"></ul>
+            <div class="vis-org-empty" data-dimension="division" hidden>No divisions yet.</div>
+          </section>
+
+          <!-- Departments -->
+          <section class="vis-org-card" data-dimension="department">
+            <h3 class="vis-org-title">Departments</h3>
+            <p class="vis-org-sub">Teams or cost centers.</p>
+            <form class="vis-org-add" data-dimension="department" autocomplete="off">
+              <input type="text" class="vis-org-input" placeholder="Add a department" maxlength="200" required />
+              <button type="submit" class="vis-btn vis-btn-primary vis-btn-sm">Add</button>
+            </form>
+            <ul class="vis-org-list" data-dimension="department"></ul>
+            <div class="vis-org-empty" data-dimension="department" hidden>No departments yet.</div>
+          </section>
+
+          <!-- Products -->
+          <section class="vis-org-card" data-dimension="product">
+            <h3 class="vis-org-title">Products</h3>
+            <p class="vis-org-sub">Product lines or SKUs.</p>
+            <form class="vis-org-add" data-dimension="product" autocomplete="off">
+              <input type="text" class="vis-org-input" placeholder="Add a product" maxlength="200" required />
+              <button type="submit" class="vis-btn vis-btn-primary vis-btn-sm">Add</button>
+            </form>
+            <ul class="vis-org-list" data-dimension="product"></ul>
+            <div class="vis-org-empty" data-dimension="product" hidden>No products yet.</div>
+          </section>
+
+          <!-- Activities -->
+          <section class="vis-org-card" data-dimension="activity">
+            <h3 class="vis-org-title">Activities</h3>
+            <p class="vis-org-sub">Initiatives, projects, or workstreams.</p>
+            <form class="vis-org-add" data-dimension="activity" autocomplete="off">
+              <input type="text" class="vis-org-input" placeholder="Add an activity" maxlength="200" required />
+              <button type="submit" class="vis-btn vis-btn-primary vis-btn-sm">Add</button>
+            </form>
+            <ul class="vis-org-list" data-dimension="activity"></ul>
+            <div class="vis-org-empty" data-dimension="activity" hidden>No activities yet.</div>
+          </section>
+        </div>
+
+        <!-- Validation / status messages -->
+        <div class="vis-banner vis-banner-error" id="osErrorBanner" hidden></div>
+        <div class="vis-banner vis-banner-info"  id="osInfoBanner"  hidden></div>
+
+        <footer class="vis-panel-actions">
+          <span class="vis-validation-summary" id="osSummary"></span>
+          <button type="button" class="vis-btn vis-btn-ghost"   id="osEditBtn"     hidden>Edit</button>
+          <button type="button" class="vis-btn vis-btn-primary" id="osCompleteBtn">Complete</button>
+        </footer>
+
+      </div>
+
     </div>
   </section>
 
-  <script src="visibility.js?v=12" defer></script>
+  <!-- Generic confirm modal (re-used; populated by JS) -->
+  <div class="vis-modal" id="visConfirmModal" hidden>
+    <div class="vis-modal-card">
+      <h3 class="vis-modal-title" id="visConfirmTitle">Confirm</h3>
+      <p class="vis-modal-body" id="visConfirmBody"></p>
+      <div class="vis-modal-actions">
+        <button type="button" class="vis-btn vis-btn-ghost"   id="visConfirmCancel">Cancel</button>
+        <button type="button" class="vis-btn vis-btn-primary" id="visConfirmOk">Continue</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="visibility.js?v=13" defer></script>
 </body>
 </html>

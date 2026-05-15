@@ -132,6 +132,33 @@ function initializeSchema(database: Database.Database): void {
       updated_at       TEXT NOT NULL,
       FOREIGN KEY (customer_key_id) REFERENCES customer_keys(id) ON DELETE CASCADE
     );
+
+    -- Visibility offering — Organizational Structure (Phase 2).
+    -- Polymorphic table holding one row per entry across the five
+    -- dimensions (company/division/department/product/activity). All
+    -- dimensions are optional and independent per spec §3; Phase 3
+    -- budget lines reference entries by id.
+    CREATE TABLE IF NOT EXISTS org_entities (
+      id                TEXT PRIMARY KEY,
+      customer_key_id   TEXT NOT NULL,
+      dimension         TEXT NOT NULL,
+      name              TEXT NOT NULL,
+      order_index       INTEGER NOT NULL DEFAULT 0,
+      created_at        TEXT NOT NULL,
+      updated_at        TEXT NOT NULL,
+      FOREIGN KEY (customer_key_id) REFERENCES customer_keys(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_org_entities_key_dim
+      ON org_entities(customer_key_id, dimension);
+
+    -- Tracks Organizational Structure status (editing | completed).
+    CREATE TABLE IF NOT EXISTS org_structure_state (
+      customer_key_id  TEXT PRIMARY KEY,
+      status           TEXT NOT NULL DEFAULT 'editing',
+      updated_at       TEXT NOT NULL,
+      FOREIGN KEY (customer_key_id) REFERENCES customer_keys(id) ON DELETE CASCADE
+    );
   `);
 
   // Migrations — add new columns to existing tables

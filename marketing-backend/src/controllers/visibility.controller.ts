@@ -5,7 +5,16 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { customerKeyRepo, CustomerKeyRow } from '../db/partner.repository';
-import { glAccountRepo, financialStructureRepo, GLAccountRow } from '../db/visibility.repository';
+import {
+  glAccountRepo,
+  financialStructureRepo,
+  GLAccountRow,
+  orgEntityRepo,
+  orgStructureRepo,
+  OrgEntityRow,
+  ORG_DIMENSIONS,
+  OrgDimension,
+} from '../db/visibility.repository';
 import { parseGLBuffer, ParseError } from '../services/gl-parser.service';
 
 // ─── Constants from spec §2.3 (single source of truth, mirrored on FE) ─────
@@ -268,4 +277,141 @@ export const visibilityController = {
     financialStructureRepo.setStatus(key.id, 'editing');
     res.json({ status: 'editing' });
   },
+
+  // ─── Phase 2 — Organizational Structure ──────────────────────────────────
+
+  /**
+   * GET /api/visibility/org-structure
+   * Returns the customer's org entities (grouped by dimension) and
+   * the current status.
+   */
+  getOrgStructure(req: Request, res: Response): void {
+    const key = resolveCustomerKey(req);
+    if (!key) { send401(res, 'Missing or invalid customer key.'); return; }
+    const all = orgEntityRepo.listByCustomer(key.id);
+    const grouped: Record<OrgDimension, OrgEntityRow[]> = {
+      company: [], division: [], department: [], product: [], activity: [],
+    };
+    for (const e of all) grouped[e.dimension].push(e);
+    res.json({
+      status:   orgStructureRepo.getStatus(key.id),
+      entities: {
+        company:    grouped.company.map(serializeOrg),
+        division:   grouped.division.map(serializeOrg),
+        department: grouped.department.map(serializeOrg),
+        product:    grouped.product.map(serializeOrg),
+        activity:   grouped.activity.map(serializeOrg),
+      },
+    });
+  },
+
+  /**
+   * POST /api/visibility/org-structure/entities
+   * Body: { dimension, name }
+   */
+  createOrgEntity(req: Request, res: Response): void {
+    const key = resolveCustomerKey(req);
+    if (!key) { send401(res, 'Missing or invalid customer key.'); return; }
+    const Schema = z.object({
+      dimension: z.enum(ORG_DIMENSIONS),
+      name:      z.string().trim().min(1).max(200),
+    });
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'dimension and name are required.' } });
+      return;
+    }
+    const created = orgEntityRepo.create(key.id, parsed.data.dimension, parsed.data.name);
+    res.status(201).json({ entity: serializeOrg(created) });
+  },
+
+  /**
+   * PATCH /api/visibility/org-structure/entities/:id
+   * Body: { name }
+   */
+  renameOrgEntity(req: Request, res: Response): void {
+    const key = resolveCustomerKey(req);
+    if (!key) { send401(res, 'Missing or invalid customer key.'); return; }
+    const existing = orgEntityRepo.getById(req.params.id);
+    if (!existing || existing.customerKeyId !== key.id) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Entity not found.' } });
+      return;
+    }
+    const Schema = z.object({ name: z.string().trim().min(1).max(200) });
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'name is required.' } });
+      return;
+    }
+    const updated = orgEntityRepo.rename(req.params.id, parsed.data.name);
+    res.json({ entity: updated ? serializeOrg(updated) : null });
+  },
+
+  /**
+   * DELETE /api/visibility/org-structure/entities/:id
+   * Drops the org entry. Cells referencing it on finalized budgets
+   * render as blank per spec §3. The response includes a referenceCount
+   * so the UI can confirm with the user before calling — though for
+   * Phase 2 (no budgets yet) the count is always 0.
+   */
+  deleteOrgEntity(req: Request, res: Response): void {
+    const key = resolveCustomerKey(req);
+    if (!key) { send401(res, 'Missing or invalid customer key.'); return; }
+    const existing = orgEntityRepo.getById(req.params.id);
+    if (!existing || existing.customerKeyId !== key.id) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Entity not found.' } });
+      return;
+    }
+    const referenceCount = orgEntityRepo.countReferences(req.params.id);
+    orgEntityRepo.deleteById(req.params.id);
+    res.json({ ok: true, referenceCount });
+  },
+
+  /**
+   * GET /api/visibility/org-structure/entities/:id/references
+   * Returns the current reference count without deleting — used by the
+   * UI to populate the delete-confirmation modal copy per spec §11.
+   */
+  getOrgEntityReferences(req: Request, res: Response): void {
+    const key = resolveCustomerKey(req);
+    if (!key) { send401(res, 'Missing or invalid customer key.'); return; }
+    const existing = orgEntityRepo.getById(req.params.id);
+    if (!existing || existing.customerKeyId !== key.id) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Entity not found.' } });
+      return;
+    }
+    res.json({ referenceCount: orgEntityRepo.countReferences(req.params.id) });
+  },
+
+  /**
+   * POST /api/visibility/org-structure/complete
+   * All five dimensions are optional, so this just flips status —
+   * no minimum-count validation. Customers can complete an empty
+   * Org Structure if they don't need dimensions.
+   */
+  completeOrgStructure(req: Request, res: Response): void {
+    const key = resolveCustomerKey(req);
+    if (!key) { send401(res, 'Missing or invalid customer key.'); return; }
+    orgStructureRepo.setStatus(key.id, 'completed');
+    res.json({ status: 'completed' });
+  },
+
+  /**
+   * POST /api/visibility/org-structure/edit
+   */
+  editOrgStructure(req: Request, res: Response): void {
+    const key = resolveCustomerKey(req);
+    if (!key) { send401(res, 'Missing or invalid customer key.'); return; }
+    orgStructureRepo.setStatus(key.id, 'editing');
+    res.json({ status: 'editing' });
+  },
 };
+
+function serializeOrg(row: OrgEntityRow): Record<string, unknown> {
+  return {
+    id:         row.id,
+    dimension:  row.dimension,
+    name:       row.name,
+    orderIndex: row.orderIndex,
+  };
+}

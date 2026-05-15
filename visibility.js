@@ -486,6 +486,280 @@ function toClientRow(r) {
   };
 }
 
+// ─────────────────────────────────────────────────────────────
+//  PHASE 2 — Organizational Structure
+// ─────────────────────────────────────────────────────────────
+
+const ORG_DIMENSIONS = ['company', 'division', 'department', 'product', 'activity'];
+
+// Module state.
+let osStatus = 'editing';
+let osEntities = {
+  company: [], division: [], department: [], product: [], activity: [],
+};
+
+// DOM refs.
+const tabs              = Array.from(document.querySelectorAll('.vis-tab'));
+const panelFS           = document.getElementById('panelFinancialStructure');
+const panelOS           = document.getElementById('panelOrgStructure');
+const osStatusPill      = document.getElementById('osStatusPill');
+const osErrorBanner     = document.getElementById('osErrorBanner');
+const osInfoBanner      = document.getElementById('osInfoBanner');
+const osSummary         = document.getElementById('osSummary');
+const osCompleteBtn     = document.getElementById('osCompleteBtn');
+const osEditBtn         = document.getElementById('osEditBtn');
+
+// ── Tabs ──────────────────────────────────────────────────────
+function activateTab(tabName) {
+  for (const t of tabs) {
+    if (t.classList.contains('is-disabled')) continue;
+    const isActive = t.dataset.tab === tabName;
+    t.classList.toggle('is-active', isActive);
+    t.setAttribute('aria-selected', String(isActive));
+  }
+  if (panelFS) panelFS.hidden = tabName !== 'financial-structure';
+  if (panelOS) panelOS.hidden = tabName !== 'org-structure';
+}
+for (const t of tabs) {
+  t.addEventListener('click', () => {
+    if (t.classList.contains('is-disabled')) return;
+    activateTab(t.dataset.tab);
+  });
+}
+
+// ── Org Structure rendering ───────────────────────────────────
+function renderOrg() {
+  for (const dim of ORG_DIMENSIONS) {
+    const listEl  = document.querySelector(`.vis-org-list[data-dimension="${dim}"]`);
+    const emptyEl = document.querySelector(`.vis-org-empty[data-dimension="${dim}"]`);
+    if (!listEl || !emptyEl) continue;
+    const items = osEntities[dim] || [];
+    listEl.innerHTML = '';
+    if (items.length === 0) {
+      emptyEl.hidden = false;
+    } else {
+      emptyEl.hidden = true;
+      for (const e of items) {
+        const li = document.createElement('li');
+        li.className = 'vis-org-list-item';
+        li.dataset.id = e.id;
+        li.dataset.dimension = dim;
+        li.innerHTML = `
+          <input class="vis-org-list-name" type="text" value="${htmlEsc(e.name)}" maxlength="200" />
+          <button type="button" class="vis-org-list-rm" title="Remove" aria-label="Remove">×</button>
+        `;
+        listEl.appendChild(li);
+      }
+    }
+  }
+  refreshOrgStatusUi();
+  refreshOrgSummary();
+}
+
+function refreshOrgStatusUi() {
+  // Clear inline overrides from previous success state.
+  osStatusPill.style.cssText  = '';
+  osCompleteBtn.style.display = '';
+  osEditBtn.style.display     = '';
+  osStatusPill.dataset.status = osStatus;
+  osStatusPill.textContent    = osStatus === 'completed' ? 'Completed' : 'Editing';
+  document.body.classList.toggle('is-os-completed', osStatus === 'completed');
+  osEditBtn.hidden     = osStatus !== 'completed';
+  osCompleteBtn.hidden = osStatus === 'completed';
+}
+
+function refreshOrgSummary() {
+  const total = ORG_DIMENSIONS.reduce((n, d) => n + (osEntities[d] || []).length, 0);
+  osSummary.textContent = total === 0
+    ? 'All dimensions are optional. Complete leaves them blank.'
+    : `${total} entr${total === 1 ? 'y' : 'ies'} defined across ${ORG_DIMENSIONS.filter(d => (osEntities[d] || []).length > 0).length} dimension${ORG_DIMENSIONS.filter(d => (osEntities[d] || []).length > 0).length === 1 ? '' : 's'}.`;
+}
+
+// ── Add ──────────────────────────────────────────────────────
+document.querySelectorAll('.vis-org-add').forEach(form => {
+  form.addEventListener('submit', async (ev) => {
+    ev.preventDefault();
+    const dim   = form.dataset.dimension;
+    const input = form.querySelector('input');
+    const name  = (input?.value || '').trim();
+    if (!name) return;
+    showBanner(osErrorBanner, '');
+    const submit = form.querySelector('button[type="submit"]');
+    submit.disabled = true;
+    try {
+      const res = await api('/api/visibility/org-structure/entities', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dimension: dim, name }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        showBanner(osErrorBanner, htmlEsc(body?.error?.message || `Add failed (${res.status}).`));
+        return;
+      }
+      const data = await res.json();
+      osEntities[dim].push(data.entity);
+      input.value = '';
+      renderOrg();
+      input.focus();
+    } catch (err) {
+      showBanner(osErrorBanner, htmlEsc(`Add failed: ${(err && err.message) || err}`));
+    } finally {
+      submit.disabled = false;
+    }
+  });
+});
+
+// ── Rename (debounced) and Remove ─────────────────────────────
+let osRenameDebounce = null;
+document.querySelectorAll('.vis-org-list').forEach(list => {
+  list.addEventListener('input', (ev) => {
+    const target = ev.target;
+    if (!(target instanceof HTMLInputElement) || !target.classList.contains('vis-org-list-name')) return;
+    const li  = target.closest('.vis-org-list-item');
+    const id  = li?.dataset.id;
+    const dim = li?.dataset.dimension;
+    if (!id || !dim) return;
+    const name = target.value.trim();
+    if (osRenameDebounce) clearTimeout(osRenameDebounce);
+    osRenameDebounce = setTimeout(async () => {
+      if (!name) return;
+      try {
+        const res = await api(`/api/visibility/org-structure/entities/${encodeURIComponent(id)}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}));
+          showBanner(osErrorBanner, htmlEsc(body?.error?.message || `Rename failed (${res.status}).`));
+          return;
+        }
+        const data = await res.json();
+        const idx = osEntities[dim].findIndex(e => e.id === id);
+        if (idx >= 0 && data.entity) osEntities[dim][idx] = data.entity;
+      } catch (err) {
+        showBanner(osErrorBanner, htmlEsc(`Rename failed: ${(err && err.message) || err}`));
+      }
+    }, 350);
+  });
+  list.addEventListener('click', async (ev) => {
+    const target = ev.target;
+    if (!(target instanceof HTMLElement) || !target.classList.contains('vis-org-list-rm')) return;
+    const li  = target.closest('.vis-org-list-item');
+    const id  = li?.dataset.id;
+    const dim = li?.dataset.dimension;
+    if (!id || !dim) return;
+    const entity = osEntities[dim].find(e => e.id === id);
+    if (!entity) return;
+
+    // Fetch reference count to decide whether to warn (spec §11).
+    let refs = 0;
+    try {
+      const r = await api(`/api/visibility/org-structure/entities/${encodeURIComponent(id)}/references`);
+      if (r.ok) refs = (await r.json()).referenceCount || 0;
+    } catch { /* default to 0 */ }
+
+    const dimLabel = dim.charAt(0).toUpperCase() + dim.slice(1);
+    const warning = refs > 0
+      ? `This ${dimLabel} is used in ${refs} budget row(s). Deleting it will leave those cells blank. Continue?`
+      : `Remove ${dimLabel} "${entity.name}"?`;
+    if (!(await confirmModal('Remove ' + dimLabel, warning))) return;
+
+    try {
+      const res = await api(`/api/visibility/org-structure/entities/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        showBanner(osErrorBanner, htmlEsc(body?.error?.message || `Remove failed (${res.status}).`));
+        return;
+      }
+      osEntities[dim] = osEntities[dim].filter(e => e.id !== id);
+      renderOrg();
+    } catch (err) {
+      showBanner(osErrorBanner, htmlEsc(`Remove failed: ${(err && err.message) || err}`));
+    }
+  });
+});
+
+// ── Complete / Edit ───────────────────────────────────────────
+osCompleteBtn.addEventListener('click', async () => {
+  showBanner(osErrorBanner, '');
+  osCompleteBtn.disabled = true;
+  const original = osCompleteBtn.textContent;
+  osCompleteBtn.textContent = 'Completing…';
+  try {
+    const res = await api('/api/visibility/org-structure/complete', { method: 'POST' });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showBanner(osErrorBanner, htmlEsc(body?.error?.message || `Could not complete (${res.status}).`));
+      return;
+    }
+    await res.json().catch(() => ({}));
+    osStatus = 'completed';
+    refreshOrgStatusUi();
+    // Belt-and-suspenders inline styling so the green pill + banner
+    // always paint, regardless of cached CSS.
+    osStatusPill.textContent   = 'Completed';
+    osStatusPill.style.cssText = 'background: rgba(74,124,63,0.15); color: #8ed47b; border: 1px solid rgba(74,124,63,0.4);';
+    osCompleteBtn.style.display = 'none';
+    osEditBtn.style.display     = 'inline-flex';
+    osInfoBanner.innerHTML   = '<strong>✓ Organizational Structure marked as completed.</strong> Use Edit to add or remove dimensions later.';
+    osInfoBanner.style.cssText = 'display: block; padding: 0.75rem 1rem; border-radius: 6px; background: rgba(91,141,224,0.10); border: 1px solid rgba(91,141,224,0.35); color: #cfe0ff; margin-bottom: 1rem;';
+    osInfoBanner.removeAttribute('hidden');
+  } catch (err) {
+    showBanner(osErrorBanner, htmlEsc(`Could not complete: ${(err && err.message) || err}`));
+  } finally {
+    osCompleteBtn.textContent = original;
+    osCompleteBtn.disabled = false;
+  }
+});
+
+osEditBtn.addEventListener('click', async () => {
+  try {
+    const res = await api('/api/visibility/org-structure/edit', { method: 'POST' });
+    if (res.ok) {
+      osStatus = 'editing';
+      refreshOrgStatusUi();
+      osInfoBanner.style.cssText = '';
+      showBanner(osInfoBanner, '');
+    }
+  } catch (err) {
+    showBanner(osErrorBanner, htmlEsc(`Could not re-open: ${(err && err.message) || err}`));
+  }
+});
+
+// ── Confirm modal ─────────────────────────────────────────────
+const modal       = document.getElementById('visConfirmModal');
+const modalTitle  = document.getElementById('visConfirmTitle');
+const modalBody   = document.getElementById('visConfirmBody');
+const modalOk     = document.getElementById('visConfirmOk');
+const modalCancel = document.getElementById('visConfirmCancel');
+
+function confirmModal(title, body) {
+  return new Promise((resolve) => {
+    modalTitle.textContent = title;
+    modalBody.textContent  = body;
+    modal.hidden = false;
+    const close = (result) => {
+      modal.hidden = true;
+      modalOk.removeEventListener('click', onOk);
+      modalCancel.removeEventListener('click', onCancel);
+      modal.removeEventListener('click', onBackdrop);
+      resolve(result);
+    };
+    const onOk      = () => close(true);
+    const onCancel  = () => close(false);
+    const onBackdrop = (ev) => { if (ev.target === modal) close(false); };
+    modalOk.addEventListener('click', onOk);
+    modalCancel.addEventListener('click', onCancel);
+    modal.addEventListener('click', onBackdrop);
+  });
+}
+
+// ─────────────────────────────────────────────────────────────
+//  BOOT
+// ─────────────────────────────────────────────────────────────
+
 (async function boot() {
   // dropdowns is initialized to DEFAULT_DROPDOWNS at module load — no
   // need to fetch them. Spec §2.3 is a fixed table; the server keeps its
@@ -502,4 +776,18 @@ function toClientRow(r) {
     showBanner(fsErrorBanner, htmlEsc(`Could not load Financial Structure: ${(err && err.message) || err}`));
   }
   render();
+
+  // Org Structure boot.
+  try {
+    const osRes = await api('/api/visibility/org-structure');
+    if (osRes.ok) {
+      const data = await osRes.json();
+      osStatus = data.status || 'editing';
+      const ent = data.entities || {};
+      for (const d of ORG_DIMENSIONS) osEntities[d] = ent[d] || [];
+    }
+  } catch (err) {
+    showBanner(osErrorBanner, htmlEsc(`Could not load Organizational Structure: ${(err && err.message) || err}`));
+  }
+  renderOrg();
 })();

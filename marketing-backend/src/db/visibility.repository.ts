@@ -184,3 +184,125 @@ export const financialStructureRepo = {
       .run(customerKeyId, status, now);
   },
 };
+
+// ─── Org Structure (Phase 2) ────────────────────────────────────────────────
+
+export const ORG_DIMENSIONS = ['company', 'division', 'department', 'product', 'activity'] as const;
+export type OrgDimension = typeof ORG_DIMENSIONS[number];
+
+export interface OrgEntityRow {
+  id: string;
+  customerKeyId: string;
+  dimension: OrgDimension;
+  name: string;
+  orderIndex: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface DbOrgEntityRow {
+  id: string;
+  customer_key_id: string;
+  dimension: OrgDimension;
+  name: string;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
+
+function toOrgDomain(r: DbOrgEntityRow): OrgEntityRow {
+  return {
+    id:            r.id,
+    customerKeyId: r.customer_key_id,
+    dimension:     r.dimension,
+    name:          r.name,
+    orderIndex:    r.order_index,
+    createdAt:     r.created_at,
+    updatedAt:     r.updated_at,
+  };
+}
+
+export const orgEntityRepo = {
+  listByCustomer(customerKeyId: string): OrgEntityRow[] {
+    const rows = getDb()
+      .prepare(`SELECT * FROM org_entities WHERE customer_key_id = ?
+                ORDER BY dimension ASC, order_index ASC, created_at ASC`)
+      .all(customerKeyId) as DbOrgEntityRow[];
+    return rows.map(toOrgDomain);
+  },
+
+  getById(id: string): OrgEntityRow | null {
+    const row = getDb()
+      .prepare(`SELECT * FROM org_entities WHERE id = ?`)
+      .get(id) as DbOrgEntityRow | undefined;
+    return row ? toOrgDomain(row) : null;
+  },
+
+  create(
+    customerKeyId: string,
+    dimension: OrgDimension,
+    name: string,
+  ): OrgEntityRow {
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    // Place new entries at the end of their dimension list.
+    const maxIdx = (getDb()
+      .prepare(`SELECT COALESCE(MAX(order_index), -1) AS m
+                  FROM org_entities WHERE customer_key_id = ? AND dimension = ?`)
+      .get(customerKeyId, dimension) as { m: number }).m;
+    getDb()
+      .prepare(
+        `INSERT INTO org_entities
+           (id, customer_key_id, dimension, name, order_index, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(id, customerKeyId, dimension, name, maxIdx + 1, now, now);
+    return this.getById(id)!;
+  },
+
+  rename(id: string, name: string): OrgEntityRow | null {
+    getDb()
+      .prepare(`UPDATE org_entities SET name = ?, updated_at = ? WHERE id = ?`)
+      .run(name, new Date().toISOString(), id);
+    return this.getById(id);
+  },
+
+  deleteById(id: string): void {
+    getDb().prepare(`DELETE FROM org_entities WHERE id = ?`).run(id);
+  },
+
+  /**
+   * Count of budget rows / Salaries rows currently referencing this org
+   * entity. Until Phase 3 ships those tables don't exist yet — return 0
+   * so the delete-confirmation modal can already be wired on the
+   * frontend without blocking on the budget layer.
+   */
+  countReferences(_id: string): number {
+    // Placeholder for Phase 3 — wire up to BudgetLine / SalariesRow once
+    // those tables are introduced.
+    return 0;
+  },
+};
+
+// ─── Org Structure status ───────────────────────────────────────────────────
+
+export type OSStatus = 'editing' | 'completed';
+
+export const orgStructureRepo = {
+  getStatus(customerKeyId: string): OSStatus {
+    const row = getDb()
+      .prepare(`SELECT status FROM org_structure_state WHERE customer_key_id = ?`)
+      .get(customerKeyId) as { status: OSStatus } | undefined;
+    return row?.status ?? 'editing';
+  },
+  setStatus(customerKeyId: string, status: OSStatus): void {
+    const now = new Date().toISOString();
+    getDb()
+      .prepare(
+        `INSERT INTO org_structure_state (customer_key_id, status, updated_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(customer_key_id) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at`,
+      )
+      .run(customerKeyId, status, now);
+  },
+};
