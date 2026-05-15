@@ -654,7 +654,7 @@
 }
 
 .vis-budget-table-wrap { max-width: 100%; overflow-x: auto; }
-.vis-budget-table { min-width: 1400px; font-size: 0.82rem; }
+.vis-budget-table { min-width: 2400px; font-size: 0.82rem; }
 .vis-budget-table thead th {
   position: sticky;
   top: 0;
@@ -684,6 +684,21 @@
   padding-left: 0.65rem;
 }
 .vis-budget-table td.is-period input { text-align: right; }
+/* Period columns are tight when there are 12 of them — hide the
+   number input's spinner UI so the digits get the whole width, and
+   guarantee a usable minimum cell width. */
+.vis-budget-table td.is-period {
+  min-width: 80px;
+}
+.vis-budget-table td.is-period input {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+.vis-budget-table td.is-period input::-webkit-outer-spin-button,
+.vis-budget-table td.is-period input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 .vis-budget-table td.is-total {
   font-weight: 700;
   color: #ffffff;
