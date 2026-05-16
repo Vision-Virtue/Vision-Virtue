@@ -217,6 +217,38 @@ function initializeSchema(database: Database.Database): void {
       PRIMARY KEY (budget_line_id, period_key),
       FOREIGN KEY (budget_line_id) REFERENCES budget_lines(id) ON DELETE CASCADE
     );
+
+    -- Visibility offering — Salaries & Benefits (Phase 3b, spec §7).
+    -- One row per employee allocation. The S&B "group" is implicit: it
+    -- is the set of rows for one budget_id. Multiple rows for the same
+    -- employee_name split that employee's salary across Org dimensions.
+    CREATE TABLE IF NOT EXISTS salaries_rows (
+      id                    TEXT PRIMARY KEY,
+      budget_id             TEXT NOT NULL,
+      company_id            TEXT,
+      employee_name         TEXT NOT NULL DEFAULT '',
+      division_id           TEXT,
+      department_id         TEXT,
+      product_id            TEXT,
+      activity_id           TEXT,
+      product_activity_pct  REAL NOT NULL DEFAULT 0,
+      monthly_salary        REAL NOT NULL DEFAULT 0,
+      gl_account_id         TEXT,
+      order_index           INTEGER NOT NULL DEFAULT 0,
+      created_at            TEXT NOT NULL,
+      updated_at            TEXT NOT NULL,
+      FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_salaries_rows_budget_id ON salaries_rows(budget_id);
+
+    -- Tracks Salaries & Benefits status (editing | finalized) per budget.
+    CREATE TABLE IF NOT EXISTS salaries_state (
+      budget_id   TEXT PRIMARY KEY,
+      status      TEXT NOT NULL DEFAULT 'editing',
+      updated_at  TEXT NOT NULL,
+      FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE
+    );
   `);
 
   // Migrations — add new columns to existing tables

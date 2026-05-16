@@ -25,8 +25,12 @@ import {
   Granularity,
   BUDGET_CAP_PER_CUSTOMER,
   periodKeysFor,
+  salariesRowRepo,
+  salariesStateRepo,
+  SalariesRow,
 } from '../db/visibility.repository';
-import { parseGLBuffer, ParseError } from '../services/gl-parser.service';
+import { parseGLBuffer, parseSBBuffer, ParseError } from '../services/gl-parser.service';
+import { validateAndPivotSalaries, pivotEntryToCells } from '../services/salaries.service';
 
 // ─── Constants from spec §2.3 (single source of truth, mirrored on FE) ─────
 
@@ -708,5 +712,227 @@ export const budgetsController = {
     }
     budgetLineRepo.deleteById(line.id);
     res.json({ ok: true });
+  },
+};
+
+// ─── Phase 3b — Salaries & Benefits (spec §7) ────────────────────────────
+
+function serializeSalary(row: SalariesRow): Record<string, unknown> {
+  return {
+    id:                  row.id,
+    companyId:           row.companyId,
+    employeeName:        row.employeeName,
+    divisionId:          row.divisionId,
+    departmentId:        row.departmentId,
+    productId:           row.productId,
+    activityId:          row.activityId,
+    productActivityPct:  row.productActivityPct,
+    monthlySalary:       row.monthlySalary,
+    glAccountId:         row.glAccountId,
+    orderIndex:          row.orderIndex,
+  };
+}
+
+function requireBudget(req: Request, res: Response): { budget: BudgetRow; customerKeyId: string } | null {
+  const key = resolveCustomerKey(req);
+  if (!key) { send401(res, 'Missing or invalid customer key.'); return null; }
+  const budget = budgetRepo.getById(req.params.id);
+  if (!budget || budget.customerKeyId !== key.id) {
+    res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Budget not found.' } });
+    return null;
+  }
+  return { budget, customerKeyId: key.id };
+}
+
+export const salariesController = {
+  /** GET /api/visibility/budgets/:id/salaries */
+  list(req: Request, res: Response): void {
+    const ctx = requireBudget(req, res); if (!ctx) return;
+    const rows = salariesRowRepo.listByBudget(ctx.budget.id);
+    const validation = validateAndPivotSalaries(rows);
+    res.json({
+      status:        salariesStateRepo.getStatus(ctx.budget.id),
+      sbEnabled:     ctx.budget.sbEnabled,
+      rows:          rows.map(serializeSalary),
+      errors:        validation.errors,
+      warnings:      validation.warnings,
+      pivotPreview:  validation.pivot.map(p => ({
+        companyId: p.companyId, divisionId: p.divisionId, departmentId: p.departmentId,
+        productId: p.productId, activityId: p.activityId, glAccountId: p.glAccountId,
+        allocatedMonthlySalary: p.allocatedMonthlySalary,
+        contributingRowIds: p.contributingRowIds,
+      })),
+    });
+  },
+
+  /** POST /api/visibility/budgets/:id/salaries */
+  createRow(req: Request, res: Response): void {
+    const ctx = requireBudget(req, res); if (!ctx) return;
+    const created = salariesRowRepo.create(ctx.budget.id);
+    res.status(201).json({ row: serializeSalary(created) });
+  },
+
+  /** PATCH /api/visibility/budgets/:id/salaries/:rowId */
+  patchRow(req: Request, res: Response): void {
+    const ctx = requireBudget(req, res); if (!ctx) return;
+    const row = salariesRowRepo.getById(req.params.rowId);
+    if (!row || row.budgetId !== ctx.budget.id) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Row not found.' } });
+      return;
+    }
+    const Schema = z.object({
+      companyId:           z.string().nullable().optional(),
+      employeeName:        z.string().trim().max(200).optional(),
+      divisionId:          z.string().nullable().optional(),
+      departmentId:        z.string().nullable().optional(),
+      productId:           z.string().nullable().optional(),
+      activityId:          z.string().nullable().optional(),
+      productActivityPct:  z.number().min(0).max(1000).optional(),
+      monthlySalary:       z.number().min(0).optional(),
+      glAccountId:         z.string().nullable().optional(),
+    });
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid salary patch.' } });
+      return;
+    }
+    // Validate FKs scoped to this customer.
+    const checkOrgId = (id: string | null | undefined): boolean => {
+      if (id == null || id === '') return true;
+      const e = orgEntityRepo.getById(id);
+      return !!e && e.customerKeyId === ctx.customerKeyId;
+    };
+    for (const k of ['companyId','divisionId','departmentId','productId','activityId'] as const) {
+      if (parsed.data[k] !== undefined && !checkOrgId(parsed.data[k] as string | null | undefined)) {
+        res.status(400).json({ error: { code: 'BAD_ORG_REF', message: `${k} does not exist for this customer.` } });
+        return;
+      }
+    }
+    if (parsed.data.glAccountId !== undefined && parsed.data.glAccountId) {
+      const gl = glAccountRepo.getById(parsed.data.glAccountId);
+      if (!gl || gl.customerKeyId !== ctx.customerKeyId) {
+        res.status(400).json({ error: { code: 'BAD_GL_REF', message: 'Unknown GL account.' } });
+        return;
+      }
+    }
+    const updated = salariesRowRepo.update(row.id, parsed.data);
+    res.json({ row: updated ? serializeSalary(updated) : null });
+  },
+
+  /** DELETE /api/visibility/budgets/:id/salaries/:rowId */
+  removeRow(req: Request, res: Response): void {
+    const ctx = requireBudget(req, res); if (!ctx) return;
+    const row = salariesRowRepo.getById(req.params.rowId);
+    if (!row || row.budgetId !== ctx.budget.id) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Row not found.' } });
+      return;
+    }
+    salariesRowRepo.deleteById(row.id);
+    res.json({ ok: true });
+  },
+
+  /**
+   * POST /api/visibility/budgets/:id/salaries/upload
+   * Raw .xlsx or .csv body. Optional ?filename= hint.
+   * Bulk-inserts rows seeded with (employeeName, monthlySalary, departmentId?).
+   * If column C matches an existing Department entity by name (case-insensitive),
+   * the row's department_id is linked; otherwise the value is dropped (the
+   * customer can fill it in manually). This is the "shortcut" upload per §7.2.
+   */
+  async upload(req: Request, res: Response): Promise<void> {
+    const ctx = requireBudget(req, res); if (!ctx) return;
+    const buf = req.body as Buffer | undefined;
+    if (!Buffer.isBuffer(buf) || buf.length === 0) {
+      res.status(400).json({ error: { code: 'EMPTY_BODY', message: 'No file uploaded.' } });
+      return;
+    }
+    const filename = typeof req.query.filename === 'string' ? req.query.filename : '';
+    let parsed;
+    try {
+      parsed = await parseSBBuffer(buf, filename);
+    } catch (err) {
+      if (err instanceof ParseError) {
+        res.status(400).json({ error: { code: 'PARSE_ERROR', message: err.userMessage } });
+      } else {
+        res.status(400).json({ error: { code: 'PARSE_ERROR', message: err instanceof Error ? err.message : 'Could not parse file.' } });
+      }
+      return;
+    }
+    // Map department names to existing org entries (case-insensitive).
+    const depts = orgEntityRepo.listByCustomer(ctx.customerKeyId).filter(e => e.dimension === 'department');
+    const deptByName = new Map(depts.map(d => [d.name.trim().toLowerCase(), d.id]));
+    const seeded: Partial<SalariesRow>[] = parsed.map(r => ({
+      employeeName:  r.employeeName,
+      monthlySalary: r.monthlySalary,
+      departmentId:  r.department ? (deptByName.get(r.department.trim().toLowerCase()) ?? null) : null,
+    }));
+    const created = salariesRowRepo.bulkInsert(ctx.budget.id, seeded);
+    res.json({
+      inserted: created.length,
+      rows:     created.map(serializeSalary),
+      unmappedDepartments: parsed
+        .filter(r => r.department && !deptByName.has(r.department.trim().toLowerCase()))
+        .map(r => r.department),
+    });
+  },
+
+  /**
+   * POST /api/visibility/budgets/:id/salaries/finalize
+   * Runs the validation pipeline; on success replaces every existing
+   * source='salaries' budget_line under this budget with the freshly
+   * pivoted set, and flips status to 'finalized'.
+   */
+  finalize(req: Request, res: Response): void {
+    const ctx = requireBudget(req, res); if (!ctx) return;
+    const rows = salariesRowRepo.listByBudget(ctx.budget.id);
+    if (rows.length === 0) {
+      res.status(400).json({ error: { code: 'EMPTY_SB', message: 'Add at least one salary row before finalizing.' } });
+      return;
+    }
+    const result = validateAndPivotSalaries(rows);
+    if (result.errors.length > 0) {
+      res.status(400).json({
+        error: {
+          code: 'SB_VALIDATION',
+          message: `${result.errors.length} validation error${result.errors.length === 1 ? '' : 's'} — fix them before finalizing.`,
+          errors:   result.errors,
+          warnings: result.warnings,
+        },
+      });
+      return;
+    }
+
+    // Replace existing salaries lines with the freshly pivoted set.
+    const existingLines = budgetLineRepo.listByBudget(ctx.budget.id).filter(l => l.source === 'salaries');
+    for (const l of existingLines) budgetLineRepo.deleteById(l.id);
+
+    for (const p of result.pivot) {
+      const line = budgetLineRepo.create(ctx.budget.id, 'salaries');
+      budgetLineRepo.update(line.id, {
+        companyId:    p.companyId,
+        divisionId:   p.divisionId,
+        departmentId: p.departmentId,
+        productId:    p.productId,
+        activityId:   p.activityId,
+        glAccountId:  p.glAccountId,
+        serviceProviderName: 'Employees Salaries',
+        serviceDescription:  'Employees Salaries',
+      });
+      const cells = pivotEntryToCells(p.allocatedMonthlySalary, ctx.budget.granularity);
+      budgetCellRepo.setAllForLine(line.id, cells);
+    }
+    salariesStateRepo.setStatus(ctx.budget.id, 'finalized');
+    res.json({
+      status:    'finalized',
+      warnings:  result.warnings,
+      pivotCount: result.pivot.length,
+    });
+  },
+
+  /** POST /api/visibility/budgets/:id/salaries/edit */
+  edit(req: Request, res: Response): void {
+    const ctx = requireBudget(req, res); if (!ctx) return;
+    salariesStateRepo.setStatus(ctx.budget.id, 'editing');
+    res.json({ status: 'editing' });
   },
 };

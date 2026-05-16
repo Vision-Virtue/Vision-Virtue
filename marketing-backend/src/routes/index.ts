@@ -4,7 +4,7 @@ import { linkedInController } from '../controllers/linkedin.controller';
 import { authController, verifyPin } from '../controllers/auth.controller';
 import { chatController } from '../controllers/chat.controller';
 import { partnerController } from '../controllers/partner.controller';
-import { visibilityController, budgetsController } from '../controllers/visibility.controller';
+import { visibilityController, budgetsController, salariesController } from '../controllers/visibility.controller';
 import { requireRaphael, requireLinkedIn, requireAdminPin } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -236,6 +236,19 @@ router.post(  '/visibility/budgets/:id/finalize',             (req, res) => budg
 router.post(  '/visibility/budgets/:id/lines',                (req, res) => budgetsController.createLine(req, res));
 router.patch( '/visibility/budgets/:id/lines/:lineId',        (req, res) => budgetsController.patchLine(req, res));
 router.delete('/visibility/budgets/:id/lines/:lineId',        (req, res) => budgetsController.removeLine(req, res));
+
+// Phase 3b — Salaries & Benefits (per budget).
+router.get(   '/visibility/budgets/:id/salaries',                  (req, res) => salariesController.list(req, res));
+router.post(  '/visibility/budgets/:id/salaries',                  (req, res) => salariesController.createRow(req, res));
+router.patch( '/visibility/budgets/:id/salaries/:rowId',           (req, res) => salariesController.patchRow(req, res));
+router.delete('/visibility/budgets/:id/salaries/:rowId',           (req, res) => salariesController.removeRow(req, res));
+router.post(
+  '/visibility/budgets/:id/salaries/upload',
+  raw({ type: '*/*', limit: '5mb' }),
+  asyncHandler(async (req, res) => { await salariesController.upload(req, res); }),
+);
+router.post(  '/visibility/budgets/:id/salaries/finalize',         (req, res) => salariesController.finalize(req, res));
+router.post(  '/visibility/budgets/:id/salaries/edit',             (req, res) => salariesController.edit(req, res));
 
 // ─── Admin (Raphael) — Partner Submissions ──────────────────────────────────
 // All admin endpoints require X-Admin-Pin header OR ?pin= query (matching
