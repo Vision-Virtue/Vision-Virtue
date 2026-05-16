@@ -1005,6 +1005,12 @@ document.querySelectorAll('.vis-pillgroup').forEach(group => {
       currentBudget.budget = data.budget;
       renderSetupPills();
       renderStatusPill();
+      // Scale and currency changes are display-only but the rendered
+      // amounts and currency symbol need to refresh (§6).
+      if (key === 'scale' || key === 'currency') {
+        renderBudgetTable();
+        renderFooterSummary();
+      }
     } catch (err) {
       showBanner(bgEditorError, htmlEsc(`Save failed: ${(err && err.message) || err}`));
     }
@@ -1030,9 +1036,32 @@ function buildGLOptions(selectedId) {
 }
 function findGL(id) { return glRows.find(r => r.id === id) || null; }
 
+// ── Scale-aware amount helpers ────────────────────────────
+// `line.cells[period]` always stores the RAW underlying amount.
+// Display = raw / 1000 when scale === 'thousands' (spec §6 says
+// scale change is display-only; underlying values untouched).
+function scaleFactor(scale) { return scale === 'thousands' ? 1000 : 1; }
+
+/** Format a raw amount for display in a period input. Empty/zero → ''. */
+function fmtCellDisplay(raw, scale) {
+  if (!Number.isFinite(raw) || raw === 0) return '';
+  return (raw / scaleFactor(scale)).toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
+/** Parse a display string (with commas / currency syms) into a raw amount. */
+function parseCellInput(str, scale) {
+  if (str == null) return 0;
+  const cleaned = String(str).replace(/[,$\s€£₪]/g, '');
+  if (cleaned === '' || cleaned === '-' || cleaned === '.') return 0;
+  const n = Number(cleaned);
+  if (!Number.isFinite(n)) return 0;
+  return n * scaleFactor(scale);
+}
+
 function renderBudgetTable() {
   if (!currentBudget) return;
   const periods = currentBudget.periodKeys || [];
+  const scale   = currentBudget.budget.scale;
   // Head
   const head = ['#', 'Company', 'Service Provider Name', 'Service Description',
     'Division', 'Department', 'Product', 'Activity',
@@ -1054,7 +1083,7 @@ function renderBudgetTable() {
 
     const cellsHtml = periods.map(p => `
       <td class="is-period">
-        <input type="number" step="any" data-field="cell" data-period="${htmlEsc(p)}" value="${l.cells[p] != null ? l.cells[p] : ''}" />
+        <input type="text" inputmode="decimal" data-field="cell" data-period="${htmlEsc(p)}" value="${htmlEsc(fmtCellDisplay(Number(l.cells[p]) || 0, scale))}" />
       </td>`).join('');
 
     tr.innerHTML = `
@@ -1071,9 +1100,9 @@ function renderBudgetTable() {
       <td class="is-readonly">${gl ? htmlEsc(gl.plSection || '—') : '—'}</td>
       <td class="is-readonly">${gl ? htmlEsc((gl.budgetCategory === 'Your Budget Category' ? gl.budgetCategoryCustom : gl.budgetCategory) || '—') : '—'}</td>
       ${cellsHtml}
-      <td class="is-total">${fmtAmount(totalFY)}</td>
+      <td class="is-total">${htmlEsc(fmtCellDisplay(totalFY, scale) || '—')}</td>
       <td class="is-actions">
-        <button type="button" class="vis-budget-line-dup" data-action="duplicate" title="Fill remaining periods with the first non-zero value">Duplicate</button>
+        <button type="button" class="vis-budget-line-dup" data-action="duplicate" title="Fill empty cells after the last entered value with that value">Duplicate</button>
         <button type="button" class="vis-budget-line-rm" data-action="remove" aria-label="Remove">×</button>
       </td>
     `;
@@ -1090,9 +1119,14 @@ function renderFooterSummary() {
   if (!currentBudget) return;
   const lines = currentBudget.lines || [];
   const periods = currentBudget.periodKeys || [];
+  const scale = currentBudget.budget.scale;
   const grand = lines.reduce((s, l) => s + periods.reduce((a, p) => a + (Number(l.cells[p]) || 0), 0), 0);
   const sym = CURRENCY_SYMBOL[currentBudget.budget.currency] || currentBudget.budget.currency;
-  bgFooterSummary.textContent = `${lines.length} row${lines.length === 1 ? '' : 's'} · Total ${sym}${fmtAmount(grand)}`;
+  const scaledGrand = grand / scaleFactor(scale);
+  const display = scaledGrand === 0 ? '—' : scaledGrand.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  bgFooterSummary.textContent =
+    `${lines.length} row${lines.length === 1 ? '' : 's'} · Total ${sym}${display}` +
+    (scale === 'thousands' ? ' (×1,000)' : '');
 }
 
 // Per-row edit handlers (delegated)
@@ -1109,12 +1143,12 @@ budgetTableBody.addEventListener('change', async (ev) => {
 
   if (field === 'cell') {
     const period = target.dataset.period;
-    const raw = target.value;
-    const num = raw === '' ? 0 : Number(raw);
-    if (!Number.isFinite(num)) return;
-    line.cells[period] = num;
+    const raw = parseCellInput(target.value, currentBudget.budget.scale);
+    line.cells[period] = raw;
+    // Reformat the cell with commas now that the user has finished typing
+    // (change event fires on blur for text inputs).
+    target.value = fmtCellDisplay(raw, currentBudget.budget.scale);
     debouncedSaveCells(lineId);
-    // Update FY total + footer summary live (no waiting for server).
     refreshRowTotal(tr, line);
     renderFooterSummary();
   } else if (field === 'glAccountId') {
@@ -1147,7 +1181,7 @@ function refreshRowTotal(tr, line) {
   const periods = currentBudget.periodKeys || [];
   const total = periods.reduce((s, p) => s + (Number(line.cells[p]) || 0), 0);
   const totalCell = tr.querySelector('td.is-total');
-  if (totalCell) totalCell.textContent = fmtAmount(total);
+  if (totalCell) totalCell.textContent = fmtCellDisplay(total, currentBudget.budget.scale) || '—';
 }
 
 // Row-action buttons (duplicate / remove)
@@ -1162,21 +1196,27 @@ budgetTableBody.addEventListener('click', async (ev) => {
 
   if (target.dataset.action === 'duplicate') {
     const periods = currentBudget.periodKeys || [];
-    // "Duplicate amount" per spec §5.2: take the first non-zero entry
-    // and copy it across all empty/zero cells in the same row.
-    let seed = 0;
-    for (const p of periods) {
-      const v = Number(line.cells[p]);
-      if (Number.isFinite(v) && v !== 0) { seed = v; break; }
+    // "Duplicate amount" per spec §5.2: take the value the user just
+    // entered (the LAST non-zero entry, scanning left → right) and
+    // fill every cell AFTER it that is still empty/zero.
+    let lastIdx = -1;
+    let lastVal = 0;
+    for (let i = 0; i < periods.length; i++) {
+      const v = Number(line.cells[periods[i]]);
+      if (Number.isFinite(v) && v !== 0) {
+        lastIdx = i;
+        lastVal = v;
+      }
     }
-    if (seed === 0) return;
-    for (const p of periods) {
-      const v = Number(line.cells[p]);
-      if (!Number.isFinite(v) || v === 0) line.cells[p] = seed;
+    if (lastIdx < 0) return; // nothing entered yet — nothing to duplicate
+    for (let i = lastIdx + 1; i < periods.length; i++) {
+      const v = Number(line.cells[periods[i]]);
+      if (!Number.isFinite(v) || v === 0) line.cells[periods[i]] = lastVal;
     }
-    // Re-render this row's inputs + total.
+    // Re-render this row's inputs + total with the (possibly-scaled) display.
     for (const inp of tr.querySelectorAll('input[data-field="cell"]')) {
-      inp.value = line.cells[inp.dataset.period] != null ? line.cells[inp.dataset.period] : '';
+      const raw = Number(line.cells[inp.dataset.period]) || 0;
+      inp.value = fmtCellDisplay(raw, currentBudget.budget.scale);
     }
     refreshRowTotal(tr, line);
     renderFooterSummary();
