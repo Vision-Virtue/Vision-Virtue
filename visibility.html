@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0" />
   <title>Vision &amp; Virtue | Visibility</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="visibility.css?v=6" />
+  <link rel="stylesheet" href="visibility.css?v=7" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
@@ -281,6 +281,57 @@
           <div class="vis-banner vis-banner-error" id="bgEditorErrorBanner" hidden></div>
           <div class="vis-banner vis-banner-info"  id="bgEditorInfoBanner"  hidden></div>
 
+          <!-- Salaries & Benefits sub-panel (shown only when budget.sbEnabled) -->
+          <section class="vis-sb-section" id="sbSection" hidden>
+            <header class="vis-sb-header">
+              <div>
+                <h3 class="vis-sb-title">Salaries &amp; Benefits</h3>
+                <p class="vis-sb-sub">Enter each employee's salary and allocate it across the Org dimensions with Product-Activity %. On Finalize, rows are pivot-aggregated into your Budget Structure as "Employees Salaries".</p>
+              </div>
+              <span class="vis-status-pill" id="sbStatusPill" data-status="editing">Editing</span>
+            </header>
+
+            <div class="vis-sb-toolbar">
+              <input type="file" id="sbFileInput" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden />
+              <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="sbUploadBtn">Upload .xlsx / .csv</button>
+              <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="sbAddRowBtn">+ Add row</button>
+              <span class="vis-sb-toolbar-hint">.xlsx or .csv · A = Employee Name · B = Monthly Salary · C = Department</span>
+            </div>
+
+            <div class="vis-banner vis-banner-error" id="sbErrorBanner" hidden></div>
+            <div class="vis-banner vis-banner-warn"  id="sbWarnBanner"  hidden></div>
+            <div class="vis-banner vis-banner-info"  id="sbInfoBanner"  hidden></div>
+
+            <div class="vis-table-wrap vis-sb-table-wrap">
+              <table class="vis-table vis-sb-table" id="sbTable">
+                <thead>
+                  <tr>
+                    <th class="vis-col-num">#</th>
+                    <th>Company</th>
+                    <th>Employee Name</th>
+                    <th>Division</th>
+                    <th>Department</th>
+                    <th>Product</th>
+                    <th>Activity</th>
+                    <th>P-A %</th>
+                    <th>Monthly Salary</th>
+                    <th>Allocated Monthly</th>
+                    <th>Account/GL Name</th>
+                    <th></th>
+                  </tr>
+                </thead>
+                <tbody id="sbTableBody"></tbody>
+              </table>
+            </div>
+            <div class="vis-empty" id="sbEmpty">No salary rows yet. Click <strong>+ Add row</strong> or upload a file.</div>
+
+            <footer class="vis-sb-actions">
+              <span class="vis-validation-summary" id="sbSummary"></span>
+              <button type="button" class="vis-btn vis-btn-ghost"   id="sbEditBtn"     hidden>Edit</button>
+              <button type="button" class="vis-btn vis-btn-primary" id="sbFinalizeBtn">Finalize Salaries</button>
+            </footer>
+          </section>
+
           <!-- Budget Structure table -->
           <section class="vis-budget-table-section">
             <div class="vis-budget-table-header">
@@ -333,6 +384,6 @@
     </div>
   </div>
 
-  <script src="visibility.js?v=15" defer></script>
+  <script src="visibility.js?v=16" defer></script>
 </body>
 </html>

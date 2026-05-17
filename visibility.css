@@ -766,6 +766,85 @@
   border-radius: 4px;
   outline: none;
 }
+
+/* ── Phase 3b: Salaries & Benefits ───────────────────────── */
+
+.vis-sb-section {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 8px;
+  padding: 1.1rem 1.2rem 1.2rem;
+  margin-bottom: 1.25rem;
+}
+.vis-sb-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.85rem;
+}
+.vis-sb-title {
+  font-family: var(--font-head);
+  font-size: 1rem;
+  font-weight: 700;
+  color: #ffffff;
+  margin: 0 0 0.3rem;
+}
+.vis-sb-sub {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.55);
+  margin: 0;
+  max-width: 680px;
+  line-height: 1.55;
+}
+.vis-sb-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-bottom: 0.75rem;
+}
+.vis-sb-toolbar-hint {
+  font-size: 0.76rem;
+  color: rgba(255, 255, 255, 0.45);
+}
+.vis-sb-table-wrap { max-width: 100%; overflow-x: auto; }
+.vis-sb-table { min-width: 1480px; font-size: 0.82rem; }
+.vis-sb-table td.is-readonly {
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.55);
+}
+.vis-sb-table td.is-number input { text-align: right; }
+.vis-sb-table td.is-number input::-webkit-outer-spin-button,
+.vis-sb-table td.is-number input::-webkit-inner-spin-button {
+  -webkit-appearance: none; margin: 0;
+}
+.vis-sb-table td.is-number input { appearance: textfield; -moz-appearance: textfield; }
+.vis-sb-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0.85rem;
+  margin-top: 1rem;
+}
+.vis-sb-actions .vis-validation-summary { margin-right: auto; }
+
+/* Once SB is finalized, lock editing on the SB rows and the upload
+   button (the Finalize button hides via [hidden]). */
+.vis-page.is-sb-finalized .vis-sb-table input,
+.vis-page.is-sb-finalized .vis-sb-table select,
+.vis-page.is-sb-finalized #sbUploadBtn,
+.vis-page.is-sb-finalized #sbAddRowBtn,
+.vis-page.is-sb-finalized #sbFinalizeBtn {
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.vis-status-pill[data-status="finalized"] {
+  background: rgba(74, 124, 63, 0.15);
+  color: #8ed47b;
+  border: 1px solid rgba(74, 124, 63, 0.4);
+}
 .vis-modal-input:focus {
   border-color: rgba(155, 189, 242, 0.7);
   background: rgba(255, 255, 255, 0.10);

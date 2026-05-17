@@ -932,6 +932,8 @@ function renderEditor() {
   renderStatusPill();
   renderBudgetTable();
   renderFooterSummary();
+  refreshSBSectionVisibility();
+  if (currentBudget.budget.sbEnabled) void loadSalaries();
 }
 
 function renderStatusPill() {
@@ -1010,6 +1012,11 @@ document.querySelectorAll('.vis-pillgroup').forEach(group => {
       if (key === 'scale' || key === 'currency') {
         renderBudgetTable();
         renderFooterSummary();
+      }
+      // Toggling S&B reveals or hides the Salaries panel.
+      if (key === 'sbEnabled') {
+        refreshSBSectionVisibility();
+        if (currentBudget.budget.sbEnabled) void loadSalaries();
       }
     } catch (err) {
       showBanner(bgEditorError, htmlEsc(`Save failed: ${(err && err.message) || err}`));
@@ -1353,6 +1360,277 @@ budgetDeleteBtn.addEventListener('click', async () => {
     }
   } catch (err) {
     showBanner(bgEditorError, htmlEsc(`Delete failed: ${(err && err.message) || err}`));
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+//  PHASE 3b — Salaries & Benefits
+// ─────────────────────────────────────────────────────────────
+
+const sbSection     = document.getElementById('sbSection');
+const sbStatusPill  = document.getElementById('sbStatusPill');
+const sbTableBody   = document.getElementById('sbTableBody');
+const sbEmpty       = document.getElementById('sbEmpty');
+const sbErrorBanner = document.getElementById('sbErrorBanner');
+const sbWarnBanner  = document.getElementById('sbWarnBanner');
+const sbInfoBanner  = document.getElementById('sbInfoBanner');
+const sbSummary     = document.getElementById('sbSummary');
+const sbAddRowBtn   = document.getElementById('sbAddRowBtn');
+const sbUploadBtn   = document.getElementById('sbUploadBtn');
+const sbFileInput   = document.getElementById('sbFileInput');
+const sbFinalizeBtn = document.getElementById('sbFinalizeBtn');
+const sbEditBtn     = document.getElementById('sbEditBtn');
+
+let sbState = { status: 'editing', rows: [], errors: [], warnings: [] };
+
+function refreshSBSectionVisibility() {
+  if (!sbSection || !currentBudget) return;
+  sbSection.hidden = !currentBudget.budget.sbEnabled;
+}
+
+async function loadSalaries() {
+  if (!currentBudget || !currentBudget.budget.sbEnabled) return;
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/salaries`);
+    if (!res.ok) {
+      showBanner(sbErrorBanner, `Could not load Salaries (${res.status}).`);
+      return;
+    }
+    const data = await res.json();
+    sbState.status   = data.status || 'editing';
+    sbState.rows     = data.rows || [];
+    sbState.errors   = data.errors || [];
+    sbState.warnings = data.warnings || [];
+    renderSBTable();
+    refreshSBStatus();
+    refreshSBValidation();
+  } catch (err) {
+    showBanner(sbErrorBanner, htmlEsc(`Could not load Salaries: ${(err && err.message) || err}`));
+  }
+}
+
+function refreshSBStatus() {
+  if (!sbStatusPill) return;
+  sbStatusPill.style.cssText = '';
+  sbStatusPill.dataset.status = sbState.status;
+  sbStatusPill.textContent    = sbState.status === 'finalized' ? 'Finalized' : 'Editing';
+  document.body.classList.toggle('is-sb-finalized', sbState.status === 'finalized');
+  sbEditBtn.hidden     = sbState.status !== 'finalized';
+  sbFinalizeBtn.hidden = sbState.status === 'finalized';
+}
+
+function refreshSBValidation() {
+  const errs  = sbState.errors  || [];
+  const warns = sbState.warnings || [];
+  showBanner(
+    sbErrorBanner,
+    errs.length > 0
+      ? `<strong>${errs.length} validation issue${errs.length === 1 ? '' : 's'}:</strong><br>` +
+        errs.map(e => `• ${htmlEsc(e.message)}`).join('<br>')
+      : '',
+  );
+  showBanner(
+    sbWarnBanner,
+    warns.length > 0
+      ? warns.map(w => `<em>Note:</em> ${htmlEsc(w.message)}`).join('<br>')
+      : '',
+  );
+  const rowCount = (sbState.rows || []).length;
+  sbSummary.textContent = rowCount === 0
+    ? ''
+    : `${rowCount} salary row${rowCount === 1 ? '' : 's'} · ${errs.length > 0 ? `${errs.length} issue${errs.length === 1 ? '' : 's'}` : 'Ready to finalize'}`;
+  sbSummary.classList.toggle('is-error', errs.length > 0);
+  sbSummary.classList.toggle('is-ready', rowCount > 0 && errs.length === 0);
+  sbFinalizeBtn.disabled = rowCount === 0 || errs.length > 0;
+}
+
+function renderSBTable() {
+  if (!sbTableBody) return;
+  sbTableBody.innerHTML = '';
+  const rows = sbState.rows || [];
+  sbEmpty.hidden = rows.length > 0;
+  rows.forEach((r, idx) => {
+    const tr = document.createElement('tr');
+    tr.dataset.id = r.id;
+    const monthly = Number(r.monthlySalary) || 0;
+    const pct     = Number(r.productActivityPct) || 0;
+    const allocated = monthly * (pct / 100);
+    tr.innerHTML = `
+      <td>${idx + 1}</td>
+      <td><select data-field="companyId">${buildOrgOptions('company', r.companyId)}</select></td>
+      <td><input type="text" data-field="employeeName" value="${htmlEsc(r.employeeName)}" maxlength="200" /></td>
+      <td><select data-field="divisionId">${buildOrgOptions('division', r.divisionId)}</select></td>
+      <td><select data-field="departmentId">${buildOrgOptions('department', r.departmentId)}</select></td>
+      <td><select data-field="productId">${buildOrgOptions('product', r.productId)}</select></td>
+      <td><select data-field="activityId">${buildOrgOptions('activity', r.activityId)}</select></td>
+      <td class="is-number"><input type="text" inputmode="decimal" data-field="productActivityPct" value="${pct === 0 ? '' : pct}" /></td>
+      <td class="is-number"><input type="text" inputmode="decimal" data-field="monthlySalary" value="${monthly === 0 ? '' : fmtCellDisplay(monthly, 'standard')}" /></td>
+      <td class="is-readonly is-number">${allocated === 0 ? '—' : fmtCellDisplay(allocated, 'standard')}</td>
+      <td><select data-field="glAccountId">${buildGLOptions(r.glAccountId)}</select></td>
+      <td class="is-actions"><button type="button" class="vis-budget-line-rm" data-action="sb-remove" aria-label="Remove">×</button></td>
+    `;
+    sbTableBody.appendChild(tr);
+  });
+}
+
+sbTableBody?.addEventListener('change', async (ev) => {
+  const target = ev.target;
+  if (!(target instanceof HTMLElement)) return;
+  const tr = target.closest('tr');
+  if (!tr) return;
+  const id = tr.dataset.id;
+  const row = sbState.rows.find(r => r.id === id);
+  if (!row) return;
+  const field = target.dataset.field;
+  if (!field) return;
+
+  if (field === 'productActivityPct') {
+    const raw = String(target.value).replace(/[%,\s]/g, '');
+    const n = raw === '' ? 0 : Number(raw);
+    if (!Number.isFinite(n)) return;
+    row.productActivityPct = n;
+    await sbPatch(id, { productActivityPct: n });
+  } else if (field === 'monthlySalary') {
+    const n = parseCellInput(target.value, 'standard');
+    row.monthlySalary = n;
+    target.value = n === 0 ? '' : fmtCellDisplay(n, 'standard');
+    await sbPatch(id, { monthlySalary: n });
+  } else if (field === 'employeeName') {
+    row.employeeName = target.value;
+    await sbPatch(id, { employeeName: target.value });
+  } else {
+    row[field] = target.value || null;
+    await sbPatch(id, { [field]: row[field] });
+  }
+  await loadSalaries();
+});
+
+sbTableBody?.addEventListener('click', async (ev) => {
+  const target = ev.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (target.dataset.action !== 'sb-remove') return;
+  const tr = target.closest('tr');
+  const id = tr?.dataset.id;
+  if (!id) return;
+  const ok = await confirmModal('Remove row', 'Remove this salary row?');
+  if (!ok) return;
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/salaries/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (res.ok) {
+      await loadSalaries();
+    } else {
+      const er = await res.json().catch(() => ({}));
+      showBanner(sbErrorBanner, htmlEsc(er?.error?.message || `Remove failed (${res.status}).`));
+    }
+  } catch (err) {
+    showBanner(sbErrorBanner, htmlEsc(`Remove failed: ${(err && err.message) || err}`));
+  }
+});
+
+async function sbPatch(rowId, payload) {
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/salaries/${encodeURIComponent(rowId)}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) {
+      const er = await res.json().catch(() => ({}));
+      showBanner(sbErrorBanner, htmlEsc(er?.error?.message || `Save failed (${res.status}).`));
+    }
+  } catch (err) {
+    showBanner(sbErrorBanner, htmlEsc(`Save failed: ${(err && err.message) || err}`));
+  }
+}
+
+sbAddRowBtn?.addEventListener('click', async () => {
+  if (!currentBudget) return;
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/salaries`, { method: 'POST' });
+    if (!res.ok) {
+      const er = await res.json().catch(() => ({}));
+      showBanner(sbErrorBanner, htmlEsc(er?.error?.message || `Add row failed (${res.status}).`));
+      return;
+    }
+    await loadSalaries();
+  } catch (err) {
+    showBanner(sbErrorBanner, htmlEsc(`Add row failed: ${(err && err.message) || err}`));
+  }
+});
+
+sbUploadBtn?.addEventListener('click', () => sbFileInput?.click());
+
+sbFileInput?.addEventListener('change', async () => {
+  const file = sbFileInput.files && sbFileInput.files[0];
+  sbFileInput.value = '';
+  if (!file || !currentBudget) return;
+  showBanner(sbErrorBanner, '');
+  showBanner(sbInfoBanner, `Uploading <strong>${htmlEsc(file.name)}</strong>…`);
+  try {
+    const res = await fetch(
+      `${VIS_API}/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/salaries/upload?key=${encodeURIComponent(customerKey())}&filename=${encodeURIComponent(file.name)}`,
+      { method: 'POST', body: file },
+    );
+    if (!res.ok) {
+      const er = await res.json().catch(() => ({}));
+      showBanner(sbInfoBanner, '');
+      showBanner(sbErrorBanner, htmlEsc(er?.error?.message || `Upload failed (${res.status}).`));
+      return;
+    }
+    const data = await res.json();
+    let msg = `Imported ${data.inserted} salary row${data.inserted === 1 ? '' : 's'}.`;
+    if (Array.isArray(data.unmappedDepartments) && data.unmappedDepartments.length > 0) {
+      msg += ` ${data.unmappedDepartments.length} department name${data.unmappedDepartments.length === 1 ? '' : 's'} did not match an Org entry — fill those in manually.`;
+    }
+    showBanner(sbInfoBanner, msg);
+    await loadSalaries();
+  } catch (err) {
+    showBanner(sbInfoBanner, '');
+    showBanner(sbErrorBanner, htmlEsc(`Upload failed: ${(err && err.message) || err}`));
+  }
+});
+
+sbFinalizeBtn?.addEventListener('click', async () => {
+  if (!currentBudget) return;
+  showBanner(sbErrorBanner, '');
+  sbFinalizeBtn.disabled = true;
+  const original = sbFinalizeBtn.textContent;
+  sbFinalizeBtn.textContent = 'Finalizing…';
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/salaries/finalize`, { method: 'POST' });
+    if (!res.ok) {
+      const er = await res.json().catch(() => ({}));
+      showBanner(sbErrorBanner, htmlEsc(er?.error?.message || `Finalize failed (${res.status}).`));
+      await loadSalaries();
+      return;
+    }
+    const data = await res.json();
+    sbState.status = 'finalized';
+    refreshSBStatus();
+    showBanner(
+      sbInfoBanner,
+      `<strong>✓ Salaries pivoted into ${data.pivotCount} Budget Structure row${data.pivotCount === 1 ? '' : 's'}.</strong> Re-open via Edit to change allocations later.`,
+    );
+    await openBudget(currentBudget.budget.id);
+  } catch (err) {
+    showBanner(sbErrorBanner, htmlEsc(`Finalize failed: ${(err && err.message) || err}`));
+  } finally {
+    sbFinalizeBtn.textContent = original;
+    sbFinalizeBtn.disabled = false;
+  }
+});
+
+sbEditBtn?.addEventListener('click', async () => {
+  if (!currentBudget) return;
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/salaries/edit`, { method: 'POST' });
+    if (res.ok) {
+      sbState.status = 'editing';
+      refreshSBStatus();
+      showBanner(sbInfoBanner, '');
+    }
+  } catch (err) {
+    showBanner(sbErrorBanner, htmlEsc(`Could not re-open: ${(err && err.message) || err}`));
   }
 });
 
