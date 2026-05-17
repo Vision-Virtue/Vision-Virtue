@@ -247,3 +247,155 @@ export async function parseGLBuffer(
 
   return { rows };
 }
+
+// ─── Salaries & Benefits upload parser (spec §7.2) ──────────────────────────
+//
+// Expected layout:
+//   Column A = Employee Name
+//   Column B = Monthly Salary
+//   Column C = Department (free-text; mapped later to an Org entity by name)
+
+export interface SBUploadRow {
+  employeeName: string;
+  monthlySalary: number;
+  department: string;
+}
+
+async function parseSBXlsx(buf: Buffer): Promise<SBUploadRow[]> {
+  const zip = await JSZip.loadAsync(buf);
+  const sstFile = zip.file('xl/sharedStrings.xml');
+  const sst: string[] = [];
+  if (sstFile) {
+    const sstXml = await sstFile.async('string');
+    const sstObj = xmlParser.parse(sstXml);
+    const items = (sstObj?.sst?.si ?? []) as Array<{ t?: string | { '#text'?: string }; r?: Array<{ t?: string | { '#text'?: string } }> }>;
+    for (const item of items) {
+      if (item.t !== undefined) {
+        sst.push(typeof item.t === 'string' ? item.t : (item.t['#text'] ?? ''));
+        continue;
+      }
+      if (item.r) {
+        sst.push(item.r.map(run => typeof run.t === 'string' ? run.t : (run.t?.['#text'] ?? '')).join(''));
+        continue;
+      }
+      sst.push('');
+    }
+  }
+  const wbXml = await zip.file('xl/workbook.xml')!.async('string');
+  const relsXml = await zip.file('xl/_rels/workbook.xml.rels')!.async('string');
+  const wbObj = xmlParser.parse(wbXml);
+  const sheets = (wbObj?.workbook?.sheets?.sheet ?? []) as Array<{ '@_r:id'?: string }>;
+  if (!sheets.length) throw new Error('xlsx contains no sheets');
+  const rels = xmlParser.parse(relsXml);
+  const relList = (rels?.Relationships?.Relationship ?? []) as Array<{ '@_Id'?: string; '@_Target'?: string }>;
+  const rel = relList.find((r) => r['@_Id'] === sheets[0]['@_r:id']);
+  if (!rel?.['@_Target']) throw new Error('xlsx has no sheet relationship');
+  const sheetPath = rel['@_Target'].startsWith('/')
+    ? rel['@_Target'].slice(1)
+    : `xl/${rel['@_Target'].replace(/^\.\//, '')}`;
+
+  const sheetXml = await zip.file(sheetPath)!.async('string');
+  const sheetObj = xmlParser.parse(sheetXml);
+  const rawRows = (sheetObj?.worksheet?.sheetData?.row ?? []) as Array<{
+    '@_r'?: string;
+    c?: Array<{ '@_r'?: string; '@_t'?: string; v?: string; is?: { t?: string | { '#text'?: string } } }>;
+  }>;
+
+  const result: SBUploadRow[] = [];
+  let firstDataRow = -1;
+  for (const r of rawRows) {
+    const rowNum = parseInt(r['@_r'] || '0', 10);
+    const cells = r.c ?? [];
+    let aText = '', bText = '', cText = '';
+    for (const c of cells) {
+      const col = colLetters(c['@_r'] || '');
+      const t = c['@_t'];
+      let value = '';
+      if (t === 'inlineStr' && c.is) {
+        value = typeof c.is.t === 'string' ? c.is.t : (c.is.t?.['#text'] ?? '');
+      } else if (t === 's' && c.v !== undefined) {
+        const idx = parseInt(c.v, 10);
+        value = sst[idx] ?? '';
+      } else if (c.v !== undefined) {
+        value = c.v;
+      }
+      if (col === 'A') aText = value.trim();
+      else if (col === 'B') bText = value.trim();
+      else if (col === 'C') cText = value.trim();
+    }
+    if (!aText && !bText && !cText) continue;
+    if (firstDataRow === -1) {
+      firstDataRow = rowNum;
+      if (/^(employee\s*name|name|full\s*name)$/i.test(aText)) continue;
+    }
+    const salary = Number(bText.replace(/[,$\s€£₪]/g, ''));
+    if (!aText) throw new ParseError(`Row ${rowNum}: Employee Name (column A) is required.`);
+    if (!Number.isFinite(salary)) throw new ParseError(`Row ${rowNum}: Monthly Salary (column B) must be a number; got "${bText}".`);
+    result.push({ employeeName: aText, monthlySalary: salary, department: cText });
+  }
+  return result;
+}
+
+function parseSBCsv(buf: Buffer): SBUploadRow[] {
+  let text = buf.toString('utf8');
+  if (text.charCodeAt(0) === 0xfeff) text = text.slice(1);
+  const lines: string[][] = [];
+  let i = 0, field = '', row: string[] = [], inQuote = false;
+  const pushField = (): void => { row.push(field); field = ''; };
+  const pushRow   = (): void => { lines.push(row); row = []; };
+  while (i < text.length) {
+    const ch = text[i];
+    if (inQuote) {
+      if (ch === '"') { if (text[i + 1] === '"') { field += '"'; i += 2; continue; } inQuote = false; i++; continue; }
+      field += ch; i++; continue;
+    }
+    if (ch === '"') { inQuote = true; i++; continue; }
+    if (ch === ',') { pushField(); i++; continue; }
+    if (ch === '\r') { i++; continue; }
+    if (ch === '\n') { pushField(); pushRow(); i++; continue; }
+    field += ch; i++;
+  }
+  pushField();
+  if (row.length > 1 || row[0] !== '') pushRow();
+
+  const out: SBUploadRow[] = [];
+  let firstSeen = false;
+  for (const r of lines) {
+    const a = (r[0] ?? '').trim();
+    const b = (r[1] ?? '').trim();
+    const c = (r[2] ?? '').trim();
+    if (!a && !b && !c) continue;
+    if (!firstSeen) {
+      firstSeen = true;
+      if (/^(employee\s*name|name|full\s*name)$/i.test(a)) continue;
+    }
+    if (!a) throw new ParseError(`Row "${r.join(',')}": Employee Name (column A) is required.`);
+    const salary = Number(b.replace(/[,$\s€£₪]/g, ''));
+    if (!Number.isFinite(salary)) throw new ParseError(`Row "${r.join(',')}": Monthly Salary (column B) must be a number; got "${b}".`);
+    out.push({ employeeName: a, monthlySalary: salary, department: c });
+  }
+  return out;
+}
+
+export async function parseSBBuffer(buf: Buffer, filenameHint?: string): Promise<SBUploadRow[]> {
+  let rows: SBUploadRow[];
+  if (isXlsx(buf)) {
+    try {
+      rows = await parseSBXlsx(buf);
+    } catch (err) {
+      if (err instanceof ParseError) throw err;
+      throw new ParseError(err instanceof Error ? `Could not read the .xlsx file: ${err.message}` : 'Could not read the .xlsx file.');
+    }
+  } else if (filenameHint && /\.csv$/i.test(filenameHint)) {
+    rows = parseSBCsv(buf);
+  } else {
+    rows = parseSBCsv(buf);
+  }
+  if (rows.length === 0) {
+    throw new ParseError('No salary rows found. Column A = Employee Name, B = Monthly Salary, C = Department.');
+  }
+  if (rows.length > MAX_ROWS) {
+    throw new ParseError(`Too many rows (${rows.length}). The maximum is ${MAX_ROWS}.`);
+  }
+  return rows;
+}

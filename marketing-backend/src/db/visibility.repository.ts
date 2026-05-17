@@ -646,3 +646,166 @@ export const budgetCellRepo = {
     this.setAllForLine(lineId, next);
   },
 };
+
+// ─── Salaries & Benefits (Phase 3b, spec §7) ────────────────────────────────
+
+export interface SalariesRow {
+  id: string;
+  budgetId: string;
+  companyId: string | null;
+  employeeName: string;
+  divisionId: string | null;
+  departmentId: string | null;
+  productId: string | null;
+  activityId: string | null;
+  productActivityPct: number;
+  monthlySalary: number;
+  glAccountId: string | null;
+  orderIndex: number;
+}
+
+interface DbSalariesRow {
+  id: string;
+  budget_id: string;
+  company_id: string | null;
+  employee_name: string;
+  division_id: string | null;
+  department_id: string | null;
+  product_id: string | null;
+  activity_id: string | null;
+  product_activity_pct: number;
+  monthly_salary: number;
+  gl_account_id: string | null;
+  order_index: number;
+}
+
+function toSalariesDomain(r: DbSalariesRow): SalariesRow {
+  return {
+    id:                  r.id,
+    budgetId:            r.budget_id,
+    companyId:           r.company_id,
+    employeeName:        r.employee_name,
+    divisionId:          r.division_id,
+    departmentId:        r.department_id,
+    productId:           r.product_id,
+    activityId:          r.activity_id,
+    productActivityPct:  r.product_activity_pct,
+    monthlySalary:       r.monthly_salary,
+    glAccountId:         r.gl_account_id,
+    orderIndex:          r.order_index,
+  };
+}
+
+export const salariesRowRepo = {
+  listByBudget(budgetId: string): SalariesRow[] {
+    const rows = getDb()
+      .prepare(`SELECT * FROM salaries_rows WHERE budget_id = ?
+                ORDER BY order_index ASC, created_at ASC`)
+      .all(budgetId) as DbSalariesRow[];
+    return rows.map(toSalariesDomain);
+  },
+
+  getById(id: string): SalariesRow | null {
+    const row = getDb()
+      .prepare(`SELECT * FROM salaries_rows WHERE id = ?`)
+      .get(id) as DbSalariesRow | undefined;
+    return row ? toSalariesDomain(row) : null;
+  },
+
+  create(budgetId: string, seed?: Partial<{
+    companyId: string | null; employeeName: string; divisionId: string | null;
+    departmentId: string | null; productId: string | null; activityId: string | null;
+    productActivityPct: number; monthlySalary: number; glAccountId: string | null;
+  }>): SalariesRow {
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    const maxIdx = (getDb()
+      .prepare(`SELECT COALESCE(MAX(order_index), -1) AS m FROM salaries_rows WHERE budget_id = ?`)
+      .get(budgetId) as { m: number }).m;
+    getDb()
+      .prepare(
+        `INSERT INTO salaries_rows
+           (id, budget_id, company_id, employee_name, division_id, department_id,
+            product_id, activity_id, product_activity_pct, monthly_salary,
+            gl_account_id, order_index, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id, budgetId,
+        seed?.companyId ?? null,
+        seed?.employeeName ?? '',
+        seed?.divisionId ?? null,
+        seed?.departmentId ?? null,
+        seed?.productId ?? null,
+        seed?.activityId ?? null,
+        seed?.productActivityPct ?? 0,
+        seed?.monthlySalary ?? 0,
+        seed?.glAccountId ?? null,
+        maxIdx + 1, now, now,
+      );
+    return this.getById(id)!;
+  },
+
+  update(
+    id: string,
+    fields: Partial<{
+      companyId: string | null; employeeName: string;
+      divisionId: string | null; departmentId: string | null;
+      productId: string | null; activityId: string | null;
+      productActivityPct: number; monthlySalary: number;
+      glAccountId: string | null;
+    }>,
+  ): SalariesRow | null {
+    const norm = (v: string | null | undefined): string | null => (v === '' || v == null ? null : v);
+    const sets: string[] = [];
+    const vals: Array<string | number | null> = [];
+    if (fields.companyId           !== undefined) { sets.push('company_id = ?');            vals.push(norm(fields.companyId)); }
+    if (fields.employeeName        !== undefined) { sets.push('employee_name = ?');         vals.push(fields.employeeName); }
+    if (fields.divisionId          !== undefined) { sets.push('division_id = ?');           vals.push(norm(fields.divisionId)); }
+    if (fields.departmentId        !== undefined) { sets.push('department_id = ?');         vals.push(norm(fields.departmentId)); }
+    if (fields.productId           !== undefined) { sets.push('product_id = ?');            vals.push(norm(fields.productId)); }
+    if (fields.activityId          !== undefined) { sets.push('activity_id = ?');           vals.push(norm(fields.activityId)); }
+    if (fields.productActivityPct  !== undefined) { sets.push('product_activity_pct = ?');  vals.push(fields.productActivityPct); }
+    if (fields.monthlySalary       !== undefined) { sets.push('monthly_salary = ?');        vals.push(fields.monthlySalary); }
+    if (fields.glAccountId         !== undefined) { sets.push('gl_account_id = ?');         vals.push(norm(fields.glAccountId)); }
+    if (sets.length === 0) return this.getById(id);
+    sets.push('updated_at = ?');
+    vals.push(new Date().toISOString());
+    vals.push(id);
+    getDb()
+      .prepare(`UPDATE salaries_rows SET ${sets.join(', ')} WHERE id = ?`)
+      .run(...vals);
+    return this.getById(id);
+  },
+
+  deleteById(id: string): void {
+    getDb().prepare(`DELETE FROM salaries_rows WHERE id = ?`).run(id);
+  },
+
+  bulkInsert(budgetId: string, items: Array<Partial<SalariesRow>>): SalariesRow[] {
+    const created: SalariesRow[] = [];
+    for (const it of items) created.push(this.create(budgetId, it));
+    return created;
+  },
+};
+
+export type SBStatus = 'editing' | 'finalized';
+
+export const salariesStateRepo = {
+  getStatus(budgetId: string): SBStatus {
+    const row = getDb()
+      .prepare(`SELECT status FROM salaries_state WHERE budget_id = ?`)
+      .get(budgetId) as { status: SBStatus } | undefined;
+    return row?.status ?? 'editing';
+  },
+  setStatus(budgetId: string, status: SBStatus): void {
+    const now = new Date().toISOString();
+    getDb()
+      .prepare(
+        `INSERT INTO salaries_state (budget_id, status, updated_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(budget_id) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at`,
+      )
+      .run(budgetId, status, now);
+  },
+};
