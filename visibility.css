@@ -739,6 +739,20 @@
   opacity: 0.7;
 }
 
+/* Row selection (click any row to mark it; powers the toolbar
+   "Delete row" buttons on both tables). */
+.vis-budget-table tbody tr.is-selected,
+.vis-sb-table tbody tr.is-selected {
+  outline: 2px solid rgba(155, 189, 242, 0.65);
+  outline-offset: -2px;
+  background: rgba(91, 141, 224, 0.10);
+}
+
+.vis-budget-table-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
 /* When budget is finalized, lock all editing. Edit is implicit via the
    spec ("a finalized budget is editable; saves overwrite") so we still
    leave fields enabled — the visual hint is only the green status pill. */

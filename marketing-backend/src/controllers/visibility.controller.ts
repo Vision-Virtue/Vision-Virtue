@@ -901,7 +901,11 @@ export const salariesController = {
     }
 
     // All names match — compute monthly salary = employer's cost / FX,
-    // then bulk-insert with the matched Org FKs.
+    // then REPLACE every existing salary row for this budget with the
+    // freshly-uploaded set (spec: re-uploading refreshes the table).
+    const existing = salariesRowRepo.listByBudget(ctx.budget.id);
+    for (const row of existing) salariesRowRepo.deleteById(row.id);
+
     const seeded: Partial<SalariesRow>[] = parsed.map(r => ({
       companyId:     companyByName.get(r.companyName.trim().toLowerCase()) ?? null,
       employeeName:  r.employeeName,
@@ -911,6 +915,7 @@ export const salariesController = {
     const created = salariesRowRepo.bulkInsert(ctx.budget.id, seeded);
     res.json({
       inserted: created.length,
+      replaced: existing.length,
       rows:     created.map(serializeSalary),
     });
   },
