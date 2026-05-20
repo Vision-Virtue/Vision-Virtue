@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0" />
   <title>Vision &amp; Virtue | Visibility</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="visibility.css?v=7" />
+  <link rel="stylesheet" href="visibility.css?v=8" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
@@ -295,6 +295,7 @@
               <input type="file" id="sbFileInput" accept=".xlsx,.csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden />
               <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="sbUploadBtn">Upload .xlsx / .csv</button>
               <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="sbAddRowBtn">+ Add row</button>
+              <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="sbDeleteRowBtn" disabled>Delete row</button>
               <span class="vis-sb-toolbar-hint">.xlsx or .csv · A = Company · B = Employee Name · C = Employer's Cost · D = Department · E = Exchange rate</span>
             </div>
 
@@ -313,7 +314,7 @@
                     <th>Department</th>
                     <th>Product</th>
                     <th>Activity</th>
-                    <th>P-A %</th>
+                    <th>Product-Activity %</th>
                     <th>Monthly Salary</th>
                     <th>Allocated Monthly</th>
                     <th>Account/GL Name</th>
@@ -336,7 +337,10 @@
           <section class="vis-budget-table-section">
             <div class="vis-budget-table-header">
               <h3>Budget Structure</h3>
-              <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="addBudgetLineBtn">+ Add row</button>
+              <div class="vis-budget-table-actions">
+                <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="addBudgetLineBtn">+ Add row</button>
+                <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="deleteBudgetLineBtn" disabled>Delete row</button>
+              </div>
             </div>
             <div class="vis-table-wrap vis-budget-table-wrap">
               <table class="vis-table vis-budget-table" id="budgetTable">
@@ -384,6 +388,6 @@
     </div>
   </div>
 
-  <script src="visibility.js?v=17" defer></script>
+  <script src="visibility.js?v=18" defer></script>
 </body>
 </html>

@@ -1043,6 +1043,22 @@ function buildGLOptions(selectedId) {
 }
 function findGL(id) { return glRows.find(r => r.id === id) || null; }
 
+// ── Percent helpers ────────────────────────────────────────
+/** Render a numeric pct (0..100+) as "50%" / empty for zero. */
+function fmtPct(n) {
+  if (!Number.isFinite(n) || n === 0) return '';
+  const s = Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/\.?0+$/, '');
+  return s + '%';
+}
+/** Parse a percent string ("50", "50%", " 50 ") into a number. */
+function parsePct(str) {
+  if (str == null) return 0;
+  const cleaned = String(str).replace(/[%,\s]/g, '');
+  if (cleaned === '' || cleaned === '-' || cleaned === '.') return 0;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
+
 // ── Scale-aware amount helpers ────────────────────────────
 // `line.cells[period]` always stores the RAW underlying amount.
 // Display = raw / 1000 when scale === 'thousands' (spec §6 says
@@ -1067,6 +1083,7 @@ function parseCellInput(str, scale) {
 
 function renderBudgetTable() {
   if (!currentBudget) return;
+  clearRowSelection(budgetTableBody, deleteBudgetLineBtn);
   const periods = currentBudget.periodKeys || [];
   const scale   = currentBudget.budget.scale;
   // Head
@@ -1364,6 +1381,67 @@ budgetDeleteBtn.addEventListener('click', async () => {
 });
 
 // ─────────────────────────────────────────────────────────────
+//  Row selection (powers the toolbar "Delete row" buttons on both
+//  the Budget Structure and Salaries & Benefits tables).
+// ─────────────────────────────────────────────────────────────
+
+const deleteBudgetLineBtn = document.getElementById('deleteBudgetLineBtn');
+
+function wireRowSelection(tbody, deleteBtn) {
+  if (!tbody || !deleteBtn) return;
+  const handler = (ev) => {
+    const tr = ev.target.closest('tr');
+    if (!tr || !tr.dataset.id) return;
+    for (const sib of tbody.querySelectorAll('tr.is-selected')) sib.classList.remove('is-selected');
+    tr.classList.add('is-selected');
+    deleteBtn.disabled = false;
+  };
+  // Mark on click AND on focus (so keyboard tab through inputs selects too).
+  tbody.addEventListener('click', handler);
+  tbody.addEventListener('focusin', handler);
+}
+
+function clearRowSelection(tbody, deleteBtn) {
+  if (tbody) {
+    for (const sib of tbody.querySelectorAll('tr.is-selected')) sib.classList.remove('is-selected');
+  }
+  if (deleteBtn) deleteBtn.disabled = true;
+}
+
+// Wire selection for the Budget Structure table.
+wireRowSelection(budgetTableBody, deleteBudgetLineBtn);
+
+// Toolbar "Delete row" for Budget Structure.
+deleteBudgetLineBtn?.addEventListener('click', async () => {
+  if (!currentBudget) return;
+  const selected = budgetTableBody?.querySelector('tr.is-selected');
+  if (!selected) return;
+  const id = selected.dataset.id;
+  const line = currentBudget.lines.find(l => l.id === id);
+  if (!line) return;
+  if (line.source === 'salaries') {
+    showBanner(bgEditorError, 'Salaries-source rows are managed via the Salaries & Benefits tab.');
+    return;
+  }
+  const ok = await confirmModal('Delete row', 'Delete the selected budget row?');
+  if (!ok) return;
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/lines/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const er = await res.json().catch(() => ({}));
+      showBanner(bgEditorError, htmlEsc(er?.error?.message || `Remove failed (${res.status}).`));
+      return;
+    }
+    currentBudget.lines = currentBudget.lines.filter(l => l.id !== id);
+    clearRowSelection(budgetTableBody, deleteBudgetLineBtn);
+    renderBudgetTable();
+    renderFooterSummary();
+  } catch (err) {
+    showBanner(bgEditorError, htmlEsc(`Remove failed: ${(err && err.message) || err}`));
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
 //  PHASE 3b — Salaries & Benefits
 // ─────────────────────────────────────────────────────────────
 
@@ -1446,6 +1524,8 @@ function refreshSBValidation() {
 
 function renderSBTable() {
   if (!sbTableBody) return;
+  const sbDeleteBtn = document.getElementById('sbDeleteRowBtn');
+  clearRowSelection(sbTableBody, sbDeleteBtn);
   sbTableBody.innerHTML = '';
   const rows = sbState.rows || [];
   sbEmpty.hidden = rows.length > 0;
@@ -1463,7 +1543,7 @@ function renderSBTable() {
       <td><select data-field="departmentId">${buildOrgOptions('department', r.departmentId)}</select></td>
       <td><select data-field="productId">${buildOrgOptions('product', r.productId)}</select></td>
       <td><select data-field="activityId">${buildOrgOptions('activity', r.activityId)}</select></td>
-      <td class="is-number"><input type="text" inputmode="decimal" data-field="productActivityPct" value="${pct === 0 ? '' : pct}" /></td>
+      <td class="is-number"><input type="text" inputmode="decimal" data-field="productActivityPct" value="${htmlEsc(fmtPct(pct))}" /></td>
       <td class="is-number"><input type="text" inputmode="decimal" data-field="monthlySalary" value="${monthly === 0 ? '' : fmtCellDisplay(monthly, 'standard')}" /></td>
       <td class="is-readonly is-number">${allocated === 0 ? '—' : fmtCellDisplay(allocated, 'standard')}</td>
       <td><select data-field="glAccountId">${buildGLOptions(r.glAccountId)}</select></td>
@@ -1485,10 +1565,10 @@ sbTableBody?.addEventListener('change', async (ev) => {
   if (!field) return;
 
   if (field === 'productActivityPct') {
-    const raw = String(target.value).replace(/[%,\s]/g, '');
-    const n = raw === '' ? 0 : Number(raw);
-    if (!Number.isFinite(n)) return;
+    const n = parsePct(target.value);
     row.productActivityPct = n;
+    // Reformat the input so the % suffix appears on blur.
+    target.value = fmtPct(n);
     await sbPatch(id, { productActivityPct: n });
   } else if (field === 'monthlySalary') {
     const n = parseCellInput(target.value, 'standard');
@@ -1630,6 +1710,31 @@ sbEditBtn?.addEventListener('click', async () => {
     }
   } catch (err) {
     showBanner(sbErrorBanner, htmlEsc(`Could not re-open: ${(err && err.message) || err}`));
+  }
+});
+
+// Row selection + toolbar "Delete row" for the S&B table.
+const sbDeleteRowBtn = document.getElementById('sbDeleteRowBtn');
+wireRowSelection(sbTableBody, sbDeleteRowBtn);
+
+sbDeleteRowBtn?.addEventListener('click', async () => {
+  if (!currentBudget) return;
+  const selected = sbTableBody?.querySelector('tr.is-selected');
+  if (!selected) return;
+  const id = selected.dataset.id;
+  const ok = await confirmModal('Delete row', 'Delete the selected salary row?');
+  if (!ok) return;
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/salaries/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    if (!res.ok) {
+      const er = await res.json().catch(() => ({}));
+      showBanner(sbErrorBanner, htmlEsc(er?.error?.message || `Remove failed (${res.status}).`));
+      return;
+    }
+    clearRowSelection(sbTableBody, sbDeleteRowBtn);
+    await loadSalaries();
+  } catch (err) {
+    showBanner(sbErrorBanner, htmlEsc(`Remove failed: ${(err && err.message) || err}`));
   }
 });
 
