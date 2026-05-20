@@ -1578,11 +1578,10 @@ sbFileInput?.addEventListener('change', async () => {
       return;
     }
     const data = await res.json();
-    let msg = `Imported ${data.inserted} salary row${data.inserted === 1 ? '' : 's'}.`;
-    if (Array.isArray(data.unmappedDepartments) && data.unmappedDepartments.length > 0) {
-      msg += ` ${data.unmappedDepartments.length} department name${data.unmappedDepartments.length === 1 ? '' : 's'} did not match an Org entry — fill those in manually.`;
-    }
-    showBanner(sbInfoBanner, msg);
+    showBanner(
+      sbInfoBanner,
+      `Imported ${data.inserted} salary row${data.inserted === 1 ? '' : 's'}. Monthly Salary in budget currency = Employer's Cost ÷ Exchange rate.`,
+    );
     await loadSalaries();
   } catch (err) {
     showBanner(sbInfoBanner, '');

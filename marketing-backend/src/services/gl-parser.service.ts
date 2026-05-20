@@ -248,17 +248,31 @@ export async function parseGLBuffer(
   return { rows };
 }
 
-// ─── Salaries & Benefits upload parser (spec §7.2) ──────────────────────────
+// ─── Salaries & Benefits upload parser (spec §7.2 + custom layout) ─────────
 //
-// Expected layout:
-//   Column A = Employee Name
-//   Column B = Monthly Salary
-//   Column C = Department (free-text; mapped later to an Org entity by name)
+// Updated layout requested by Vision & Virtue:
+//   Column A = Company Name        (matched to Org > Companies)
+//   Column B = Employee Name       (free text)
+//   Column C = Employer's Cost     (numeric, source currency)
+//   Column D = Department Name     (matched to Org > Departments)
+//   Column E = Exchange rate       (numeric > 0; Monthly Salary in
+//                                   the budget currency = C / E)
+//
+// Company and Department names must match an existing entry in the
+// customer's Organizational Structure exactly (case-insensitive,
+// trimmed). The visibility controller does the matching and returns
+// UNMAPPED_NAMES with the offending values if anything doesn't line up.
 
 export interface SBUploadRow {
+  companyName: string;
   employeeName: string;
-  monthlySalary: number;
-  department: string;
+  employersCost: number;
+  departmentName: string;
+  exchangeRate: number;
+}
+
+function readSBHeaders(a: string): boolean {
+  return /^(company|company\s*name)$/i.test(a);
 }
 
 async function parseSBXlsx(buf: Buffer): Promise<SBUploadRow[]> {
@@ -306,7 +320,7 @@ async function parseSBXlsx(buf: Buffer): Promise<SBUploadRow[]> {
   for (const r of rawRows) {
     const rowNum = parseInt(r['@_r'] || '0', 10);
     const cells = r.c ?? [];
-    let aText = '', bText = '', cText = '';
+    let aText = '', bText = '', cText = '', dText = '', eText = '';
     for (const c of cells) {
       const col = colLetters(c['@_r'] || '');
       const t = c['@_t'];
@@ -319,19 +333,31 @@ async function parseSBXlsx(buf: Buffer): Promise<SBUploadRow[]> {
       } else if (c.v !== undefined) {
         value = c.v;
       }
-      if (col === 'A') aText = value.trim();
+      if      (col === 'A') aText = value.trim();
       else if (col === 'B') bText = value.trim();
       else if (col === 'C') cText = value.trim();
+      else if (col === 'D') dText = value.trim();
+      else if (col === 'E') eText = value.trim();
     }
-    if (!aText && !bText && !cText) continue;
+    if (!aText && !bText && !cText && !dText && !eText) continue;
     if (firstDataRow === -1) {
       firstDataRow = rowNum;
-      if (/^(employee\s*name|name|full\s*name)$/i.test(aText)) continue;
+      if (readSBHeaders(aText)) continue;
     }
-    const salary = Number(bText.replace(/[,$\s€£₪]/g, ''));
-    if (!aText) throw new ParseError(`Row ${rowNum}: Employee Name (column A) is required.`);
-    if (!Number.isFinite(salary)) throw new ParseError(`Row ${rowNum}: Monthly Salary (column B) must be a number; got "${bText}".`);
-    result.push({ employeeName: aText, monthlySalary: salary, department: cText });
+    if (!aText) throw new ParseError(`Row ${rowNum}: Company Name (column A) is required.`);
+    if (!bText) throw new ParseError(`Row ${rowNum}: Employee Name (column B) is required.`);
+    if (!dText) throw new ParseError(`Row ${rowNum}: Department (column D) is required.`);
+    const cost = Number(cText.replace(/[,$\s€£₪]/g, ''));
+    const fx   = Number(eText.replace(/[,$\s€£₪]/g, ''));
+    if (!Number.isFinite(cost)) throw new ParseError(`Row ${rowNum}: Employer's Cost (column C) must be a number; got "${cText}".`);
+    if (!Number.isFinite(fx) || fx <= 0) throw new ParseError(`Row ${rowNum}: Exchange rate (column E) must be a positive number; got "${eText}".`);
+    result.push({
+      companyName:    aText,
+      employeeName:   bText,
+      employersCost:  cost,
+      departmentName: dText,
+      exchangeRate:   fx,
+    });
   }
   return result;
 }
@@ -360,19 +386,33 @@ function parseSBCsv(buf: Buffer): SBUploadRow[] {
 
   const out: SBUploadRow[] = [];
   let firstSeen = false;
+  let lineNo = 0;
   for (const r of lines) {
+    lineNo++;
     const a = (r[0] ?? '').trim();
     const b = (r[1] ?? '').trim();
     const c = (r[2] ?? '').trim();
-    if (!a && !b && !c) continue;
+    const d = (r[3] ?? '').trim();
+    const e = (r[4] ?? '').trim();
+    if (!a && !b && !c && !d && !e) continue;
     if (!firstSeen) {
       firstSeen = true;
-      if (/^(employee\s*name|name|full\s*name)$/i.test(a)) continue;
+      if (readSBHeaders(a)) continue;
     }
-    if (!a) throw new ParseError(`Row "${r.join(',')}": Employee Name (column A) is required.`);
-    const salary = Number(b.replace(/[,$\s€£₪]/g, ''));
-    if (!Number.isFinite(salary)) throw new ParseError(`Row "${r.join(',')}": Monthly Salary (column B) must be a number; got "${b}".`);
-    out.push({ employeeName: a, monthlySalary: salary, department: c });
+    if (!a) throw new ParseError(`Row ${lineNo}: Company Name (column A) is required.`);
+    if (!b) throw new ParseError(`Row ${lineNo}: Employee Name (column B) is required.`);
+    if (!d) throw new ParseError(`Row ${lineNo}: Department (column D) is required.`);
+    const cost = Number(c.replace(/[,$\s€£₪]/g, ''));
+    const fx   = Number(e.replace(/[,$\s€£₪]/g, ''));
+    if (!Number.isFinite(cost)) throw new ParseError(`Row ${lineNo}: Employer's Cost (column C) must be a number; got "${c}".`);
+    if (!Number.isFinite(fx) || fx <= 0) throw new ParseError(`Row ${lineNo}: Exchange rate (column E) must be a positive number; got "${e}".`);
+    out.push({
+      companyName:    a,
+      employeeName:   b,
+      employersCost:  cost,
+      departmentName: d,
+      exchangeRate:   fx,
+    });
   }
   return out;
 }
@@ -392,7 +432,7 @@ export async function parseSBBuffer(buf: Buffer, filenameHint?: string): Promise
     rows = parseSBCsv(buf);
   }
   if (rows.length === 0) {
-    throw new ParseError('No salary rows found. Column A = Employee Name, B = Monthly Salary, C = Department.');
+    throw new ParseError('No salary rows found. Layout: A = Company, B = Employee Name, C = Employer\'s Cost, D = Department, E = Exchange rate.');
   }
   if (rows.length > MAX_ROWS) {
     throw new ParseError(`Too many rows (${rows.length}). The maximum is ${MAX_ROWS}.`);

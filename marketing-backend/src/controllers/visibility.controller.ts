@@ -858,21 +858,60 @@ export const salariesController = {
       }
       return;
     }
-    // Map department names to existing org entries (case-insensitive).
-    const depts = orgEntityRepo.listByCustomer(ctx.customerKeyId).filter(e => e.dimension === 'department');
-    const deptByName = new Map(depts.map(d => [d.name.trim().toLowerCase(), d.id]));
+    // Match Company and Department names against the customer's Org
+    // Structure exactly (case-insensitive, trimmed). ANY mismatch
+    // blocks the upload — no rows are inserted.
+    const allOrg = orgEntityRepo.listByCustomer(ctx.customerKeyId);
+    const companyByName = new Map(
+      allOrg.filter(e => e.dimension === 'company').map(c => [c.name.trim().toLowerCase(), c.id]),
+    );
+    const departmentByName = new Map(
+      allOrg.filter(e => e.dimension === 'department').map(d => [d.name.trim().toLowerCase(), d.id]),
+    );
+
+    const unmappedCompanies = new Set<string>();
+    const unmappedDepartments = new Set<string>();
+    for (const r of parsed) {
+      if (!companyByName.has(r.companyName.trim().toLowerCase())) {
+        unmappedCompanies.add(r.companyName);
+      }
+      if (!departmentByName.has(r.departmentName.trim().toLowerCase())) {
+        unmappedDepartments.add(r.departmentName);
+      }
+    }
+    if (unmappedCompanies.size > 0 || unmappedDepartments.size > 0) {
+      const parts: string[] = [];
+      if (unmappedCompanies.size > 0) {
+        parts.push(`Company name${unmappedCompanies.size === 1 ? '' : 's'} not in Organizational Structure: ${[...unmappedCompanies].map(s => `"${s}"`).join(', ')}`);
+      }
+      if (unmappedDepartments.size > 0) {
+        parts.push(`Department name${unmappedDepartments.size === 1 ? '' : 's'} not in Organizational Structure: ${[...unmappedDepartments].map(s => `"${s}"`).join(', ')}`);
+      }
+      res.status(400).json({
+        error: {
+          code: 'UNMAPPED_NAMES',
+          message:
+            `Upload blocked — every Company in column A and Department in column D must exactly match an entry in your Organizational Structure. ` +
+            parts.join('. ') + '.',
+          unmappedCompanies:   [...unmappedCompanies],
+          unmappedDepartments: [...unmappedDepartments],
+        },
+      });
+      return;
+    }
+
+    // All names match — compute monthly salary = employer's cost / FX,
+    // then bulk-insert with the matched Org FKs.
     const seeded: Partial<SalariesRow>[] = parsed.map(r => ({
+      companyId:     companyByName.get(r.companyName.trim().toLowerCase()) ?? null,
       employeeName:  r.employeeName,
-      monthlySalary: r.monthlySalary,
-      departmentId:  r.department ? (deptByName.get(r.department.trim().toLowerCase()) ?? null) : null,
+      departmentId:  departmentByName.get(r.departmentName.trim().toLowerCase()) ?? null,
+      monthlySalary: r.employersCost / r.exchangeRate,
     }));
     const created = salariesRowRepo.bulkInsert(ctx.budget.id, seeded);
     res.json({
       inserted: created.length,
       rows:     created.map(serializeSalary),
-      unmappedDepartments: parsed
-        .filter(r => r.department && !deptByName.has(r.department.trim().toLowerCase()))
-        .map(r => r.department),
     });
   },
 
