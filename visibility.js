@@ -1080,6 +1080,32 @@ function fmtCellDisplay(raw, scale) {
   return (raw / scaleFactor(scale)).toLocaleString('en-US', { maximumFractionDigits: 2 });
 }
 
+/** Format an amount for display in read-only cells.
+ *  Negative values render as (1,234.56) per accounting convention.
+ *  Zero / empty → '—'. */
+function fmtAmountAccounting(raw, scale) {
+  if (!Number.isFinite(raw) || raw === 0) return '—';
+  const abs = Math.abs(raw / scaleFactor(scale));
+  const s = abs.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return raw < 0 ? `(${s})` : s;
+}
+
+/** Like fmtAmountAccounting but always returns the absolute value
+ *  for display (Revenues / Gross Profit / Adjusted EBITDA per spec).
+ *  Underlying signed value is preserved in the data + export. */
+function fmtAmountAbsDisplay(raw, scale) {
+  if (!Number.isFinite(raw) || raw === 0) return '—';
+  return Math.abs(raw / scaleFactor(scale)).toLocaleString('en-US', { maximumFractionDigits: 2 });
+}
+
+/** Format a percentage. Negative → (xx.xx%). */
+function fmtPctSigned(n) {
+  if (!Number.isFinite(n)) return '—';
+  const v = Number(n.toFixed(2));
+  if (v === 0) return '0.00%';
+  return v < 0 ? `(${Math.abs(v).toFixed(2)}%)` : `${v.toFixed(2)}%`;
+}
+
 /** Parse a display string (with commas / currency syms) into a raw amount. */
 function parseCellInput(str, scale) {
   if (str == null) return 0;
@@ -1133,7 +1159,7 @@ function renderBudgetTable() {
       <td class="is-readonly">${gl ? htmlEsc(gl.plSection || '—') : '—'}</td>
       <td class="is-readonly">${gl ? htmlEsc((gl.budgetCategory === 'Your Budget Category' ? gl.budgetCategoryCustom : gl.budgetCategory) || '—') : '—'}</td>
       ${cellsHtml}
-      <td class="is-total">${htmlEsc(fmtCellDisplay(totalFY, scale) || '—')}</td>
+      <td class="is-total">${htmlEsc(fmtAmountAccounting(totalFY, scale))}</td>
       <td class="is-actions">
         <button type="button" class="vis-budget-line-dup" data-action="duplicate" title="Fill empty cells after the last entered value with that value">Duplicate</button>
         <button type="button" class="vis-budget-line-rm" data-action="remove" aria-label="Remove">×</button>
@@ -1155,8 +1181,7 @@ function renderFooterSummary() {
   const scale = currentBudget.budget.scale;
   const grand = lines.reduce((s, l) => s + periods.reduce((a, p) => a + (Number(l.cells[p]) || 0), 0), 0);
   const sym = CURRENCY_SYMBOL[currentBudget.budget.currency] || currentBudget.budget.currency;
-  const scaledGrand = grand / scaleFactor(scale);
-  const display = scaledGrand === 0 ? '—' : scaledGrand.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  const display = fmtAmountAccounting(grand, scale);
   bgFooterSummary.textContent =
     `${lines.length} row${lines.length === 1 ? '' : 's'} · Total ${sym}${display}` +
     (scale === 'thousands' ? ' (×1,000)' : '');
@@ -1214,7 +1239,7 @@ function refreshRowTotal(tr, line) {
   const periods = currentBudget.periodKeys || [];
   const total = periods.reduce((s, p) => s + (Number(line.cells[p]) || 0), 0);
   const totalCell = tr.querySelector('td.is-total');
-  if (totalCell) totalCell.textContent = fmtCellDisplay(total, currentBudget.budget.scale) || '—';
+  if (totalCell) totalCell.textContent = fmtAmountAccounting(total, currentBudget.budget.scale);
 }
 
 // Row-action buttons (duplicate / remove)
@@ -1613,7 +1638,29 @@ sbTableBody?.addEventListener('change', async (ev) => {
     await sbPatch(id, { monthlySalary: full });
   } else if (field === 'employeeName') {
     row.employeeName = target.value;
-    await sbPatch(id, { employeeName: target.value });
+    // Auto-link rows for the same employee. Per spec §7.4 all rows
+    // for one employee must share Company / Division / Department,
+    // and they obviously share the same Monthly Salary too. When
+    // the user types a name that already exists, copy those four
+    // fields from the matching row so the user doesn't have to type
+    // them again — and avoids the "I typed the allocated value by
+    // mistake" calculation error.
+    const trimmed = (row.employeeName || '').trim().toLowerCase();
+    const match = trimmed
+      ? sbState.rows.find(r => r.id !== id && (r.employeeName || '').trim().toLowerCase() === trimmed)
+      : null;
+    const patch = { employeeName: row.employeeName };
+    if (match) {
+      row.companyId    = match.companyId;
+      row.divisionId   = match.divisionId;
+      row.departmentId = match.departmentId;
+      row.monthlySalary = match.monthlySalary;
+      patch.companyId    = row.companyId;
+      patch.divisionId   = row.divisionId;
+      patch.departmentId = row.departmentId;
+      patch.monthlySalary = row.monthlySalary;
+    }
+    await sbPatch(id, patch);
   } else {
     row[field] = target.value || null;
     await sbPatch(id, { [field]: row[field] });
@@ -1803,7 +1850,7 @@ const pivotClearFiltersBtn = document.getElementById('pivotClearFiltersBtn');
 const budgetExportBtn    = document.getElementById('budgetExportBtn');
 
 let pivotFilters = {
-  companies: [], divisions: [], departments: [], products: [], activities: [],
+  companies: [], divisions: [], departments: [], products: [], activities: [], gls: [],
   display: null, // null = follow budget granularity
 };
 
@@ -1837,6 +1884,14 @@ function populatePivotFilterDropdowns() {
   fillSelect('department', 'departments');
   fillSelect('product',    'products');
   fillSelect('activity',   'activities');
+  // GL filter — populate from the customer's Financial Structure.
+  const glSel = document.querySelector('select[data-pivot-filter="gls"]');
+  if (glSel) {
+    const gls = (glRows || []).filter(r => !r.orphan);
+    glSel.innerHTML = gls.map(g =>
+      `<option value="${htmlEsc(g.id)}"${pivotFilters.gls.includes(g.id) ? ' selected' : ''}>${htmlEsc(`${g.glNumber} ${g.glName}`)}</option>`,
+    ).join('');
+  }
 
   // Display granularity pills — disable any finer than the budget's native.
   const budgetGran = currentBudget?.budget?.granularity || 'monthly';
@@ -1849,7 +1904,22 @@ function populatePivotFilterDropdowns() {
   }
 }
 
+// Custom toggle on multi-select: every click toggles just the
+// clicked option without resetting other selections, AND clicking
+// an already-selected option deselects it (per user request #5).
 for (const sel of document.querySelectorAll('.vis-pivot-filter select[multiple]')) {
+  sel.addEventListener('mousedown', (ev) => {
+    const target = ev.target;
+    if (!(target instanceof HTMLOptionElement)) return;
+    ev.preventDefault();           // suppress the browser default
+    sel.focus();
+    target.selected = !target.selected;
+    const key = sel.dataset.pivotFilter;
+    pivotFilters[key] = Array.from(sel.selectedOptions).map(o => o.value);
+    void refreshPivot();
+  });
+  // Keyboard space/enter still toggles the focused option natively;
+  // mirror our state into pivotFilters when that happens.
   sel.addEventListener('change', () => {
     const key = sel.dataset.pivotFilter;
     pivotFilters[key] = Array.from(sel.selectedOptions).map(o => o.value);
@@ -1869,14 +1939,14 @@ for (const btn of document.querySelectorAll('.vis-pillgroup[data-pivot-filter="d
 }
 
 pivotClearFiltersBtn?.addEventListener('click', () => {
-  pivotFilters = { companies: [], divisions: [], departments: [], products: [], activities: [], display: null };
+  pivotFilters = { companies: [], divisions: [], departments: [], products: [], activities: [], gls: [], display: null };
   populatePivotFilterDropdowns();
   void refreshPivot();
 });
 
 function buildPivotQuery() {
   const parts = [];
-  for (const k of ['companies', 'divisions', 'departments', 'products', 'activities']) {
+  for (const k of ['companies', 'divisions', 'departments', 'products', 'activities', 'gls']) {
     if (pivotFilters[k] && pivotFilters[k].length > 0) parts.push(`${k}=${encodeURIComponent(pivotFilters[k].join(','))}`);
   }
   if (pivotFilters.display) parts.push(`display=${encodeURIComponent(pivotFilters.display)}`);
@@ -1904,11 +1974,12 @@ async function refreshPivot() {
 function renderPivot(data) {
   const periodKeys = data.periodKeys || [];
   const scale = currentBudget.budget.scale;
-  const fmt = (v) => {
-    const x = Number(v) || 0;
-    if (x === 0) return '—';
-    return fmtCellDisplay(x, scale);
-  };
+  // Standard accounting display: negatives in parens, zeros as em-dash.
+  const fmtAcct = (v) => fmtAmountAccounting(Number(v) || 0, scale);
+  // Absolute-value display for Revenues / Gross Profit / Adjusted EBITDA
+  // per user request — the underlying signed value flows through the
+  // Excel export untouched.
+  const fmtAbs = (v) => fmtAmountAbsDisplay(Number(v) || 0, scale);
 
   const headCells = ['P&L Section', 'Budget Category', ...periodKeys.map(p => PIVOT_PERIOD_LABEL[p] || p), 'FY Total'];
   pivotTableHead.innerHTML = '<tr>' + headCells.map(h => `<th>${htmlEsc(h)}</th>`).join('') + '</tr>';
@@ -1916,41 +1987,110 @@ function renderPivot(data) {
   pivotTableBody.innerHTML = '';
   const groups = data.groups || [];
   pivotEmpty.hidden = groups.length > 0;
-  for (const g of groups) {
+
+  // Quick lookups by section name.
+  const byName = new Map(groups.map(g => [g.plSection, g]));
+  const groupCell = (sec, p) => (byName.get(sec)?.cells[p] || 0);
+  const groupFy   = (sec)    => (byName.get(sec)?.fyTotal || 0);
+
+  // Helper: write one P&L section (subtotal row + category rows).
+  // If `fmtFn` is provided, it overrides the default accounting format
+  // for the subtotal row (used for Revenues which displays as |abs|).
+  const writeSection = (sectionName, fmtFn) => {
+    const g = byName.get(sectionName);
+    if (!g) return;
     const sectionRow = document.createElement('tr');
     sectionRow.className = 'is-section';
+    const subFmt = fmtFn || fmtAcct;
     sectionRow.innerHTML =
       `<td>${htmlEsc(g.plSection)}</td><td>— subtotal —</td>` +
-      periodKeys.map(p => `<td class="vis-pivot-num">${htmlEsc(fmt(g.cells[p]))}</td>`).join('') +
-      `<td class="vis-pivot-num">${htmlEsc(fmt(g.fyTotal))}</td>`;
+      periodKeys.map(p => `<td class="vis-pivot-num">${htmlEsc(subFmt(g.cells[p]))}</td>`).join('') +
+      `<td class="vis-pivot-num">${htmlEsc(subFmt(g.fyTotal))}</td>`;
     pivotTableBody.appendChild(sectionRow);
     for (const c of g.categories || []) {
       const catRow = document.createElement('tr');
       catRow.className = 'is-category';
       catRow.innerHTML =
         `<td></td><td class="vis-pivot-cat-label">${htmlEsc(c.name)}</td>` +
-        periodKeys.map(p => `<td class="vis-pivot-num">${htmlEsc(fmt(c.cells[p]))}</td>`).join('') +
-        `<td class="vis-pivot-num">${htmlEsc(fmt(c.fyTotal))}</td>`;
+        periodKeys.map(p => `<td class="vis-pivot-num">${htmlEsc(fmtAcct(c.cells[p]))}</td>`).join('') +
+        `<td class="vis-pivot-num">${htmlEsc(fmtAcct(c.fyTotal))}</td>`;
       pivotTableBody.appendChild(catRow);
     }
-  }
+  };
 
-  pivotTableFoot.innerHTML = '';
-  if (groups.length > 0) {
-    const gtRow = document.createElement('tr');
-    gtRow.className = 'is-grand';
-    gtRow.innerHTML =
-      `<td>Grand Total</td><td></td>` +
-      periodKeys.map(p => `<td class="vis-pivot-num">${htmlEsc(fmt(data.grandTotal[p]))}</td>`).join('') +
-      `<td class="vis-pivot-num">${htmlEsc(fmt(data.grandTotal.fyTotal))}</td>`;
-    pivotTableFoot.appendChild(gtRow);
+  // Helper to write a computed (no categories) row with custom class.
+  const writeComputed = (label, perPeriod, fyTotal, fmtFn, klass) => {
+    const tr = document.createElement('tr');
+    tr.className = klass || 'is-section';
+    const fmt = fmtFn || fmtAcct;
+    tr.innerHTML =
+      `<td>${htmlEsc(label)}</td><td></td>` +
+      periodKeys.map(p => `<td class="vis-pivot-num">${htmlEsc(fmt(perPeriod[p]))}</td>`).join('') +
+      `<td class="vis-pivot-num">${htmlEsc(fmt(fyTotal))}</td>`;
+    pivotTableBody.appendChild(tr);
+  };
+
+  // Helper to write a percentage row (e.g. Gross Margin %, EBITDA %).
+  const writePct = (label, perPeriod, fyTotal, klass) => {
+    const tr = document.createElement('tr');
+    tr.className = klass || 'is-pct';
+    tr.innerHTML =
+      `<td>${htmlEsc(label)}</td><td></td>` +
+      periodKeys.map(p => `<td class="vis-pivot-num">${htmlEsc(fmtPctSigned(perPeriod[p]))}</td>`).join('') +
+      `<td class="vis-pivot-num">${htmlEsc(fmtPctSigned(fyTotal))}</td>`;
+    pivotTableBody.appendChild(tr);
+  };
+
+  // 1) Revenues (display as abs)
+  writeSection('Revenues', fmtAbs);
+  // 2) COGS
+  writeSection('COGS');
+
+  // 3a) Gross Margin % (above Gross Profit)
+  writePct('Gross Margin %', data.grossMargin, data.grossMargin.fyTotal);
+
+  // 3b) Gross Profit = Revenues - COGS (display as abs)
+  const gpCells = {};
+  for (const p of periodKeys) gpCells[p] = groupCell('Revenues', p) - groupCell('COGS', p);
+  const gpFy = groupFy('Revenues') - groupFy('COGS');
+  writeComputed('Gross Profit', gpCells, gpFy, fmtAbs, 'is-section is-gp');
+
+  // 3c) Gross Margin % (below Gross Profit)
+  writePct('Gross Margin %', data.grossMargin, data.grossMargin.fyTotal);
+
+  // 4) OPEX sections
+  writeSection('R&D');
+  writeSection('S&M');
+  writeSection('G&A');
+
+  // Total OPEX = R&D + S&M + G&A
+  const opexCells = {};
+  for (const p of periodKeys) opexCells[p] = groupCell('R&D', p) + groupCell('S&M', p) + groupCell('G&A', p);
+  const opexFy = groupFy('R&D') + groupFy('S&M') + groupFy('G&A');
+  writeComputed('Total OPEX', opexCells, opexFy, fmtAcct, 'is-section is-opex');
+
+  // Adjusted EBITDA = Gross Profit - Total OPEX (display as abs)
+  const ebCells = {};
+  for (const p of periodKeys) ebCells[p] = gpCells[p] - opexCells[p];
+  const ebFy = gpFy - opexFy;
+  writeComputed('Adjusted EBITDA', ebCells, ebFy, fmtAbs, 'is-section is-ebitda');
+
+  // Adjusted EBITDA % = EBITDA / Revenues × 100
+  const ebPct = {};
+  for (const p of periodKeys) {
+    const r = groupCell('Revenues', p);
+    ebPct[p] = r > 0 ? (ebCells[p] / r) * 100 : 0;
   }
-  const gmRow = document.createElement('tr');
-  gmRow.innerHTML =
-    `<td>Gross Margin %</td><td></td>` +
-    periodKeys.map(p => `<td class="vis-pivot-num">${Number(data.grossMargin[p] || 0).toFixed(2)}%</td>`).join('') +
-    `<td class="vis-pivot-num">${Number(data.grossMargin.fyTotal || 0).toFixed(2)}%</td>`;
-  pivotTableFoot.appendChild(gmRow);
+  const ebPctFy = groupFy('Revenues') > 0 ? (ebFy / groupFy('Revenues')) * 100 : 0;
+  writePct('Adjusted EBITDA %', ebPct, ebPctFy, 'is-pct is-ebitda-pct');
+
+  // Below-the-line sections (unchanged accounting display)
+  writeSection('Financial Income/(Expenses)');
+  writeSection('Tax');
+  writeSection('Other Income/(Expenses)');
+
+  // No tfoot rows in the new layout — clear any leftover.
+  pivotTableFoot.innerHTML = '';
 }
 
 budgetExportBtn?.addEventListener('click', async () => {
@@ -1985,7 +2125,7 @@ budgetExportBtn?.addEventListener('click', async () => {
 // renders. renderEditor() is called by openBudget() after fetching
 // the budget, so this kicks in for every budget open.
 function resetToStructureView() {
-  pivotFilters = { companies: [], divisions: [], departments: [], products: [], activities: [], display: null };
+  pivotFilters = { companies: [], divisions: [], departments: [], products: [], activities: [], gls: [], display: null };
   if (structureSection) structureSection.hidden = false;
   if (pivotSection)     pivotSection.hidden     = true;
   for (const t of viewTabs) {
