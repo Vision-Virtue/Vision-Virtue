@@ -42,6 +42,7 @@ export interface PivotFilters {
   departmentIds?: string[];
   productIds?:    string[];
   activityIds?:   string[];
+  glAccountIds?:  string[];
 }
 
 export interface PivotCategory {
@@ -87,7 +88,8 @@ export function computePivot(
     matches(filters.divisionIds,   l.divisionId) &&
     matches(filters.departmentIds, l.departmentId) &&
     matches(filters.productIds,    l.productId) &&
-    matches(filters.activityIds,   l.activityId),
+    matches(filters.activityIds,   l.activityId) &&
+    matches(filters.glAccountIds,  l.glAccountId),
   );
 
   // section → category → { cells, fyTotal }

@@ -80,48 +80,114 @@ export async function buildBudgetExport(opts: {
   // ─── Sheet 2: P&L Pivot ───────────────────────────────────
   const ws2 = wb.addWorksheet('P&L Pivot');
   const periodLabels2 = opts.pivot.periodKeys.map(p => PERIOD_LABEL[p] ?? p);
+  const periodKeys = opts.pivot.periodKeys;
   ws2.addRow([
     'P&L Section', 'Budget Category',
     ...periodLabels2, 'FY Total',
   ]);
   ws2.getRow(1).font = { bold: true };
 
-  for (const group of opts.pivot.groups) {
-    // Section subtotal row
+  const sumGroup = (sec: string, p: string): number => {
+    const g = opts.pivot.groups.find(gr => gr.plSection === sec);
+    return g ? (g.cells[p] || 0) : 0;
+  };
+  const sumGroupFy = (sec: string): number => {
+    const g = opts.pivot.groups.find(gr => gr.plSection === sec);
+    return g ? g.fyTotal : 0;
+  };
+
+  // Helper that writes a section with categories.
+  const writeSection = (sectionName: string): void => {
+    const group = opts.pivot.groups.find(g => g.plSection === sectionName);
+    if (!group) return;
     const totalRow = ws2.addRow([
       group.plSection, '— total —',
-      ...opts.pivot.periodKeys.map(p => group.cells[p] || 0),
+      ...periodKeys.map(p => group.cells[p] || 0),
       group.fyTotal,
     ]);
     totalRow.font = { bold: true };
-    // Category rows under the section
     for (const c of group.categories) {
       ws2.addRow([
         '', c.name,
-        ...opts.pivot.periodKeys.map(p => c.cells[p] || 0),
+        ...periodKeys.map(p => c.cells[p] || 0),
         c.fyTotal,
       ]);
     }
-  }
+  };
 
-  // Grand total row
-  if (opts.pivot.groups.length > 0) {
-    ws2.addRow([]);
-    const gtRow = ws2.addRow([
-      'Grand Total', '',
-      ...opts.pivot.periodKeys.map(p => opts.pivot.grandTotal[p] || 0),
-      opts.pivot.grandTotal.fyTotal,
-    ]);
-    gtRow.font = { bold: true };
-  }
+  // 1) Revenues + 2) COGS
+  writeSection('Revenues');
+  writeSection('COGS');
 
-  // Gross Margin % row
-  const gmRow = ws2.addRow([
+  // 3) Gross Margin % row (above GP, then row, then below)
+  const gmAbove = ws2.addRow([
     'Gross Margin %', '',
-    ...opts.pivot.periodKeys.map(p => Number((opts.pivot.grossMargin[p] || 0).toFixed(2))),
+    ...periodKeys.map(p => Number((opts.pivot.grossMargin[p] || 0).toFixed(2))),
     Number((opts.pivot.grossMargin.fyTotal || 0).toFixed(2)),
   ]);
-  gmRow.font = { bold: true, color: { argb: 'FF2E7D32' } };
+  gmAbove.font = { bold: true, color: { argb: 'FF2E7D32' } };
+
+  // Gross Profit = Revenues - COGS
+  const gpCells: Record<string, number> = {};
+  for (const p of periodKeys) gpCells[p] = sumGroup('Revenues', p) - sumGroup('COGS', p);
+  const gpFy = sumGroupFy('Revenues') - sumGroupFy('COGS');
+  const gpRow = ws2.addRow([
+    'Gross Profit', '',
+    ...periodKeys.map(p => gpCells[p]),
+    gpFy,
+  ]);
+  gpRow.font = { bold: true };
+
+  const gmBelow = ws2.addRow([
+    'Gross Margin %', '',
+    ...periodKeys.map(p => Number((opts.pivot.grossMargin[p] || 0).toFixed(2))),
+    Number((opts.pivot.grossMargin.fyTotal || 0).toFixed(2)),
+  ]);
+  gmBelow.font = { bold: true, color: { argb: 'FF2E7D32' } };
+
+  // 4) OPEX sections
+  writeSection('R&D');
+  writeSection('S&M');
+  writeSection('G&A');
+
+  // Total OPEX = R&D + S&M + G&A
+  const opexCells: Record<string, number> = {};
+  for (const p of periodKeys) {
+    opexCells[p] = sumGroup('R&D', p) + sumGroup('S&M', p) + sumGroup('G&A', p);
+  }
+  const opexFy = sumGroupFy('R&D') + sumGroupFy('S&M') + sumGroupFy('G&A');
+  const opexRow = ws2.addRow([
+    'Total OPEX', '',
+    ...periodKeys.map(p => opexCells[p]),
+    opexFy,
+  ]);
+  opexRow.font = { bold: true };
+
+  // Adjusted EBITDA = Gross Profit - Total OPEX
+  const ebitdaCells: Record<string, number> = {};
+  for (const p of periodKeys) ebitdaCells[p] = gpCells[p] - opexCells[p];
+  const ebitdaFy = gpFy - opexFy;
+  const ebitdaRow = ws2.addRow([
+    'Adjusted EBITDA', '',
+    ...periodKeys.map(p => ebitdaCells[p]),
+    ebitdaFy,
+  ]);
+  ebitdaRow.font = { bold: true, color: { argb: 'FF1565C0' } };
+
+  // Adjusted EBITDA % = EBITDA / Revenues × 100
+  const pctOf = (num: number, denom: number): number =>
+    denom > 0 ? (num / denom) * 100 : 0;
+  const ebitdaPctRow = ws2.addRow([
+    'Adjusted EBITDA %', '',
+    ...periodKeys.map(p => Number(pctOf(ebitdaCells[p], sumGroup('Revenues', p)).toFixed(2))),
+    Number(pctOf(ebitdaFy, sumGroupFy('Revenues')).toFixed(2)),
+  ]);
+  ebitdaPctRow.font = { bold: true, color: { argb: 'FF1565C0' } };
+
+  // 5) Below-the-line sections (Financial, Tax, Other Income/(Expenses))
+  for (const s of ['Financial Income/(Expenses)', 'Tax', 'Other Income/(Expenses)']) {
+    writeSection(s);
+  }
 
   ws2.columns.forEach((col, i) => {
     col.width = i < 2 ? 26 : 13;

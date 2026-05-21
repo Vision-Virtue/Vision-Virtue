@@ -828,6 +828,7 @@ function collectPivotContext(
     departmentIds: parseIdList(query.departments),
     productIds:    parseIdList(query.products),
     activityIds:   parseIdList(query.activities),
+    glAccountIds:  parseIdList(query.gls),
   };
 
   // Display granularity — roll up cells to the requested display
