@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0" />
   <title>Vision &amp; Virtue | Visibility</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="visibility.css?v=8" />
+  <link rel="stylesheet" href="visibility.css?v=9" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
@@ -232,6 +232,11 @@
         <div class="vis-budget-editor-view" id="budgetEditorView" hidden>
           <header class="vis-panel-header">
             <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="budgetBackBtn">← Back to budgets</button>
+            <div class="vis-view-toggle" role="tablist" aria-label="Budget view">
+              <button type="button" class="vis-view-tab is-active" data-view="structure" role="tab" aria-selected="true">Structure</button>
+              <button type="button" class="vis-view-tab" data-view="pivot" role="tab" aria-selected="false">P&amp;L Pivot</button>
+            </div>
+            <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="budgetExportBtn">⬇ Export to Excel</button>
             <span class="vis-status-pill" id="budgetStatusPill" data-status="draft">Draft</span>
           </header>
 
@@ -350,6 +355,50 @@
             <div class="vis-empty" id="budgetTableEmpty">No rows yet. Click <strong>+ Add row</strong> to begin.</div>
           </section>
 
+          <!-- ── P&L Pivot view (spec §8.2–§8.3) ───────────────── -->
+          <section class="vis-pivot-section" id="pivotSection" hidden>
+            <div class="vis-pivot-filters">
+              <div class="vis-pivot-filter">
+                <label>Period</label>
+                <div class="vis-pillgroup" data-pivot-filter="display">
+                  <button type="button" data-value="monthly">Monthly</button>
+                  <button type="button" data-value="quarterly">Quarterly</button>
+                  <button type="button" data-value="yearly">Yearly</button>
+                </div>
+              </div>
+              <div class="vis-pivot-filter">
+                <label>Company</label>
+                <select multiple size="4" data-pivot-filter="companies"></select>
+              </div>
+              <div class="vis-pivot-filter">
+                <label>Division</label>
+                <select multiple size="4" data-pivot-filter="divisions"></select>
+              </div>
+              <div class="vis-pivot-filter">
+                <label>Department</label>
+                <select multiple size="4" data-pivot-filter="departments"></select>
+              </div>
+              <div class="vis-pivot-filter">
+                <label>Product</label>
+                <select multiple size="4" data-pivot-filter="products"></select>
+              </div>
+              <div class="vis-pivot-filter">
+                <label>Activity</label>
+                <select multiple size="4" data-pivot-filter="activities"></select>
+              </div>
+              <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="pivotClearFiltersBtn">Clear filters</button>
+            </div>
+            <div class="vis-banner vis-banner-error" id="pivotErrorBanner" hidden></div>
+            <div class="vis-table-wrap vis-pivot-table-wrap">
+              <table class="vis-table vis-pivot-table" id="pivotTable">
+                <thead id="pivotTableHead"></thead>
+                <tbody id="pivotTableBody"></tbody>
+                <tfoot id="pivotTableFoot"></tfoot>
+              </table>
+            </div>
+            <div class="vis-empty" id="pivotEmpty">No data to pivot. Add Budget Structure rows first.</div>
+          </section>
+
           <footer class="vis-panel-actions">
             <span class="vis-validation-summary" id="bgFooterSummary"></span>
             <button type="button" class="vis-btn vis-btn-ghost"   id="budgetDeleteBtn">Delete budget</button>
@@ -387,6 +436,6 @@
     </div>
   </div>
 
-  <script src="visibility.js?v=19" defer></script>
+  <script src="visibility.js?v=20" defer></script>
 </body>
 </html>
