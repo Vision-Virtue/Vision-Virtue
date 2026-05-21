@@ -781,6 +781,103 @@
   outline: none;
 }
 
+/* ── Phase 3c: P&L Pivot view + Export ─────────────────────── */
+
+.vis-view-toggle {
+  display: inline-flex;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  padding: 0.18rem;
+  gap: 0.15rem;
+  margin: 0 auto;
+}
+.vis-view-tab {
+  padding: 0.4rem 1rem;
+  font-family: inherit;
+  font-size: 0.84rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.65);
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.vis-view-tab.is-active {
+  background: rgba(91, 141, 224, 0.30);
+  color: #ffffff;
+}
+
+.vis-pivot-section { margin-top: 0.5rem; margin-bottom: 0.5rem; }
+
+.vis-pivot-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.85rem;
+  align-items: end;
+  padding: 1rem 1.1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: 8px;
+  margin-bottom: 1rem;
+}
+.vis-pivot-filter { display: flex; flex-direction: column; gap: 0.3rem; }
+.vis-pivot-filter label {
+  font-size: 0.74rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.7);
+}
+.vis-pivot-filter select[multiple] {
+  width: 100%;
+  padding: 0.35rem 0.45rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  outline: none;
+}
+.vis-pivot-filter select[multiple] option {
+  background: var(--navy-800);
+  color: #ffffff;
+  padding: 0.25rem 0.4rem;
+}
+.vis-pivot-filter select[multiple] option:checked {
+  background: rgba(91, 141, 224, 0.45);
+}
+.vis-pivot-filters > button { align-self: end; }
+
+.vis-pivot-table-wrap { max-width: 100%; overflow-x: auto; }
+.vis-pivot-table { min-width: 720px; font-size: 0.86rem; }
+.vis-pivot-table tbody tr.is-section td {
+  font-weight: 700;
+  color: #ffffff;
+  background: rgba(91, 141, 224, 0.10);
+  border-top: 1px solid rgba(91, 141, 224, 0.25);
+}
+.vis-pivot-table tbody tr.is-category td.vis-pivot-cat-label {
+  padding-left: 1.5rem;
+  color: rgba(255, 255, 255, 0.85);
+}
+.vis-pivot-table td.vis-pivot-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.vis-pivot-table tfoot tr td {
+  font-weight: 700;
+  background: rgba(74, 124, 63, 0.10);
+  border-top: 1px solid rgba(74, 124, 63, 0.35);
+  color: #c9efb7;
+}
+.vis-pivot-table tfoot tr.is-grand td {
+  background: rgba(91, 141, 224, 0.18);
+  color: #ffffff;
+  border-top: 1px solid rgba(91, 141, 224, 0.45);
+}
+
 /* ── Phase 3b: Salaries & Benefits ───────────────────────── */
 
 .vis-sb-section {

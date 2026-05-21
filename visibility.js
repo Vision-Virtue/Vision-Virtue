@@ -928,6 +928,8 @@ budgetBackBtn.addEventListener('click', async () => {
 
 function renderEditor() {
   if (!currentBudget) return;
+  // Default to Structure view on every open (Phase 3c).
+  if (typeof resetToStructureView === 'function') resetToStructureView();
   renderSetupPills();
   renderStatusPill();
   renderBudgetTable();
@@ -1778,6 +1780,220 @@ sbDeleteRowBtn?.addEventListener('click', async () => {
     showBanner(sbErrorBanner, htmlEsc(`Remove failed: ${(err && err.message) || err}`));
   }
 });
+
+// ─────────────────────────────────────────────────────────────
+//  PHASE 3c — Personal Area: view toggle + P&L Pivot + Export
+// ─────────────────────────────────────────────────────────────
+
+const PIVOT_PERIOD_LABEL = {
+  M01: 'Jan', M02: 'Feb', M03: 'Mar', M04: 'Apr', M05: 'May', M06: 'Jun',
+  M07: 'Jul', M08: 'Aug', M09: 'Sep', M10: 'Oct', M11: 'Nov', M12: 'Dec',
+  Q1: 'Q1', Q2: 'Q2', Q3: 'Q3', Q4: 'Q4', FY: 'FY',
+};
+
+const viewTabs           = Array.from(document.querySelectorAll('.vis-view-tab'));
+const structureSection   = document.querySelector('.vis-budget-table-section');
+const pivotSection       = document.getElementById('pivotSection');
+const pivotTableHead     = document.getElementById('pivotTableHead');
+const pivotTableBody     = document.getElementById('pivotTableBody');
+const pivotTableFoot     = document.getElementById('pivotTableFoot');
+const pivotEmpty         = document.getElementById('pivotEmpty');
+const pivotErrorBanner   = document.getElementById('pivotErrorBanner');
+const pivotClearFiltersBtn = document.getElementById('pivotClearFiltersBtn');
+const budgetExportBtn    = document.getElementById('budgetExportBtn');
+
+let pivotFilters = {
+  companies: [], divisions: [], departments: [], products: [], activities: [],
+  display: null, // null = follow budget granularity
+};
+
+function setView(view) {
+  for (const t of viewTabs) {
+    const a = t.dataset.view === view;
+    t.classList.toggle('is-active', a);
+    t.setAttribute('aria-selected', String(a));
+  }
+  if (structureSection) structureSection.hidden = view !== 'structure';
+  if (sbSection)        sbSection.hidden        = view !== 'structure' || !currentBudget?.budget?.sbEnabled;
+  if (pivotSection)     pivotSection.hidden     = view !== 'pivot';
+  if (view === 'pivot') void refreshPivot();
+}
+
+for (const t of viewTabs) {
+  t.addEventListener('click', () => setView(t.dataset.view));
+}
+
+function populatePivotFilterDropdowns() {
+  const fillSelect = (dim, key) => {
+    const sel = document.querySelector(`select[data-pivot-filter="${key}"]`);
+    if (!sel) return;
+    const entries = osEntities[dim] || [];
+    sel.innerHTML = entries.map(e =>
+      `<option value="${htmlEsc(e.id)}"${pivotFilters[key].includes(e.id) ? ' selected' : ''}>${htmlEsc(e.name)}</option>`,
+    ).join('');
+  };
+  fillSelect('company',    'companies');
+  fillSelect('division',   'divisions');
+  fillSelect('department', 'departments');
+  fillSelect('product',    'products');
+  fillSelect('activity',   'activities');
+
+  // Display granularity pills — disable any finer than the budget's native.
+  const budgetGran = currentBudget?.budget?.granularity || 'monthly';
+  const rank = { monthly: 0, quarterly: 1, yearly: 2 };
+  for (const btn of document.querySelectorAll('.vis-pillgroup[data-pivot-filter="display"] button')) {
+    const v = btn.dataset.value;
+    const tooFine = rank[v] < rank[budgetGran];
+    btn.disabled = tooFine;
+    btn.classList.toggle('is-active', (pivotFilters.display || budgetGran) === v);
+  }
+}
+
+for (const sel of document.querySelectorAll('.vis-pivot-filter select[multiple]')) {
+  sel.addEventListener('change', () => {
+    const key = sel.dataset.pivotFilter;
+    pivotFilters[key] = Array.from(sel.selectedOptions).map(o => o.value);
+    void refreshPivot();
+  });
+}
+
+for (const btn of document.querySelectorAll('.vis-pillgroup[data-pivot-filter="display"] button')) {
+  btn.addEventListener('click', () => {
+    if (btn.disabled) return;
+    pivotFilters.display = btn.dataset.value;
+    for (const sib of btn.parentElement.querySelectorAll('button')) {
+      sib.classList.toggle('is-active', sib === btn);
+    }
+    void refreshPivot();
+  });
+}
+
+pivotClearFiltersBtn?.addEventListener('click', () => {
+  pivotFilters = { companies: [], divisions: [], departments: [], products: [], activities: [], display: null };
+  populatePivotFilterDropdowns();
+  void refreshPivot();
+});
+
+function buildPivotQuery() {
+  const parts = [];
+  for (const k of ['companies', 'divisions', 'departments', 'products', 'activities']) {
+    if (pivotFilters[k] && pivotFilters[k].length > 0) parts.push(`${k}=${encodeURIComponent(pivotFilters[k].join(','))}`);
+  }
+  if (pivotFilters.display) parts.push(`display=${encodeURIComponent(pivotFilters.display)}`);
+  return parts.length > 0 ? '?' + parts.join('&') : '';
+}
+
+async function refreshPivot() {
+  if (!currentBudget || (pivotSection && pivotSection.hidden)) return;
+  populatePivotFilterDropdowns();
+  showBanner(pivotErrorBanner, '');
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/pivot${buildPivotQuery()}`);
+    if (!res.ok) {
+      const er = await res.json().catch(() => ({}));
+      showBanner(pivotErrorBanner, htmlEsc(er?.error?.message || `Pivot failed (${res.status}).`));
+      return;
+    }
+    const data = await res.json();
+    renderPivot(data);
+  } catch (err) {
+    showBanner(pivotErrorBanner, htmlEsc(`Pivot failed: ${(err && err.message) || err}`));
+  }
+}
+
+function renderPivot(data) {
+  const periodKeys = data.periodKeys || [];
+  const scale = currentBudget.budget.scale;
+  const fmt = (v) => {
+    const x = Number(v) || 0;
+    if (x === 0) return '—';
+    return fmtCellDisplay(x, scale);
+  };
+
+  const headCells = ['P&L Section', 'Budget Category', ...periodKeys.map(p => PIVOT_PERIOD_LABEL[p] || p), 'FY Total'];
+  pivotTableHead.innerHTML = '<tr>' + headCells.map(h => `<th>${htmlEsc(h)}</th>`).join('') + '</tr>';
+
+  pivotTableBody.innerHTML = '';
+  const groups = data.groups || [];
+  pivotEmpty.hidden = groups.length > 0;
+  for (const g of groups) {
+    const sectionRow = document.createElement('tr');
+    sectionRow.className = 'is-section';
+    sectionRow.innerHTML =
+      `<td>${htmlEsc(g.plSection)}</td><td>— subtotal —</td>` +
+      periodKeys.map(p => `<td class="vis-pivot-num">${htmlEsc(fmt(g.cells[p]))}</td>`).join('') +
+      `<td class="vis-pivot-num">${htmlEsc(fmt(g.fyTotal))}</td>`;
+    pivotTableBody.appendChild(sectionRow);
+    for (const c of g.categories || []) {
+      const catRow = document.createElement('tr');
+      catRow.className = 'is-category';
+      catRow.innerHTML =
+        `<td></td><td class="vis-pivot-cat-label">${htmlEsc(c.name)}</td>` +
+        periodKeys.map(p => `<td class="vis-pivot-num">${htmlEsc(fmt(c.cells[p]))}</td>`).join('') +
+        `<td class="vis-pivot-num">${htmlEsc(fmt(c.fyTotal))}</td>`;
+      pivotTableBody.appendChild(catRow);
+    }
+  }
+
+  pivotTableFoot.innerHTML = '';
+  if (groups.length > 0) {
+    const gtRow = document.createElement('tr');
+    gtRow.className = 'is-grand';
+    gtRow.innerHTML =
+      `<td>Grand Total</td><td></td>` +
+      periodKeys.map(p => `<td class="vis-pivot-num">${htmlEsc(fmt(data.grandTotal[p]))}</td>`).join('') +
+      `<td class="vis-pivot-num">${htmlEsc(fmt(data.grandTotal.fyTotal))}</td>`;
+    pivotTableFoot.appendChild(gtRow);
+  }
+  const gmRow = document.createElement('tr');
+  gmRow.innerHTML =
+    `<td>Gross Margin %</td><td></td>` +
+    periodKeys.map(p => `<td class="vis-pivot-num">${Number(data.grossMargin[p] || 0).toFixed(2)}%</td>`).join('') +
+    `<td class="vis-pivot-num">${Number(data.grossMargin.fyTotal || 0).toFixed(2)}%</td>`;
+  pivotTableFoot.appendChild(gmRow);
+}
+
+budgetExportBtn?.addEventListener('click', async () => {
+  if (!currentBudget) return;
+  const original = budgetExportBtn.textContent;
+  budgetExportBtn.disabled = true;
+  budgetExportBtn.textContent = 'Preparing…';
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/export${buildPivotQuery()}`);
+    if (!res.ok) {
+      const er = await res.json().catch(() => ({}));
+      showBanner(bgEditorError, htmlEsc(er?.error?.message || `Export failed (${res.status}).`));
+      return;
+    }
+    const blob = await res.blob();
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    const name = (currentBudget.budget.name || 'budget').replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 60);
+    a.href = url;
+    a.download = `${name}.xlsx`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    showBanner(bgEditorError, htmlEsc(`Export failed: ${(err && err.message) || err}`));
+  } finally {
+    budgetExportBtn.textContent = original;
+    budgetExportBtn.disabled = false;
+  }
+});
+
+// Reset to Structure view + clear pivot filters whenever the editor
+// renders. renderEditor() is called by openBudget() after fetching
+// the budget, so this kicks in for every budget open.
+function resetToStructureView() {
+  pivotFilters = { companies: [], divisions: [], departments: [], products: [], activities: [], display: null };
+  if (structureSection) structureSection.hidden = false;
+  if (pivotSection)     pivotSection.hidden     = true;
+  for (const t of viewTabs) {
+    const a = t.dataset.view === 'structure';
+    t.classList.toggle('is-active', a);
+    t.setAttribute('aria-selected', String(a));
+  }
+}
 
 // ── Prompt modal ───────────────────────────────────────────
 const promptEl     = document.getElementById('visPromptModal');
