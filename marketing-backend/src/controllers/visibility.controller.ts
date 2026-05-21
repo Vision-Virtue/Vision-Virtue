@@ -606,7 +606,7 @@ export const budgetsController = {
 
   // ─── Lines ─────────────────────────────────────────────────
 
-  /** POST /api/visibility/budgets/:id/lines */
+  /** POST /api/visibility/budgets/:id/lines  body: { afterId?: string } */
   createLine(req: Request, res: Response): void {
     const key = resolveCustomerKey(req);
     if (!key) { send401(res, 'Missing or invalid customer key.'); return; }
@@ -615,7 +615,8 @@ export const budgetsController = {
       res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Budget not found.' } });
       return;
     }
-    const line = budgetLineRepo.create(budget.id, 'manual');
+    const afterId = typeof req.body?.afterId === 'string' ? req.body.afterId : undefined;
+    const line = budgetLineRepo.create(budget.id, 'manual', afterId);
     res.status(201).json({ line: serializeBudgetLine(line, {}) });
   },
 
@@ -765,10 +766,11 @@ export const salariesController = {
     });
   },
 
-  /** POST /api/visibility/budgets/:id/salaries */
+  /** POST /api/visibility/budgets/:id/salaries  body: { afterId?: string } */
   createRow(req: Request, res: Response): void {
     const ctx = requireBudget(req, res); if (!ctx) return;
-    const created = salariesRowRepo.create(ctx.budget.id);
+    const afterId = typeof req.body?.afterId === 'string' ? req.body.afterId : undefined;
+    const created = salariesRowRepo.create(ctx.budget.id, undefined, afterId);
     res.status(201).json({ row: serializeSalary(created) });
   },
 
