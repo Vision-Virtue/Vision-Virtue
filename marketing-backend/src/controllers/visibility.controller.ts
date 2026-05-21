@@ -31,6 +31,15 @@ import {
 } from '../db/visibility.repository';
 import { parseGLBuffer, parseSBBuffer, ParseError } from '../services/gl-parser.service';
 import { validateAndPivotSalaries, pivotEntryToCells } from '../services/salaries.service';
+import {
+  computePivot,
+  rollUpCells,
+  periodKeysForDisplay,
+  DisplayGranularity,
+  BudgetLineWithCells,
+  PivotFilters,
+} from '../services/pivot.service';
+import { buildBudgetExport } from '../services/budget-export.service';
 
 // ─── Constants from spec §2.3 (single source of truth, mirrored on FE) ─────
 
@@ -693,6 +702,55 @@ export const budgetsController = {
     });
   },
 
+  /**
+   * GET /api/visibility/budgets/:id/pivot
+   * Query params:
+   *   companies, divisions, departments, products, activities — each a
+   *     comma-separated list of Org entity ids (omit / empty = all).
+   *   display — monthly | quarterly | yearly (defaults to budget's
+   *     native granularity; can only roll UP, not split down).
+   * Returns the §8.2 P&L Pivot computation as JSON.
+   */
+  getPivot(req: Request, res: Response): void {
+    const key = resolveCustomerKey(req);
+    if (!key) { send401(res, 'Missing or invalid customer key.'); return; }
+    const budget = budgetRepo.getById(req.params.id);
+    if (!budget || budget.customerKeyId !== key.id) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Budget not found.' } });
+      return;
+    }
+    const ctx = collectPivotContext(budget.id, key.id, req.query, budget.granularity);
+    res.json(ctx.pivot);
+  },
+
+  /**
+   * GET /api/visibility/budgets/:id/export
+   * Same query params as /pivot. Streams an .xlsx containing both
+   * Budget Structure (raw) and P&L Pivot sheets per spec §8.4.
+   */
+  async exportXlsx(req: Request, res: Response): Promise<void> {
+    const key = resolveCustomerKey(req);
+    if (!key) { send401(res, 'Missing or invalid customer key.'); return; }
+    const budget = budgetRepo.getById(req.params.id);
+    if (!budget || budget.customerKeyId !== key.id) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Budget not found.' } });
+      return;
+    }
+    const ctx = collectPivotContext(budget.id, key.id, req.query, budget.granularity);
+    const buf = await buildBudgetExport({
+      budget,
+      periodKeys: periodKeysFor(budget.granularity),
+      lines: ctx.lineRows.map(l => ({ line: l, cells: budgetCellRepo.listByLine(l.id) })),
+      glById: ctx.glById,
+      orgById: ctx.orgById,
+      pivot: ctx.pivot,
+    });
+    const safeName = (budget.name || 'budget').replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 60);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="${safeName}.xlsx"`);
+    res.send(buf);
+  },
+
   /** DELETE /api/visibility/budgets/:id/lines/:lineId */
   removeLine(req: Request, res: Response): void {
     const key = resolveCustomerKey(req);
@@ -715,6 +773,76 @@ export const budgetsController = {
     res.json({ ok: true });
   },
 };
+
+// ─── Pivot context (shared by /pivot and /export) ────────────────────────
+
+function parseIdList(raw: unknown): string[] {
+  if (typeof raw !== 'string' || !raw.trim()) return [];
+  return raw.split(',').map(s => s.trim()).filter(Boolean);
+}
+
+function parseDisplayGranularity(
+  raw: unknown,
+  budgetGran: 'monthly' | 'quarterly' | 'yearly',
+): DisplayGranularity {
+  const ALLOWED: DisplayGranularity[] = ['monthly', 'quarterly', 'yearly'];
+  const want = typeof raw === 'string' ? raw : '';
+  if (!(ALLOWED as string[]).includes(want)) return budgetGran;
+  // The pivot can only roll up. monthly→quarterly/yearly, quarterly→yearly.
+  // If a finer granularity than the budget is requested, fall back to budget's.
+  const rank: Record<DisplayGranularity, number> = { monthly: 0, quarterly: 1, yearly: 2 };
+  return rank[want as DisplayGranularity] >= rank[budgetGran] ? (want as DisplayGranularity) : budgetGran;
+}
+
+function collectPivotContext(
+  budgetId: string,
+  customerKeyId: string,
+  query: Record<string, unknown>,
+  budgetGran: 'monthly' | 'quarterly' | 'yearly',
+) {
+  // Load lines + cells.
+  const lineRows = budgetLineRepo.listByBudget(budgetId);
+  const linesWithCells: BudgetLineWithCells[] = lineRows.map(l => ({
+    id:           l.id,
+    companyId:    l.companyId,
+    divisionId:   l.divisionId,
+    departmentId: l.departmentId,
+    productId:    l.productId,
+    activityId:   l.activityId,
+    glAccountId:  l.glAccountId,
+    cells:        budgetCellRepo.listByLine(l.id),
+  }));
+
+  // Build GL + Org id lookups once.
+  const glById = new Map(
+    glAccountRepo.listByCustomer(customerKeyId).map(g => [g.id, g] as const),
+  );
+  const orgById = new Map(
+    orgEntityRepo.listByCustomer(customerKeyId).map(e => [e.id, e] as const),
+  );
+
+  // Filters.
+  const filters: PivotFilters = {
+    companyIds:    parseIdList(query.companies),
+    divisionIds:   parseIdList(query.divisions),
+    departmentIds: parseIdList(query.departments),
+    productIds:    parseIdList(query.products),
+    activityIds:   parseIdList(query.activities),
+  };
+
+  // Display granularity — roll up cells to the requested display
+  // granularity before pivoting so the period columns match.
+  const display = parseDisplayGranularity(query.display, budgetGran);
+  const displayPeriods = periodKeysForDisplay(display);
+  const linesRolled: BudgetLineWithCells[] = linesWithCells.map(l => ({
+    ...l,
+    cells: rollUpCells(l.cells, budgetGran, display),
+  }));
+
+  const pivot = computePivot(linesRolled, glById, filters, displayPeriods);
+
+  return { lineRows, linesWithCells, glById, orgById, filters, display, pivot };
+}
 
 // ─── Phase 3b — Salaries & Benefits (spec §7) ────────────────────────────
 

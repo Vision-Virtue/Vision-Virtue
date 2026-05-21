@@ -237,6 +237,16 @@ router.post(  '/visibility/budgets/:id/lines',                (req, res) => budg
 router.patch( '/visibility/budgets/:id/lines/:lineId',        (req, res) => budgetsController.patchLine(req, res));
 router.delete('/visibility/budgets/:id/lines/:lineId',        (req, res) => budgetsController.removeLine(req, res));
 
+// Phase 3c — Personal area: P&L Pivot view + Export to Excel.
+router.get(
+  '/visibility/budgets/:id/pivot',
+  (req, res) => budgetsController.getPivot(req, res),
+);
+router.get(
+  '/visibility/budgets/:id/export',
+  asyncHandler(async (req, res) => { await budgetsController.exportXlsx(req, res); }),
+);
+
 // Phase 3b — Salaries & Benefits (per budget).
 router.get(   '/visibility/budgets/:id/salaries',                  (req, res) => salariesController.list(req, res));
 router.post(  '/visibility/budgets/:id/salaries',                  (req, res) => salariesController.createRow(req, res));
