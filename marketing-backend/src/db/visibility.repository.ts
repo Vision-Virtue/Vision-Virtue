@@ -518,19 +518,36 @@ export const budgetLineRepo = {
     return row ? toBudgetLineDomain(row) : null;
   },
 
-  create(budgetId: string, source: 'manual' | 'salaries' = 'manual'): BudgetLineRow {
+  create(budgetId: string, source: 'manual' | 'salaries' = 'manual', afterId?: string): BudgetLineRow {
     const id = uuidv4();
     const now = new Date().toISOString();
-    const maxIdx = (getDb()
-      .prepare(`SELECT COALESCE(MAX(order_index), -1) AS m FROM budget_lines WHERE budget_id = ?`)
-      .get(budgetId) as { m: number }).m;
+    let insertAt: number;
+    if (afterId) {
+      const ex = getDb()
+        .prepare(`SELECT order_index FROM budget_lines WHERE id = ? AND budget_id = ?`)
+        .get(afterId, budgetId) as { order_index: number } | undefined;
+      if (ex) {
+        insertAt = ex.order_index + 1;
+        getDb()
+          .prepare(`UPDATE budget_lines SET order_index = order_index + 1 WHERE budget_id = ? AND order_index >= ?`)
+          .run(budgetId, insertAt);
+      } else {
+        insertAt = ((getDb()
+          .prepare(`SELECT COALESCE(MAX(order_index), -1) AS m FROM budget_lines WHERE budget_id = ?`)
+          .get(budgetId) as { m: number }).m) + 1;
+      }
+    } else {
+      insertAt = ((getDb()
+        .prepare(`SELECT COALESCE(MAX(order_index), -1) AS m FROM budget_lines WHERE budget_id = ?`)
+        .get(budgetId) as { m: number }).m) + 1;
+    }
     getDb()
       .prepare(
         `INSERT INTO budget_lines
            (id, budget_id, source, order_index, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, budgetId, source, maxIdx + 1, now, now);
+      .run(id, budgetId, source, insertAt, now, now);
     return this.getById(id)!;
   },
 
@@ -716,12 +733,29 @@ export const salariesRowRepo = {
     companyId: string | null; employeeName: string; divisionId: string | null;
     departmentId: string | null; productId: string | null; activityId: string | null;
     productActivityPct: number; monthlySalary: number; glAccountId: string | null;
-  }>): SalariesRow {
+  }>, afterId?: string): SalariesRow {
     const id = uuidv4();
     const now = new Date().toISOString();
-    const maxIdx = (getDb()
-      .prepare(`SELECT COALESCE(MAX(order_index), -1) AS m FROM salaries_rows WHERE budget_id = ?`)
-      .get(budgetId) as { m: number }).m;
+    let insertAt: number;
+    if (afterId) {
+      const ex = getDb()
+        .prepare(`SELECT order_index FROM salaries_rows WHERE id = ? AND budget_id = ?`)
+        .get(afterId, budgetId) as { order_index: number } | undefined;
+      if (ex) {
+        insertAt = ex.order_index + 1;
+        getDb()
+          .prepare(`UPDATE salaries_rows SET order_index = order_index + 1 WHERE budget_id = ? AND order_index >= ?`)
+          .run(budgetId, insertAt);
+      } else {
+        insertAt = ((getDb()
+          .prepare(`SELECT COALESCE(MAX(order_index), -1) AS m FROM salaries_rows WHERE budget_id = ?`)
+          .get(budgetId) as { m: number }).m) + 1;
+      }
+    } else {
+      insertAt = ((getDb()
+        .prepare(`SELECT COALESCE(MAX(order_index), -1) AS m FROM salaries_rows WHERE budget_id = ?`)
+        .get(budgetId) as { m: number }).m) + 1;
+    }
     getDb()
       .prepare(
         `INSERT INTO salaries_rows
@@ -741,7 +775,7 @@ export const salariesRowRepo = {
         seed?.productActivityPct ?? 0,
         seed?.monthlySalary ?? 0,
         seed?.glAccountId ?? null,
-        maxIdx + 1, now, now,
+        insertAt, now, now,
       );
     return this.getById(id)!;
   },

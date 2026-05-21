@@ -1033,9 +1033,16 @@ function buildOrgOptions(dim, selectedId) {
   }
   return html;
 }
-function buildGLOptions(selectedId) {
+function buildGLOptions(selectedId, opts) {
+  // opts.onlySalaries → restrict the list to GLs that the customer
+  //   tagged with the "Salaries and benefits" budget category in
+  //   Financial Structure. Used by the S&B table per request.
+  const onlySalaries = !!(opts && opts.onlySalaries);
   let html = '<option value="">—</option>';
-  for (const g of glRows.filter(r => !r.orphan)) {
+  const filtered = glRows
+    .filter(r => !r.orphan)
+    .filter(r => !onlySalaries || r.budgetCategory === 'Salaries and benefits');
+  for (const g of filtered) {
     const label = `${g.glNumber} ${g.glName}`;
     html += `<option value="${htmlEsc(g.id)}"${selectedId === g.id ? ' selected' : ''}>${htmlEsc(label)}</option>`;
   }
@@ -1311,17 +1318,24 @@ async function patchLine(lineId, payload) {
 addBudgetLineBtn.addEventListener('click', async () => {
   if (!currentBudget) return;
   showBanner(bgEditorError, '');
+  // If a row is selected, ask the server to insert right after it
+  // (the selected row shifts down by one and the new one lands below).
+  const selected = budgetTableBody?.querySelector('tr.is-selected');
+  const afterId  = selected?.dataset?.id || undefined;
   try {
-    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/lines`, { method: 'POST' });
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/lines`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(afterId ? { afterId } : {}),
+    });
     if (!res.ok) {
       const er = await res.json().catch(() => ({}));
       showBanner(bgEditorError, htmlEsc(er?.error?.message || `Add row failed (${res.status}).`));
       return;
     }
-    const data = await res.json();
-    currentBudget.lines.push(data.line);
-    renderBudgetTable();
-    renderFooterSummary();
+    // Re-fetch so the order on screen matches the server (other rows
+    // got their order_index bumped) — simpler than splicing locally.
+    await openBudget(currentBudget.budget.id);
   } catch (err) {
     showBanner(bgEditorError, htmlEsc(`Add row failed: ${(err && err.message) || err}`));
   }
@@ -1534,7 +1548,11 @@ function renderSBTable() {
     tr.dataset.id = r.id;
     const monthly = Number(r.monthlySalary) || 0;
     const pct     = Number(r.productActivityPct) || 0;
-    const allocated = monthly * (pct / 100);
+    // The displayed Monthly Salary is the ALLOCATED amount (full × pct/100).
+    // While the input is focused the user sees the full salary for editing;
+    // on blur the displayed value flips back to the allocated. data-full
+    // carries the raw value so the focus swap doesn't need a re-query.
+    const allocated = pct > 0 ? monthly * (pct / 100) : monthly;
     tr.innerHTML = `
       <td>${idx + 1}</td>
       <td><select data-field="companyId">${buildOrgOptions('company', r.companyId)}</select></td>
@@ -1544,14 +1562,25 @@ function renderSBTable() {
       <td><select data-field="productId">${buildOrgOptions('product', r.productId)}</select></td>
       <td><select data-field="activityId">${buildOrgOptions('activity', r.activityId)}</select></td>
       <td class="is-number"><input type="text" inputmode="decimal" data-field="productActivityPct" value="${htmlEsc(fmtPct(pct))}" /></td>
-      <td class="is-number"><input type="text" inputmode="decimal" data-field="monthlySalary" value="${monthly === 0 ? '' : fmtCellDisplay(monthly, 'standard')}" /></td>
-      <td class="is-readonly is-number">${allocated === 0 ? '—' : fmtCellDisplay(allocated, 'standard')}</td>
-      <td><select data-field="glAccountId">${buildGLOptions(r.glAccountId)}</select></td>
+      <td class="is-number"><input type="text" inputmode="decimal" data-field="monthlySalary"
+            data-full="${monthly}"
+            value="${allocated === 0 ? '' : fmtCellDisplay(allocated, 'standard')}" /></td>
+      <td><select data-field="glAccountId">${buildGLOptions(r.glAccountId, { onlySalaries: true })}</select></td>
       <td class="is-actions"><button type="button" class="vis-budget-line-rm" data-action="sb-remove" aria-label="Remove">×</button></td>
     `;
     sbTableBody.appendChild(tr);
   });
 }
+
+// Show the full monthly salary while the cell is focused so the user
+// can edit the underlying value, not the (read-only-ish) allocated.
+sbTableBody?.addEventListener('focusin', (ev) => {
+  const target = ev.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  if (target.dataset.field !== 'monthlySalary') return;
+  const full = Number(target.dataset.full) || 0;
+  target.value = full === 0 ? '' : fmtCellDisplay(full, 'standard');
+});
 
 sbTableBody?.addEventListener('change', async (ev) => {
   const target = ev.target;
@@ -1571,10 +1600,15 @@ sbTableBody?.addEventListener('change', async (ev) => {
     target.value = fmtPct(n);
     await sbPatch(id, { productActivityPct: n });
   } else if (field === 'monthlySalary') {
-    const n = parseCellInput(target.value, 'standard');
-    row.monthlySalary = n;
-    target.value = n === 0 ? '' : fmtCellDisplay(n, 'standard');
-    await sbPatch(id, { monthlySalary: n });
+    // User-typed value is treated as the FULL monthly salary. The
+    // displayed value flips back to the allocated amount on blur.
+    const full = parseCellInput(target.value, 'standard');
+    row.monthlySalary = full;
+    target.dataset.full = String(full);
+    const pct = Number(row.productActivityPct) || 0;
+    const allocated = pct > 0 ? full * (pct / 100) : full;
+    target.value = allocated === 0 ? '' : fmtCellDisplay(allocated, 'standard');
+    await sbPatch(id, { monthlySalary: full });
   } else if (field === 'employeeName') {
     row.employeeName = target.value;
     await sbPatch(id, { employeeName: target.value });
@@ -1625,8 +1659,15 @@ async function sbPatch(rowId, payload) {
 
 sbAddRowBtn?.addEventListener('click', async () => {
   if (!currentBudget) return;
+  // Insert right after the selected row if any, else append.
+  const selected = sbTableBody?.querySelector('tr.is-selected');
+  const afterId  = selected?.dataset?.id || undefined;
   try {
-    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/salaries`, { method: 'POST' });
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/salaries`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(afterId ? { afterId } : {}),
+    });
     if (!res.ok) {
       const er = await res.json().catch(() => ({}));
       showBanner(sbErrorBanner, htmlEsc(er?.error?.message || `Add row failed (${res.status}).`));
