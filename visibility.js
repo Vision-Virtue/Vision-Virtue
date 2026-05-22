@@ -1563,6 +1563,21 @@ function refreshSBValidation() {
   sbFinalizeBtn.disabled = rowCount === 0 || errs.length > 0;
 }
 
+// The "canonical" Monthly Salary is a property of the employee, not
+// of a single row — multiple allocation rows for one employee should
+// always show (canonical × pct / 100). Look up the canonical from
+// any sibling row that has a non-zero monthlySalary stored, falling
+// back to this row's own value when there are no siblings.
+function canonicalSalary(employeeName, ownValue) {
+  const trimmed = (employeeName || '').trim().toLowerCase();
+  if (!trimmed) return Number(ownValue) || 0;
+  for (const r of (sbState.rows || [])) {
+    const v = Number(r.monthlySalary) || 0;
+    if (v !== 0 && (r.employeeName || '').trim().toLowerCase() === trimmed) return v;
+  }
+  return Number(ownValue) || 0;
+}
+
 function renderSBTable() {
   if (!sbTableBody) return;
   const sbDeleteBtn = document.getElementById('sbDeleteRowBtn');
@@ -1573,12 +1588,11 @@ function renderSBTable() {
   rows.forEach((r, idx) => {
     const tr = document.createElement('tr');
     tr.dataset.id = r.id;
-    const monthly = Number(r.monthlySalary) || 0;
+    // Monthly Salary is canonical per employee — every row for the
+    // same name shares the same underlying value. Allocated display
+    // is (canonical × pct / 100).
+    const monthly = canonicalSalary(r.employeeName, r.monthlySalary);
     const pct     = Number(r.productActivityPct) || 0;
-    // The displayed Monthly Salary is the ALLOCATED amount (full × pct/100).
-    // While the input is focused the user sees the full salary for editing;
-    // on blur the displayed value flips back to the allocated. data-full
-    // carries the raw value so the focus swap doesn't need a re-query.
     const allocated = pct > 0 ? monthly * (pct / 100) : monthly;
     tr.innerHTML = `
       <td>${idx + 1}</td>
@@ -1599,13 +1613,18 @@ function renderSBTable() {
   });
 }
 
-// Show the full monthly salary while the cell is focused so the user
-// can edit the underlying value, not the (read-only-ish) allocated.
+// Show the canonical full monthly salary while the cell is focused
+// so the user can edit the underlying value. (Sibling rows for the
+// same employee share the same canonical salary.)
 sbTableBody?.addEventListener('focusin', (ev) => {
   const target = ev.target;
   if (!(target instanceof HTMLInputElement)) return;
   if (target.dataset.field !== 'monthlySalary') return;
-  const full = Number(target.dataset.full) || 0;
+  const tr  = target.closest('tr');
+  const id  = tr?.dataset?.id;
+  const row = sbState.rows.find(r => r.id === id);
+  if (!row) return;
+  const full = canonicalSalary(row.employeeName, row.monthlySalary);
   target.value = full === 0 ? '' : fmtCellDisplay(full, 'standard');
 });
 
@@ -1627,15 +1646,27 @@ sbTableBody?.addEventListener('change', async (ev) => {
     target.value = fmtPct(n);
     await sbPatch(id, { productActivityPct: n });
   } else if (field === 'monthlySalary') {
-    // User-typed value is treated as the FULL monthly salary. The
-    // displayed value flips back to the allocated amount on blur.
+    // User-typed value is treated as the FULL monthly salary —
+    // the canonical for this employee. Sync it to every sibling
+    // row that shares the same employee name so allocations on
+    // all rows compute against the same base.
     const full = parseCellInput(target.value, 'standard');
     row.monthlySalary = full;
     target.dataset.full = String(full);
     const pct = Number(row.productActivityPct) || 0;
     const allocated = pct > 0 ? full * (pct / 100) : full;
     target.value = allocated === 0 ? '' : fmtCellDisplay(allocated, 'standard');
-    await sbPatch(id, { monthlySalary: full });
+    const trimmed = (row.employeeName || '').trim().toLowerCase();
+    const siblings = trimmed
+      ? sbState.rows.filter(r => r.id !== id && (r.employeeName || '').trim().toLowerCase() === trimmed)
+      : [];
+    await Promise.all([
+      sbPatch(id, { monthlySalary: full }),
+      ...siblings.map(async (r) => {
+        r.monthlySalary = full;
+        await sbPatch(r.id, { monthlySalary: full });
+      }),
+    ]);
   } else if (field === 'employeeName') {
     row.employeeName = target.value;
     // Auto-link rows for the same employee. Per spec §7.4 all rows
@@ -1988,10 +2019,13 @@ function renderPivot(data) {
   const groups = data.groups || [];
   pivotEmpty.hidden = groups.length > 0;
 
-  // Quick lookups by section name.
+  // Quick lookups by section name. P&L convention here: every section
+  // subtotal participates in calculations as an ABSOLUTE value, so the
+  // user can enter Revenues as a credit (negative) and Costs as either
+  // sign and still get a sensible Gross Profit / EBITDA / GM% / EBITDA%.
   const byName = new Map(groups.map(g => [g.plSection, g]));
-  const groupCell = (sec, p) => (byName.get(sec)?.cells[p] || 0);
-  const groupFy   = (sec)    => (byName.get(sec)?.fyTotal || 0);
+  const absCell = (sec, p) => Math.abs(byName.get(sec)?.cells[p] || 0);
+  const absFy   = (sec)    => Math.abs(byName.get(sec)?.fyTotal || 0);
 
   // Helper: write one P&L section (subtotal row + category rows).
   // If `fmtFn` is provided, it overrides the default accounting format
@@ -2046,42 +2080,45 @@ function renderPivot(data) {
   // 2) COGS
   writeSection('COGS');
 
-  // 3a) Gross Margin % (above Gross Profit)
-  writePct('Gross Margin %', data.grossMargin, data.grossMargin.fyTotal);
-
-  // 3b) Gross Profit = Revenues - COGS (display as abs)
+  // Gross Profit = |Revenues| - |COGS|
   const gpCells = {};
-  for (const p of periodKeys) gpCells[p] = groupCell('Revenues', p) - groupCell('COGS', p);
-  const gpFy = groupFy('Revenues') - groupFy('COGS');
+  for (const p of periodKeys) gpCells[p] = absCell('Revenues', p) - absCell('COGS', p);
+  const gpFy = absFy('Revenues') - absFy('COGS');
   writeComputed('Gross Profit', gpCells, gpFy, fmtAbs, 'is-section is-gp');
 
-  // 3c) Gross Margin % (below Gross Profit)
-  writePct('Gross Margin %', data.grossMargin, data.grossMargin.fyTotal);
+  // Gross Margin % = Gross Profit / |Revenues| × 100
+  const gmCells = {};
+  for (const p of periodKeys) {
+    const rev = absCell('Revenues', p);
+    gmCells[p] = rev !== 0 ? (gpCells[p] / rev) * 100 : 0;
+  }
+  const gmFy = absFy('Revenues') !== 0 ? (gpFy / absFy('Revenues')) * 100 : 0;
+  writePct('Gross Margin %', gmCells, gmFy);
 
   // 4) OPEX sections
   writeSection('R&D');
   writeSection('S&M');
   writeSection('G&A');
 
-  // Total OPEX = R&D + S&M + G&A
+  // Total OPEX = |R&D| + |S&M| + |G&A|
   const opexCells = {};
-  for (const p of periodKeys) opexCells[p] = groupCell('R&D', p) + groupCell('S&M', p) + groupCell('G&A', p);
-  const opexFy = groupFy('R&D') + groupFy('S&M') + groupFy('G&A');
+  for (const p of periodKeys) opexCells[p] = absCell('R&D', p) + absCell('S&M', p) + absCell('G&A', p);
+  const opexFy = absFy('R&D') + absFy('S&M') + absFy('G&A');
   writeComputed('Total OPEX', opexCells, opexFy, fmtAcct, 'is-section is-opex');
 
-  // Adjusted EBITDA = Gross Profit - Total OPEX (display as abs)
+  // Adjusted EBITDA = |Revenues| - |COGS| - Total OPEX  (= GP - OPEX)
   const ebCells = {};
   for (const p of periodKeys) ebCells[p] = gpCells[p] - opexCells[p];
   const ebFy = gpFy - opexFy;
   writeComputed('Adjusted EBITDA', ebCells, ebFy, fmtAbs, 'is-section is-ebitda');
 
-  // Adjusted EBITDA % = EBITDA / Revenues × 100
+  // Adjusted EBITDA % = EBITDA / |Revenues| × 100
   const ebPct = {};
   for (const p of periodKeys) {
-    const r = groupCell('Revenues', p);
-    ebPct[p] = r > 0 ? (ebCells[p] / r) * 100 : 0;
+    const rev = absCell('Revenues', p);
+    ebPct[p] = rev !== 0 ? (ebCells[p] / rev) * 100 : 0;
   }
-  const ebPctFy = groupFy('Revenues') > 0 ? (ebFy / groupFy('Revenues')) * 100 : 0;
+  const ebPctFy = absFy('Revenues') !== 0 ? (ebFy / absFy('Revenues')) * 100 : 0;
   writePct('Adjusted EBITDA %', ebPct, ebPctFy, 'is-pct is-ebitda-pct');
 
   // Below-the-line sections (unchanged accounting display)

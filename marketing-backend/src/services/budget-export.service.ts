@@ -87,13 +87,19 @@ export async function buildBudgetExport(opts: {
   ]);
   ws2.getRow(1).font = { bold: true };
 
-  const sumGroup = (sec: string, p: string): number => {
+  // P&L calculations use absolute values so a negative-signed Revenues
+  // (entered as an accounting credit) still flows correctly through
+  // Gross Profit / OPEX / EBITDA / GM% / EBITDA%. The signed amounts
+  // themselves are still written into the underlying section subtotal
+  // rows (the user explicitly asked for export to keep the original
+  // signed value).
+  const absGroup = (sec: string, p: string): number => {
     const g = opts.pivot.groups.find(gr => gr.plSection === sec);
-    return g ? (g.cells[p] || 0) : 0;
+    return Math.abs(g ? (g.cells[p] || 0) : 0);
   };
-  const sumGroupFy = (sec: string): number => {
+  const absGroupFy = (sec: string): number => {
     const g = opts.pivot.groups.find(gr => gr.plSection === sec);
-    return g ? g.fyTotal : 0;
+    return Math.abs(g ? g.fyTotal : 0);
   };
 
   // Helper that writes a section with categories.
@@ -119,18 +125,10 @@ export async function buildBudgetExport(opts: {
   writeSection('Revenues');
   writeSection('COGS');
 
-  // 3) Gross Margin % row (above GP, then row, then below)
-  const gmAbove = ws2.addRow([
-    'Gross Margin %', '',
-    ...periodKeys.map(p => Number((opts.pivot.grossMargin[p] || 0).toFixed(2))),
-    Number((opts.pivot.grossMargin.fyTotal || 0).toFixed(2)),
-  ]);
-  gmAbove.font = { bold: true, color: { argb: 'FF2E7D32' } };
-
-  // Gross Profit = Revenues - COGS
+  // Gross Profit = |Revenues| - |COGS|
   const gpCells: Record<string, number> = {};
-  for (const p of periodKeys) gpCells[p] = sumGroup('Revenues', p) - sumGroup('COGS', p);
-  const gpFy = sumGroupFy('Revenues') - sumGroupFy('COGS');
+  for (const p of periodKeys) gpCells[p] = absGroup('Revenues', p) - absGroup('COGS', p);
+  const gpFy = absGroupFy('Revenues') - absGroupFy('COGS');
   const gpRow = ws2.addRow([
     'Gross Profit', '',
     ...periodKeys.map(p => gpCells[p]),
@@ -138,24 +136,31 @@ export async function buildBudgetExport(opts: {
   ]);
   gpRow.font = { bold: true };
 
-  const gmBelow = ws2.addRow([
+  // Gross Margin % = Gross Profit / |Revenues| × 100  (placed below GP only)
+  const gmCells: Record<string, number> = {};
+  for (const p of periodKeys) {
+    const rev = absGroup('Revenues', p);
+    gmCells[p] = rev !== 0 ? (gpCells[p] / rev) * 100 : 0;
+  }
+  const gmFy = absGroupFy('Revenues') !== 0 ? (gpFy / absGroupFy('Revenues')) * 100 : 0;
+  const gmRow = ws2.addRow([
     'Gross Margin %', '',
-    ...periodKeys.map(p => Number((opts.pivot.grossMargin[p] || 0).toFixed(2))),
-    Number((opts.pivot.grossMargin.fyTotal || 0).toFixed(2)),
+    ...periodKeys.map(p => Number(gmCells[p].toFixed(2))),
+    Number(gmFy.toFixed(2)),
   ]);
-  gmBelow.font = { bold: true, color: { argb: 'FF2E7D32' } };
+  gmRow.font = { bold: true, color: { argb: 'FF2E7D32' } };
 
   // 4) OPEX sections
   writeSection('R&D');
   writeSection('S&M');
   writeSection('G&A');
 
-  // Total OPEX = R&D + S&M + G&A
+  // Total OPEX = |R&D| + |S&M| + |G&A|
   const opexCells: Record<string, number> = {};
   for (const p of periodKeys) {
-    opexCells[p] = sumGroup('R&D', p) + sumGroup('S&M', p) + sumGroup('G&A', p);
+    opexCells[p] = absGroup('R&D', p) + absGroup('S&M', p) + absGroup('G&A', p);
   }
-  const opexFy = sumGroupFy('R&D') + sumGroupFy('S&M') + sumGroupFy('G&A');
+  const opexFy = absGroupFy('R&D') + absGroupFy('S&M') + absGroupFy('G&A');
   const opexRow = ws2.addRow([
     'Total OPEX', '',
     ...periodKeys.map(p => opexCells[p]),
@@ -174,13 +179,13 @@ export async function buildBudgetExport(opts: {
   ]);
   ebitdaRow.font = { bold: true, color: { argb: 'FF1565C0' } };
 
-  // Adjusted EBITDA % = EBITDA / Revenues × 100
+  // Adjusted EBITDA % = EBITDA / |Revenues| × 100
   const pctOf = (num: number, denom: number): number =>
-    denom > 0 ? (num / denom) * 100 : 0;
+    denom !== 0 ? (num / denom) * 100 : 0;
   const ebitdaPctRow = ws2.addRow([
     'Adjusted EBITDA %', '',
-    ...periodKeys.map(p => Number(pctOf(ebitdaCells[p], sumGroup('Revenues', p)).toFixed(2))),
-    Number(pctOf(ebitdaFy, sumGroupFy('Revenues')).toFixed(2)),
+    ...periodKeys.map(p => Number(pctOf(ebitdaCells[p], absGroup('Revenues', p)).toFixed(2))),
+    Number(pctOf(ebitdaFy, absGroupFy('Revenues')).toFixed(2)),
   ]);
   ebitdaPctRow.font = { bold: true, color: { argb: 'FF1565C0' } };
 
