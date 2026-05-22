@@ -148,7 +148,7 @@ export async function buildBudgetExport(opts: {
     ...periodKeys.map(p => Number(gmCells[p].toFixed(2))),
     Number(gmFy.toFixed(2)),
   ]);
-  gmRow.font = { bold: true, color: { argb: 'FF2E7D32' } };
+  gmRow.font = { bold: true, italic: true, color: { argb: 'FF2E7D32' } };
 
   // 4) OPEX sections
   writeSection('R&D');
@@ -168,6 +168,16 @@ export async function buildBudgetExport(opts: {
   ]);
   opexRow.font = { bold: true };
 
+  // Total OPEX % = Total OPEX / |Revenues| × 100
+  const pctOf = (num: number, denom: number): number =>
+    denom !== 0 ? (num / denom) * 100 : 0;
+  const opexPctRow = ws2.addRow([
+    'Total OPEX %', '',
+    ...periodKeys.map(p => Number(pctOf(opexCells[p], absGroup('Revenues', p)).toFixed(2))),
+    Number(pctOf(opexFy, absGroupFy('Revenues')).toFixed(2)),
+  ]);
+  opexPctRow.font = { bold: true, italic: true, color: { argb: 'FFC4863A' } };
+
   // Adjusted EBITDA = Gross Profit - Total OPEX
   const ebitdaCells: Record<string, number> = {};
   for (const p of periodKeys) ebitdaCells[p] = gpCells[p] - opexCells[p];
@@ -180,14 +190,12 @@ export async function buildBudgetExport(opts: {
   ebitdaRow.font = { bold: true, color: { argb: 'FF1565C0' } };
 
   // Adjusted EBITDA % = EBITDA / |Revenues| × 100
-  const pctOf = (num: number, denom: number): number =>
-    denom !== 0 ? (num / denom) * 100 : 0;
   const ebitdaPctRow = ws2.addRow([
     'Adjusted EBITDA %', '',
     ...periodKeys.map(p => Number(pctOf(ebitdaCells[p], absGroup('Revenues', p)).toFixed(2))),
     Number(pctOf(ebitdaFy, absGroupFy('Revenues')).toFixed(2)),
   ]);
-  ebitdaPctRow.font = { bold: true, color: { argb: 'FF1565C0' } };
+  ebitdaPctRow.font = { bold: true, italic: true, color: { argb: 'FF1565C0' } };
 
   // 5) Below-the-line sections (Financial, Tax, Other Income/(Expenses))
   for (const s of ['Financial Income/(Expenses)', 'Tax', 'Other Income/(Expenses)']) {
