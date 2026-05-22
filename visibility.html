@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0" />
   <title>Vision &amp; Virtue | Visibility</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="visibility.css?v=11" />
+  <link rel="stylesheet" href="visibility.css?v=12" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
@@ -257,13 +257,16 @@
                 </div>
               </div>
               <div class="vis-budget-setup-field">
-                <label>3. Currency</label>
-                <div class="vis-pillgroup" data-setup="currency">
-                  <button type="button" data-value="USD">USD</button>
-                  <button type="button" data-value="EUR">EUR</button>
-                  <button type="button" data-value="GBP">GBP</button>
-                  <button type="button" data-value="ILS">ILS</button>
+                <label>3. Translate amounts</label>
+                <div class="vis-translate-tool">
+                  <div class="vis-pillgroup" data-translate="op">
+                    <button type="button" data-value="divide">Divide by</button>
+                    <button type="button" data-value="multiply">Multiply by</button>
+                  </div>
+                  <input type="text" inputmode="decimal" id="translateValue" placeholder="Number" />
+                  <button type="button" class="vis-btn vis-btn-primary vis-btn-sm" id="translateBtn" disabled>Translate</button>
                 </div>
+                <p class="vis-translate-hint">Select rows in Budget Structure first (click any row to toggle it), then choose an operation and click Translate.</p>
               </div>
               <div class="vis-budget-setup-field">
                 <label>4. Scale</label>
@@ -441,6 +444,6 @@
     </div>
   </div>
 
-  <script src="visibility.js?v=23" defer></script>
+  <script src="visibility.js?v=24" defer></script>
 </body>
 </html>

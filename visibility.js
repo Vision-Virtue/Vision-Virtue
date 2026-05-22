@@ -1428,18 +1428,42 @@ budgetDeleteBtn.addEventListener('click', async () => {
 
 const deleteBudgetLineBtn = document.getElementById('deleteBudgetLineBtn');
 
-function wireRowSelection(tbody, deleteBtn) {
+function wireRowSelection(tbody, deleteBtn, opts) {
   if (!tbody || !deleteBtn) return;
-  const handler = (ev) => {
-    const tr = ev.target.closest('tr');
+  const multi = !!(opts && opts.multi);
+  const onSelectionChange = opts && typeof opts.onSelectionChange === 'function' ? opts.onSelectionChange : null;
+  const setSelected = (tr) => {
     if (!tr || !tr.dataset.id) return;
-    for (const sib of tbody.querySelectorAll('tr.is-selected')) sib.classList.remove('is-selected');
+    if (!multi) {
+      for (const sib of tbody.querySelectorAll('tr.is-selected')) {
+        if (sib !== tr) sib.classList.remove('is-selected');
+      }
+    }
     tr.classList.add('is-selected');
     deleteBtn.disabled = false;
+    onSelectionChange && onSelectionChange();
   };
-  // Mark on click AND on focus (so keyboard tab through inputs selects too).
-  tbody.addEventListener('click', handler);
-  tbody.addEventListener('focusin', handler);
+  tbody.addEventListener('click', (ev) => {
+    const tr = ev.target.closest('tr');
+    if (!tr || !tr.dataset.id) return;
+    // Clicking inside an editable cell shouldn't toggle the row —
+    // the user is just placing the cursor. Make sure the row is at
+    // least marked selected though.
+    if (ev.target.closest('input, select, button, textarea')) {
+      setSelected(tr);
+      return;
+    }
+    if (multi) {
+      tr.classList.toggle('is-selected');
+      deleteBtn.disabled = !tbody.querySelector('tr.is-selected');
+      onSelectionChange && onSelectionChange();
+    } else {
+      setSelected(tr);
+    }
+  });
+  tbody.addEventListener('focusin', (ev) => {
+    setSelected(ev.target.closest('tr'));
+  });
 }
 
 function clearRowSelection(tbody, deleteBtn) {
@@ -1447,10 +1471,85 @@ function clearRowSelection(tbody, deleteBtn) {
     for (const sib of tbody.querySelectorAll('tr.is-selected')) sib.classList.remove('is-selected');
   }
   if (deleteBtn) deleteBtn.disabled = true;
+  refreshTranslateButtonState();
 }
 
-// Wire selection for the Budget Structure table.
-wireRowSelection(budgetTableBody, deleteBudgetLineBtn);
+function refreshTranslateButtonState() {
+  const btn = document.getElementById('translateBtn');
+  if (!btn) return;
+  const opEl = document.querySelector('.vis-pillgroup[data-translate="op"] button.is-active');
+  const valEl = document.getElementById('translateValue');
+  const v = valEl ? Number(String(valEl.value || '').replace(/[,\s]/g, '')) : NaN;
+  const sel = budgetTableBody ? budgetTableBody.querySelectorAll('tr.is-selected').length : 0;
+  btn.disabled = !(opEl && Number.isFinite(v) && v !== 0 && sel > 0);
+}
+
+// Wire selection for the Budget Structure table — multi-select so the
+// new Translate tool can apply to many rows at once.
+wireRowSelection(budgetTableBody, deleteBudgetLineBtn, {
+  multi: true,
+  onSelectionChange: refreshTranslateButtonState,
+});
+
+// ── Translate amounts tool ────────────────────────────────
+// Operates on the currently-selected Budget Structure rows: each
+// period cell becomes (cell × N) for Multiply or (cell ÷ N) for
+// Divide. Salaries-source rows are skipped (their cells are owned
+// by the S&B finalize pivot). Runs PATCHes in parallel.
+for (const btn of document.querySelectorAll('.vis-pillgroup[data-translate="op"] button')) {
+  btn.addEventListener('click', () => {
+    for (const sib of btn.parentElement.querySelectorAll('button')) {
+      sib.classList.toggle('is-active', sib === btn);
+    }
+    refreshTranslateButtonState();
+  });
+}
+const translateValueEl = document.getElementById('translateValue');
+translateValueEl?.addEventListener('input', refreshTranslateButtonState);
+
+const translateBtn = document.getElementById('translateBtn');
+translateBtn?.addEventListener('click', async () => {
+  if (!currentBudget) return;
+  const opEl  = document.querySelector('.vis-pillgroup[data-translate="op"] button.is-active');
+  const op    = opEl ? opEl.dataset.value : null;
+  const value = Number(String((translateValueEl && translateValueEl.value) || '').replace(/[,\s]/g, ''));
+  if (!op || !Number.isFinite(value) || value === 0) return;
+  const selectedIds = Array.from(budgetTableBody.querySelectorAll('tr.is-selected'))
+    .map(tr => tr.dataset.id)
+    .filter(Boolean);
+  if (selectedIds.length === 0) return;
+
+  // Apply to every selected, non-salaries line.
+  const lines = currentBudget.lines.filter(l => selectedIds.includes(l.id) && l.source !== 'salaries');
+  if (lines.length === 0) {
+    showBanner(bgEditorError, 'Translate skipped — all selected rows are managed by Salaries & Benefits and can\'t be edited here.');
+    return;
+  }
+  translateBtn.disabled = true;
+  const originalLabel = translateBtn.textContent;
+  translateBtn.textContent = 'Translating…';
+  try {
+    const patches = lines.map(async (l) => {
+      const next = {};
+      for (const p of currentBudget.periodKeys) {
+        const v = Number(l.cells[p]) || 0;
+        next[p] = op === 'divide' ? v / value : v * value;
+        l.cells[p] = next[p];
+      }
+      await patchLine(l.id, { cells: next });
+    });
+    await Promise.all(patches);
+    renderBudgetTable();
+    renderFooterSummary();
+    showBanner(
+      bgEditorInfo,
+      `Translated ${lines.length} row${lines.length === 1 ? '' : 's'} — every period cell ${op === 'divide' ? '÷' : '×'} ${value}.`,
+    );
+  } finally {
+    translateBtn.textContent = originalLabel;
+    refreshTranslateButtonState();
+  }
+});
 
 // Toolbar "Delete row" for Budget Structure.
 deleteBudgetLineBtn?.addEventListener('click', async () => {
