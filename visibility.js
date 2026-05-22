@@ -1884,6 +1884,12 @@ let pivotFilters = {
   companies: [], divisions: [], departments: [], products: [], activities: [], gls: [],
   display: null, // null = follow budget granularity
 };
+// Section collapse state — survives between renders so toggling a
+// section doesn't lose your collapse settings on every refetch.
+const collapsedSections = new Set();
+// The last pivot payload — used so collapse/expand re-renders locally
+// without another network round-trip.
+let lastPivotData = null;
 
 function setView(view) {
   for (const t of viewTabs) {
@@ -1969,6 +1975,36 @@ for (const btn of document.querySelectorAll('.vis-pillgroup[data-pivot-filter="d
   });
 }
 
+// Search input above any filter select — narrows the visible option
+// list as the user types. Matches by substring (case-insensitive).
+for (const inp of document.querySelectorAll('.vis-pivot-search')) {
+  inp.addEventListener('input', () => {
+    const key = inp.dataset.pivotSearch;
+    const sel = document.querySelector(`select[data-pivot-filter="${key}"]`);
+    if (!sel) return;
+    const q = (inp.value || '').trim().toLowerCase();
+    for (const opt of sel.options) {
+      const visible = !q || opt.textContent.toLowerCase().includes(q);
+      opt.hidden = !visible;
+      // Belt-and-suspenders display:none in case the browser ignores
+      // the hidden attribute on <option>.
+      opt.style.display = visible ? '' : 'none';
+    }
+  });
+}
+
+// Section header toggle (click '+' / '−' to collapse/expand the
+// categories under a P&L section in the pivot table).
+pivotTableBody?.addEventListener('click', (ev) => {
+  const btn = ev.target.closest && ev.target.closest('.vis-pivot-toggle-btn');
+  if (!btn || !lastPivotData) return;
+  const sec = btn.dataset.toggle;
+  if (!sec) return;
+  if (collapsedSections.has(sec)) collapsedSections.delete(sec);
+  else collapsedSections.add(sec);
+  renderPivot(lastPivotData);
+});
+
 pivotClearFiltersBtn?.addEventListener('click', () => {
   pivotFilters = { companies: [], divisions: [], departments: [], products: [], activities: [], gls: [], display: null };
   populatePivotFilterDropdowns();
@@ -1996,6 +2032,7 @@ async function refreshPivot() {
       return;
     }
     const data = await res.json();
+    lastPivotData = data;
     renderPivot(data);
   } catch (err) {
     showBanner(pivotErrorBanner, htmlEsc(`Pivot failed: ${(err && err.message) || err}`));
@@ -2030,17 +2067,28 @@ function renderPivot(data) {
   // Helper: write one P&L section (subtotal row + category rows).
   // If `fmtFn` is provided, it overrides the default accounting format
   // for the subtotal row (used for Revenues which displays as |abs|).
+  // The section header carries a +/− toggle that collapses or expands
+  // its category rows underneath.
   const writeSection = (sectionName, fmtFn) => {
     const g = byName.get(sectionName);
     if (!g) return;
+    const collapsed = collapsedSections.has(sectionName);
+    const subFmt = fmtFn || fmtAcct;
     const sectionRow = document.createElement('tr');
     sectionRow.className = 'is-section';
-    const subFmt = fmtFn || fmtAcct;
+    sectionRow.dataset.section = sectionName;
     sectionRow.innerHTML =
-      `<td>${htmlEsc(g.plSection)}</td><td>— subtotal —</td>` +
+      `<td>
+        <button type="button" class="vis-pivot-toggle-btn" data-toggle="${htmlEsc(sectionName)}" aria-expanded="${!collapsed}">
+          <span class="vis-pivot-toggle-icon">${collapsed ? '+' : '−'}</span>
+          <span>${htmlEsc(g.plSection)}</span>
+        </button>
+      </td>
+      <td>— subtotal —</td>` +
       periodKeys.map(p => `<td class="vis-pivot-num">${htmlEsc(subFmt(g.cells[p]))}</td>`).join('') +
       `<td class="vis-pivot-num">${htmlEsc(subFmt(g.fyTotal))}</td>`;
     pivotTableBody.appendChild(sectionRow);
+    if (collapsed) return;
     for (const c of g.categories || []) {
       const catRow = document.createElement('tr');
       catRow.className = 'is-category';
@@ -2105,6 +2153,15 @@ function renderPivot(data) {
   for (const p of periodKeys) opexCells[p] = absCell('R&D', p) + absCell('S&M', p) + absCell('G&A', p);
   const opexFy = absFy('R&D') + absFy('S&M') + absFy('G&A');
   writeComputed('Total OPEX', opexCells, opexFy, fmtAcct, 'is-section is-opex');
+
+  // Total OPEX % = Total OPEX / |Revenues| × 100
+  const opexPctCells = {};
+  for (const p of periodKeys) {
+    const rev = absCell('Revenues', p);
+    opexPctCells[p] = rev !== 0 ? (opexCells[p] / rev) * 100 : 0;
+  }
+  const opexPctFy = absFy('Revenues') !== 0 ? (opexFy / absFy('Revenues')) * 100 : 0;
+  writePct('Total OPEX %', opexPctCells, opexPctFy, 'is-pct is-opex-pct');
 
   // Adjusted EBITDA = |Revenues| - |COGS| - Total OPEX  (= GP - OPEX)
   const ebCells = {};

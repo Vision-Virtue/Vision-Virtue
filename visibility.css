@@ -848,6 +848,50 @@
 .vis-pivot-filter select[multiple] option:checked {
   background: rgba(91, 141, 224, 0.45);
 }
+.vis-pivot-filter select[multiple] option[hidden] { display: none; }
+
+/* Custom scrollbar for the filter dropdowns (and the GL search) —
+   blue track with a small blueish thumb per the customer request. */
+.vis-pivot-filter select[multiple],
+.vis-pivot-filter input.vis-pivot-search {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(91, 141, 224, 0.70) rgba(91, 141, 224, 0.12);
+}
+.vis-pivot-filter select[multiple]::-webkit-scrollbar {
+  width: 9px;
+}
+.vis-pivot-filter select[multiple]::-webkit-scrollbar-track {
+  background: rgba(91, 141, 224, 0.12);
+  border-radius: 999px;
+  margin: 2px;
+}
+.vis-pivot-filter select[multiple]::-webkit-scrollbar-thumb {
+  background: rgba(91, 141, 224, 0.70);
+  border: 2px solid rgba(91, 141, 224, 0.12);
+  border-radius: 999px;
+  min-height: 16px;
+}
+.vis-pivot-filter select[multiple]::-webkit-scrollbar-thumb:hover {
+  background: rgba(155, 189, 242, 0.85);
+}
+
+.vis-pivot-search {
+  width: 100%;
+  padding: 0.35rem 0.5rem;
+  font-family: inherit;
+  font-size: 0.78rem;
+  background: rgba(255, 255, 255, 0.05);
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  outline: none;
+}
+.vis-pivot-search:focus {
+  border-color: rgba(155, 189, 242, 0.7);
+  background: rgba(255, 255, 255, 0.10);
+}
+.vis-pivot-search::placeholder { color: rgba(255, 255, 255, 0.4); }
+
 .vis-pivot-filters > button { align-self: end; }
 
 .vis-pivot-table-wrap { max-width: 100%; overflow-x: auto; }
@@ -868,9 +912,47 @@
 }
 .vis-pivot-table tbody tr.is-pct td {
   font-weight: 700;
+  font-style: italic;
   background: rgba(74, 124, 63, 0.08);
   color: #c9efb7;
   border-top: 1px dashed rgba(74, 124, 63, 0.30);
+}
+.vis-pivot-table tbody tr.is-opex-pct td {
+  font-style: italic;
+  background: rgba(196, 134, 58, 0.08);
+  color: #f5d493;
+  border-top: 1px dashed rgba(196, 134, 58, 0.30);
+}
+
+/* Collapse/expand toggle on each P&L Section row. */
+.vis-pivot-toggle-btn {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0;
+  cursor: pointer;
+}
+.vis-pivot-toggle-btn:hover .vis-pivot-toggle-icon {
+  background: rgba(91, 141, 224, 0.45);
+}
+.vis-pivot-toggle-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: rgba(91, 141, 224, 0.25);
+  border: 1px solid rgba(91, 141, 224, 0.40);
+  font-weight: 700;
+  font-size: 0.85rem;
+  line-height: 1;
 }
 .vis-pivot-table tbody tr.is-gp td {
   background: rgba(91, 141, 224, 0.18);
@@ -891,6 +973,7 @@
 .vis-pivot-table tbody tr.is-ebitda-pct td {
   background: rgba(58, 107, 196, 0.15);
   color: #cfe0ff;
+  font-style: italic;
 }
 
 /* ── Phase 3b: Salaries & Benefits ───────────────────────── */
