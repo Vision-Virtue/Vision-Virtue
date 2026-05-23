@@ -922,3 +922,151 @@ export const cashFlowRepo = {
       .run(status, now, id);
   },
 };
+
+/* ============================================================
+   CF — Payables sub-repos (spec §3)
+   ============================================================ */
+
+export const PAYMENT_TERMS = ['Cash', 'Current', '30+', '60+', '90+', '120+', '180+'] as const;
+export type PaymentTerm = typeof PAYMENT_TERMS[number];
+
+export const cfPayablesSectionRepo = {
+  get(cashFlowId: string): { openingBalance: number } {
+    const row = getDb()
+      .prepare(`SELECT opening_balance FROM cf_payables_section WHERE cash_flow_id = ?`)
+      .get(cashFlowId) as { opening_balance: number } | undefined;
+    return { openingBalance: row?.opening_balance ?? 0 };
+  },
+  upsert(cashFlowId: string, openingBalance: number): void {
+    getDb()
+      .prepare(
+        `INSERT INTO cf_payables_section (cash_flow_id, opening_balance)
+         VALUES (?, ?)
+         ON CONFLICT(cash_flow_id) DO UPDATE SET opening_balance = excluded.opening_balance`,
+      )
+      .run(cashFlowId, openingBalance);
+  },
+};
+
+export interface CfPayablesRow {
+  id: string;
+  cashFlowId: string;
+  companyId: string | null;
+  plSection: string | null;
+  budgetCategory: string | null;
+  glAccountId: string | null;
+  serviceProviderName: string | null;
+  paymentTerm: PaymentTerm | null;
+  orderIndex: number;
+}
+
+interface DbCfPayablesRow {
+  id: string;
+  cash_flow_id: string;
+  company_id: string | null;
+  pl_section: string | null;
+  budget_category: string | null;
+  gl_account_id: string | null;
+  service_provider_name: string | null;
+  payment_term: PaymentTerm | null;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
+
+function toPayablesRowDomain(r: DbCfPayablesRow): CfPayablesRow {
+  return {
+    id:                  r.id,
+    cashFlowId:          r.cash_flow_id,
+    companyId:           r.company_id,
+    plSection:           r.pl_section,
+    budgetCategory:      r.budget_category,
+    glAccountId:         r.gl_account_id,
+    serviceProviderName: r.service_provider_name,
+    paymentTerm:         r.payment_term,
+    orderIndex:          r.order_index,
+  };
+}
+
+export const cfPayablesRowRepo = {
+  listByCf(cashFlowId: string): CfPayablesRow[] {
+    const rows = getDb()
+      .prepare(
+        `SELECT * FROM cf_payables_rows WHERE cash_flow_id = ?
+         ORDER BY order_index ASC, created_at ASC`,
+      )
+      .all(cashFlowId) as DbCfPayablesRow[];
+    return rows.map(toPayablesRowDomain);
+  },
+
+  getById(id: string): CfPayablesRow | null {
+    const row = getDb()
+      .prepare(`SELECT * FROM cf_payables_rows WHERE id = ?`)
+      .get(id) as DbCfPayablesRow | undefined;
+    return row ? toPayablesRowDomain(row) : null;
+  },
+
+  /**
+   * Find a default-level row (gl_account_id = NULL, service_provider_name
+   * = NULL) for the given (cf, company, P&L, category) tuple. Creates it
+   * if absent. Returns the row.
+   */
+  findOrCreateDefault(
+    cashFlowId: string,
+    companyId: string | null,
+    plSection: string,
+    budgetCategory: string,
+    orderIndex: number,
+  ): CfPayablesRow {
+    const db = getDb();
+    const existing = db
+      .prepare(
+        `SELECT * FROM cf_payables_rows
+          WHERE cash_flow_id = ?
+            AND (company_id IS ? OR company_id = ?)
+            AND pl_section = ?
+            AND budget_category = ?
+            AND gl_account_id IS NULL
+            AND service_provider_name IS NULL`,
+      )
+      .get(cashFlowId, companyId, companyId, plSection, budgetCategory) as DbCfPayablesRow | undefined;
+    if (existing) return toPayablesRowDomain(existing);
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO cf_payables_rows
+         (id, cash_flow_id, company_id, pl_section, budget_category,
+          gl_account_id, service_provider_name, payment_term,
+          order_index, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?)`,
+    ).run(id, cashFlowId, companyId, plSection, budgetCategory, orderIndex, now, now);
+    return this.getById(id)!;
+  },
+
+  updatePaymentTerm(id: string, term: PaymentTerm | null): void {
+    const now = new Date().toISOString();
+    getDb()
+      .prepare(`UPDATE cf_payables_rows SET payment_term = ?, updated_at = ? WHERE id = ?`)
+      .run(term, now, id);
+  },
+};
+
+export const cfPayablesPriorCarryRepo = {
+  listByRow(rowId: string): Record<string, number> {
+    const rows = getDb()
+      .prepare(`SELECT period_key, amount FROM cf_payables_prior_carry WHERE cf_payables_row_id = ?`)
+      .all(rowId) as Array<{ period_key: string; amount: number }>;
+    const out: Record<string, number> = {};
+    for (const r of rows) out[r.period_key] = r.amount;
+    return out;
+  },
+  upsert(rowId: string, periodKey: string, amount: number): void {
+    getDb()
+      .prepare(
+        `INSERT INTO cf_payables_prior_carry (cf_payables_row_id, period_key, amount)
+         VALUES (?, ?, ?)
+         ON CONFLICT(cf_payables_row_id, period_key) DO UPDATE SET amount = excluded.amount`,
+      )
+      .run(rowId, periodKey, amount);
+  },
+};

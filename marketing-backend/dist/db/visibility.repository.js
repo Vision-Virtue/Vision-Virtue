@@ -4,7 +4,7 @@
    Tables: gl_accounts, financial_structure_state.
    ============================================================ */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cashFlowRepo = exports.salariesStateRepo = exports.salariesRowRepo = exports.budgetCellRepo = exports.budgetLineRepo = exports.budgetRepo = exports.BUDGET_CAP_PER_CUSTOMER = exports.SCALES = exports.CURRENCIES = exports.GRANULARITIES = exports.orgStructureRepo = exports.orgEntityRepo = exports.ORG_DIMENSIONS = exports.financialStructureRepo = exports.glAccountRepo = void 0;
+exports.cfPayablesPriorCarryRepo = exports.cfPayablesRowRepo = exports.cfPayablesSectionRepo = exports.PAYMENT_TERMS = exports.cashFlowRepo = exports.salariesStateRepo = exports.salariesRowRepo = exports.budgetCellRepo = exports.budgetLineRepo = exports.budgetRepo = exports.BUDGET_CAP_PER_CUSTOMER = exports.SCALES = exports.CURRENCIES = exports.GRANULARITIES = exports.orgStructureRepo = exports.orgEntityRepo = exports.ORG_DIMENSIONS = exports.financialStructureRepo = exports.glAccountRepo = void 0;
 exports.periodKeysFor = periodKeysFor;
 const uuid_1 = require("uuid");
 const database_1 = require("./database");
@@ -694,5 +694,103 @@ exports.cashFlowRepo = {
         (0, database_1.getDb)()
             .prepare(`UPDATE cash_flows SET status = ?, updated_at = ? WHERE id = ?`)
             .run(status, now, id);
+    },
+};
+/* ============================================================
+   CF — Payables sub-repos (spec §3)
+   ============================================================ */
+exports.PAYMENT_TERMS = ['Cash', 'Current', '30+', '60+', '90+', '120+', '180+'];
+exports.cfPayablesSectionRepo = {
+    get(cashFlowId) {
+        const row = (0, database_1.getDb)()
+            .prepare(`SELECT opening_balance FROM cf_payables_section WHERE cash_flow_id = ?`)
+            .get(cashFlowId);
+        return { openingBalance: row?.opening_balance ?? 0 };
+    },
+    upsert(cashFlowId, openingBalance) {
+        (0, database_1.getDb)()
+            .prepare(`INSERT INTO cf_payables_section (cash_flow_id, opening_balance)
+         VALUES (?, ?)
+         ON CONFLICT(cash_flow_id) DO UPDATE SET opening_balance = excluded.opening_balance`)
+            .run(cashFlowId, openingBalance);
+    },
+};
+function toPayablesRowDomain(r) {
+    return {
+        id: r.id,
+        cashFlowId: r.cash_flow_id,
+        companyId: r.company_id,
+        plSection: r.pl_section,
+        budgetCategory: r.budget_category,
+        glAccountId: r.gl_account_id,
+        serviceProviderName: r.service_provider_name,
+        paymentTerm: r.payment_term,
+        orderIndex: r.order_index,
+    };
+}
+exports.cfPayablesRowRepo = {
+    listByCf(cashFlowId) {
+        const rows = (0, database_1.getDb)()
+            .prepare(`SELECT * FROM cf_payables_rows WHERE cash_flow_id = ?
+         ORDER BY order_index ASC, created_at ASC`)
+            .all(cashFlowId);
+        return rows.map(toPayablesRowDomain);
+    },
+    getById(id) {
+        const row = (0, database_1.getDb)()
+            .prepare(`SELECT * FROM cf_payables_rows WHERE id = ?`)
+            .get(id);
+        return row ? toPayablesRowDomain(row) : null;
+    },
+    /**
+     * Find a default-level row (gl_account_id = NULL, service_provider_name
+     * = NULL) for the given (cf, company, P&L, category) tuple. Creates it
+     * if absent. Returns the row.
+     */
+    findOrCreateDefault(cashFlowId, companyId, plSection, budgetCategory, orderIndex) {
+        const db = (0, database_1.getDb)();
+        const existing = db
+            .prepare(`SELECT * FROM cf_payables_rows
+          WHERE cash_flow_id = ?
+            AND (company_id IS ? OR company_id = ?)
+            AND pl_section = ?
+            AND budget_category = ?
+            AND gl_account_id IS NULL
+            AND service_provider_name IS NULL`)
+            .get(cashFlowId, companyId, companyId, plSection, budgetCategory);
+        if (existing)
+            return toPayablesRowDomain(existing);
+        const id = (0, uuid_1.v4)();
+        const now = new Date().toISOString();
+        db.prepare(`INSERT INTO cf_payables_rows
+         (id, cash_flow_id, company_id, pl_section, budget_category,
+          gl_account_id, service_provider_name, payment_term,
+          order_index, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, NULL, NULL, NULL, ?, ?, ?)`).run(id, cashFlowId, companyId, plSection, budgetCategory, orderIndex, now, now);
+        return this.getById(id);
+    },
+    updatePaymentTerm(id, term) {
+        const now = new Date().toISOString();
+        (0, database_1.getDb)()
+            .prepare(`UPDATE cf_payables_rows SET payment_term = ?, updated_at = ? WHERE id = ?`)
+            .run(term, now, id);
+    },
+};
+exports.cfPayablesPriorCarryRepo = {
+    listByRow(rowId) {
+        const rows = (0, database_1.getDb)()
+            .prepare(`SELECT period_key, amount FROM cf_payables_prior_carry WHERE cf_payables_row_id = ?`)
+            .all(rowId);
+        const out = {};
+        for (const r of rows)
+            out[r.period_key] = r.amount;
+        return out;
+    },
+    upsert(rowId, periodKey, amount) {
+        (0, database_1.getDb)()
+            .prepare(`INSERT INTO cf_payables_prior_carry (cf_payables_row_id, period_key, amount)
+         VALUES (?, ?, ?)
+         ON CONFLICT(cf_payables_row_id, period_key) DO UPDATE SET amount = excluded.amount`)
+            .run(rowId, periodKey, amount);
     },
 };

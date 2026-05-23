@@ -30,6 +30,11 @@ import {
   SalariesRow,
   cashFlowRepo,
   CashFlowRow,
+  cfPayablesSectionRepo,
+  cfPayablesRowRepo,
+  cfPayablesPriorCarryRepo,
+  PAYMENT_TERMS,
+  PaymentTerm,
 } from '../db/visibility.repository';
 import { parseGLBuffer, parseSBBuffer, ParseError } from '../services/gl-parser.service';
 import { validateAndPivotSalaries, pivotEntryToCells } from '../services/salaries.service';
@@ -42,6 +47,7 @@ import {
   PivotFilters,
 } from '../services/pivot.service';
 import { buildBudgetExport } from '../services/budget-export.service';
+import { computePayablesGrid } from '../services/cf-payables.service';
 
 // ─── Constants from spec §2.3 (single source of truth, mirrored on FE) ─────
 
@@ -1189,5 +1195,78 @@ export const cashFlowController = {
     }
     const updated = cashFlowRepo.getByBudget(ctx.budget.id);
     res.json({ cf: updated ? serializeCashFlow(updated) : null });
+  },
+};
+
+/* ============================================================
+   CF — Payables controller (spec §3)
+   ============================================================ */
+
+function requireFinalizedBudgetCf(req: Request, res: Response):
+  | { customerKeyId: string; budget: BudgetRow; cfId: string }
+  | null {
+  const ctx = requireBudget(req, res); if (!ctx) return null;
+  if (ctx.budget.status !== 'finalized') {
+    res.status(409).json({
+      error: { code: 'BUDGET_NOT_FINALIZED', message: 'Finalize the budget first.' },
+    });
+    return null;
+  }
+  const cf = cashFlowRepo.ensureForBudget(ctx.budget.id);
+  return { customerKeyId: ctx.customerKeyId, budget: ctx.budget, cfId: cf.id };
+}
+
+export const cfPayablesController = {
+  /** GET /api/visibility/budgets/:id/cf/payables */
+  get(req: Request, res: Response): void {
+    const ctx = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const grid = computePayablesGrid(ctx.budget, ctx.cfId, ctx.customerKeyId);
+    res.json({ payables: grid, paymentTerms: PAYMENT_TERMS });
+  },
+
+  /** PATCH /api/visibility/budgets/:id/cf/payables — section-level (openingBalance). */
+  patchSection(req: Request, res: Response): void {
+    const ctx = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const Schema = z.object({ openingBalance: z.number().finite().min(0) });
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'openingBalance must be a non-negative number.' } });
+      return;
+    }
+    cfPayablesSectionRepo.upsert(ctx.cfId, parsed.data.openingBalance);
+    res.json({ section: cfPayablesSectionRepo.get(ctx.cfId) });
+  },
+
+  /**
+   * PATCH /api/visibility/budgets/:id/cf/payables/rows/:rowId
+   * Body: { paymentTerm?, priorCarry?: { periodKey: amount } }
+   */
+  patchRow(req: Request, res: Response): void {
+    const ctx = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const row = cfPayablesRowRepo.getById(req.params.rowId);
+    if (!row || row.cashFlowId !== ctx.cfId) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Payables row not found.' } });
+      return;
+    }
+    const Schema = z.object({
+      paymentTerm: z.union([z.enum(PAYMENT_TERMS), z.null()]).optional(),
+      priorCarry:  z.record(z.string(), z.number().finite().min(0)).optional(),
+    });
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid row patch payload.' } });
+      return;
+    }
+    if (parsed.data.paymentTerm !== undefined) {
+      cfPayablesRowRepo.updatePaymentTerm(row.id, parsed.data.paymentTerm as PaymentTerm | null);
+    }
+    if (parsed.data.priorCarry) {
+      for (const [periodKey, amount] of Object.entries(parsed.data.priorCarry)) {
+        cfPayablesPriorCarryRepo.upsert(row.id, periodKey, amount);
+      }
+    }
+    // Re-compute the full grid so the FE gets fresh Payment values.
+    const grid = computePayablesGrid(ctx.budget, ctx.cfId, ctx.customerKeyId);
+    res.json({ payables: grid });
   },
 };
