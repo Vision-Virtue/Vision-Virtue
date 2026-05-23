@@ -1999,7 +1999,10 @@ function setView(view) {
   if (structureSection) structureSection.hidden = view !== 'structure';
   if (sbSection)        sbSection.hidden        = view !== 'structure' || !currentBudget?.budget?.sbEnabled;
   if (pivotSection)     pivotSection.hidden     = view !== 'pivot';
-  if (view === 'pivot') void refreshPivot();
+  const dash = document.getElementById('dashboardSection');
+  if (dash) dash.hidden = view !== 'dashboard';
+  if (view === 'pivot')     void refreshPivot();
+  if (view === 'dashboard') renderDashboard();
 }
 
 for (const t of viewTabs) {
@@ -2321,10 +2324,467 @@ function resetToStructureView() {
   pivotFilters = { companies: [], divisions: [], departments: [], products: [], activities: [], gls: [], display: null };
   if (structureSection) structureSection.hidden = false;
   if (pivotSection)     pivotSection.hidden     = true;
+  const dash = document.getElementById('dashboardSection');
+  if (dash) dash.hidden = true;
+  if (typeof destroyDashCharts === 'function') destroyDashCharts();
   for (const t of viewTabs) {
     const a = t.dataset.view === 'structure';
     t.classList.toggle('is-active', a);
     t.setAttribute('aria-selected', String(a));
+  }
+}
+
+// ─────────────────────────────────────────────────────────────
+//  DASHBOARD — modern P&L visualizations
+// ─────────────────────────────────────────────────────────────
+
+// Vision & Virtue accent palette for charts.
+const DASH_PALETTE = [
+  '#5b8de0', // accent blue
+  '#9bbdf2', // light blue
+  '#8ed47b', // mint
+  '#f0c763', // amber
+  '#f2937f', // coral
+  '#c39bf2', // lavender
+  '#7bd4d0', // teal
+  '#ffd6a0', // peach
+];
+const DASH_AXIS_COLOR  = 'rgba(255, 255, 255, 0.55)';
+const DASH_GRID_COLOR  = 'rgba(255, 255, 255, 0.08)';
+const DASH_LABEL_COLOR = 'rgba(255, 255, 255, 0.85)';
+
+// Keep chart instances around so we can destroy + recreate cleanly on
+// every render — Chart.js otherwise complains about reusing a canvas.
+const dashCharts = new Map();
+
+function setDashChart(id, chart) {
+  const existing = dashCharts.get(id);
+  if (existing) existing.destroy();
+  dashCharts.set(id, chart);
+}
+function destroyDashCharts() {
+  for (const c of dashCharts.values()) c.destroy();
+  dashCharts.clear();
+}
+
+function fmtThousands(v) {
+  if (!Number.isFinite(v) || v === 0) return '0';
+  return Math.round(v / 1000).toLocaleString('en-US');
+}
+function fmtThousandsSigned(v) {
+  if (!Number.isFinite(v) || v === 0) return '0';
+  const n = Math.round(v / 1000);
+  return n < 0
+    ? `(${Math.abs(n).toLocaleString('en-US')})`
+    : n.toLocaleString('en-US');
+}
+
+function computeDashboardAgg() {
+  if (!currentBudget) return null;
+  const lines = currentBudget.lines || [];
+  const periods = currentBudget.periodKeys || [];
+  const granularity = currentBudget.budget.granularity;
+  const opexSections = ['R&D', 'S&M', 'G&A'];
+
+  const glById = new Map((glRows || []).map(g => [g.id, g]));
+  const orgById = new Map();
+  for (const dim of ORG_DIMENSIONS) {
+    for (const e of (osEntities[dim] || [])) orgById.set(e.id, e);
+  }
+  const sectionOf = (l) => {
+    if (!l.glAccountId) return null;
+    return glById.get(l.glAccountId)?.plSection || null;
+  };
+  const categoryOf = (l) => {
+    const gl = l.glAccountId ? glById.get(l.glAccountId) : null;
+    if (!gl) return null;
+    return gl.budgetCategory === 'Your Budget Category'
+      ? (gl.budgetCategoryCustom || 'Your Budget Category')
+      : gl.budgetCategory;
+  };
+  const lineFy = (l) => periods.reduce((s, p) => s + (Number(l.cells[p]) || 0), 0);
+
+  // Section subtotals (using |sum of lines in section| to be robust to
+  // accounting credit/debit sign convention — Revenues entered negative).
+  const sumSection = (sec) => Math.abs(
+    lines.filter(l => sectionOf(l) === sec).reduce((s, l) => s + lineFy(l), 0),
+  );
+  const totalRev  = sumSection('Revenues');
+  const totalCogs = sumSection('COGS');
+  const totalRnd  = sumSection('R&D');
+  const totalSm   = sumSection('S&M');
+  const totalGa   = sumSection('G&A');
+  const totalOpex = totalRnd + totalSm + totalGa;
+
+  // Revenue by Budget Category.
+  const revByCategoryMap = new Map();
+  for (const l of lines) {
+    if (sectionOf(l) !== 'Revenues') continue;
+    const cat = categoryOf(l) || 'Uncategorized';
+    revByCategoryMap.set(cat, (revByCategoryMap.get(cat) || 0) + Math.abs(lineFy(l)));
+  }
+
+  // Revenue trend by Quarter — works on monthly (roll up M01..M12 into 4
+  // quarters), quarterly (passthrough), and yearly (split FY ÷ 4 to keep
+  // the trend chart legible).
+  const revByQuarter = { Q1: 0, Q2: 0, Q3: 0, Q4: 0 };
+  for (const l of lines) {
+    if (sectionOf(l) !== 'Revenues') continue;
+    if (granularity === 'monthly') {
+      revByQuarter.Q1 += Math.abs((l.cells.M01 || 0) + (l.cells.M02 || 0) + (l.cells.M03 || 0));
+      revByQuarter.Q2 += Math.abs((l.cells.M04 || 0) + (l.cells.M05 || 0) + (l.cells.M06 || 0));
+      revByQuarter.Q3 += Math.abs((l.cells.M07 || 0) + (l.cells.M08 || 0) + (l.cells.M09 || 0));
+      revByQuarter.Q4 += Math.abs((l.cells.M10 || 0) + (l.cells.M11 || 0) + (l.cells.M12 || 0));
+    } else if (granularity === 'quarterly') {
+      revByQuarter.Q1 += Math.abs(l.cells.Q1 || 0);
+      revByQuarter.Q2 += Math.abs(l.cells.Q2 || 0);
+      revByQuarter.Q3 += Math.abs(l.cells.Q3 || 0);
+      revByQuarter.Q4 += Math.abs(l.cells.Q4 || 0);
+    } else {
+      const q = Math.abs(l.cells.FY || 0) / 4;
+      revByQuarter.Q1 += q; revByQuarter.Q2 += q; revByQuarter.Q3 += q; revByQuarter.Q4 += q;
+    }
+  }
+
+  // Revenue by Product (only lines with a productId set).
+  const revByProductMap = new Map();
+  for (const l of lines) {
+    if (sectionOf(l) !== 'Revenues') continue;
+    if (!l.productId) continue;
+    const name = orgById.get(l.productId)?.name || '—';
+    revByProductMap.set(name, (revByProductMap.get(name) || 0) + Math.abs(lineFy(l)));
+  }
+
+  // Salaries & benefits within OPEX sections.
+  const salariesAndBenefits = Math.abs(lines
+    .filter(l => opexSections.includes(sectionOf(l)) && categoryOf(l) === 'Salaries and benefits')
+    .reduce((s, l) => s + lineFy(l), 0));
+
+  // Per-Product Adjusted EBITDA  (|Rev| - |COGS| - |OPEX|, per product).
+  const productAgg = new Map();
+  for (const l of lines) {
+    if (!l.productId) continue;
+    const sec = sectionOf(l);
+    if (!sec) continue;
+    const isOpex = opexSections.includes(sec);
+    if (sec !== 'Revenues' && sec !== 'COGS' && !isOpex) continue;
+    let p = productAgg.get(l.productId);
+    if (!p) { p = { rev: 0, cogs: 0, opex: 0 }; productAgg.set(l.productId, p); }
+    const fy = Math.abs(lineFy(l));
+    if (sec === 'Revenues') p.rev  += fy;
+    else if (sec === 'COGS') p.cogs += fy;
+    else                     p.opex += fy;
+  }
+  const ebitdaByProduct = Array.from(productAgg.entries())
+    .map(([pid, x]) => ({ name: orgById.get(pid)?.name || '—', ebitda: x.rev - x.cogs - x.opex }))
+    .sort((a, b) => b.ebitda - a.ebitda);
+
+  // OPEX by Activity.
+  const opexByActivityMap = new Map();
+  for (const l of lines) {
+    if (!l.activityId) continue;
+    if (!opexSections.includes(sectionOf(l))) continue;
+    const name = orgById.get(l.activityId)?.name || '—';
+    opexByActivityMap.set(name, (opexByActivityMap.get(name) || 0) + Math.abs(lineFy(l)));
+  }
+
+  // Per-Division Adjusted EBITDA.
+  const divAgg = new Map();
+  for (const l of lines) {
+    if (!l.divisionId) continue;
+    const sec = sectionOf(l);
+    if (!sec) continue;
+    const isOpex = opexSections.includes(sec);
+    if (sec !== 'Revenues' && sec !== 'COGS' && !isOpex) continue;
+    let d = divAgg.get(l.divisionId);
+    if (!d) { d = { rev: 0, cogs: 0, opex: 0 }; divAgg.set(l.divisionId, d); }
+    const fy = Math.abs(lineFy(l));
+    if (sec === 'Revenues') d.rev  += fy;
+    else if (sec === 'COGS') d.cogs += fy;
+    else                     d.opex += fy;
+  }
+  const ebitdaByDivision = Array.from(divAgg.entries())
+    .map(([did, x]) => ({ name: orgById.get(did)?.name || '—', ebitda: x.rev - x.cogs - x.opex }))
+    .sort((a, b) => b.ebitda - a.ebitda);
+
+  // OPEX by Department.
+  const opexByDepartmentMap = new Map();
+  for (const l of lines) {
+    if (!l.departmentId) continue;
+    if (!opexSections.includes(sectionOf(l))) continue;
+    const name = orgById.get(l.departmentId)?.name || '—';
+    opexByDepartmentMap.set(name, (opexByDepartmentMap.get(name) || 0) + Math.abs(lineFy(l)));
+  }
+
+  return {
+    totalRev, totalCogs, totalOpex, salariesAndBenefits,
+    gmPct:   totalRev > 0 ? ((totalRev - totalCogs) / totalRev) * 100 : 0,
+    opexPct: totalRev > 0 ? (totalOpex / totalRev) * 100               : 0,
+    salariesOpexPct: totalOpex > 0 ? (salariesAndBenefits / totalOpex) * 100 : 0,
+    revByCategory: [...revByCategoryMap.entries()].map(([name, value]) => ({ name, value })),
+    revByQuarter,
+    revByProduct:  [...revByProductMap.entries()]
+                     .map(([name, value]) => ({ name, value }))
+                     .sort((a, b) => b.value - a.value),
+    ebitdaByProduct,
+    opexByActivity:   [...opexByActivityMap.entries()]
+                        .map(([name, value]) => ({ name, value }))
+                        .sort((a, b) => b.value - a.value),
+    ebitdaByDivision,
+    opexByDepartment: [...opexByDepartmentMap.entries()]
+                        .map(([name, value]) => ({ name, value })),
+  };
+}
+
+function dashEmptyCheck(agg) {
+  if (!agg) return true;
+  const sum = (agg.totalRev || 0) + (agg.totalCogs || 0) + (agg.totalOpex || 0);
+  return sum === 0;
+}
+
+function renderDashboard() {
+  const dash = document.getElementById('dashboardSection');
+  if (!dash) return;
+  // Chart.js loads via CDN with `defer`; if the user opens the
+  // Dashboard tab before it lands, retry shortly.
+  if (typeof Chart === 'undefined') {
+    setTimeout(renderDashboard, 60);
+    return;
+  }
+  const agg = computeDashboardAgg();
+  const empty = dashEmptyCheck(agg);
+  document.getElementById('dashEmpty').hidden = !empty;
+  document.getElementById('dashScaleHint').hidden = empty;
+  document.getElementById('dashScaleHint').innerHTML =
+    `All amounts are shown in <strong>thousands</strong> (rounded). Source: this budget's Structure rows.`;
+  destroyDashCharts();
+  if (empty) {
+    // Clear KPI text too.
+    document.getElementById('dashTotalRev').textContent  = '—';
+    document.getElementById('dashGmPct').textContent     = '—';
+    document.getElementById('dashTotalOpex').textContent = '—';
+    document.getElementById('dashOpexPct').textContent   = '—';
+    document.getElementById('dashSalariesPct').textContent = '—';
+    document.getElementById('dashSalariesAbs').textContent = '—';
+    return;
+  }
+
+  // ── Top-line KPIs ─────────────────────────────────────────
+  document.getElementById('dashTotalRev').textContent  = fmtThousands(agg.totalRev);
+  document.getElementById('dashGmPct').textContent     = `${agg.gmPct.toFixed(1)}%`;
+  document.getElementById('dashTotalOpex').textContent = fmtThousands(agg.totalOpex);
+  document.getElementById('dashOpexPct').textContent   = `${agg.opexPct.toFixed(1)}% of revenues`;
+  document.getElementById('dashSalariesPct').textContent = `${agg.salariesOpexPct.toFixed(1)}%`;
+  document.getElementById('dashSalariesAbs').textContent = `${fmtThousands(agg.salariesAndBenefits)} in thousands`;
+
+  // Shared chart options.
+  const baseOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { labels: { color: DASH_LABEL_COLOR, font: { family: 'Inter', size: 11 } } },
+      tooltip: {
+        backgroundColor: 'rgba(10, 18, 38, 0.92)',
+        borderColor: 'rgba(91, 141, 224, 0.5)',
+        borderWidth: 1,
+        titleColor: '#ffffff',
+        bodyColor: DASH_LABEL_COLOR,
+      },
+    },
+  };
+  const cartesianScales = {
+    x: { ticks: { color: DASH_AXIS_COLOR }, grid: { color: DASH_GRID_COLOR } },
+    y: { ticks: { color: DASH_AXIS_COLOR }, grid: { color: DASH_GRID_COLOR } },
+  };
+
+  // Revenue mix (pie)
+  if (agg.revByCategory.length > 0) {
+    const ctx = document.getElementById('dashRevByCategory');
+    setDashChart('revByCategory', new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: agg.revByCategory.map(d => d.name),
+        datasets: [{
+          data: agg.revByCategory.map(d => d.value),
+          backgroundColor: DASH_PALETTE,
+          borderColor: 'rgba(10, 18, 38, 0.85)',
+          borderWidth: 2,
+        }],
+      },
+      options: {
+        ...baseOpts,
+        cutout: '60%',
+        plugins: {
+          ...baseOpts.plugins,
+          legend: { ...baseOpts.plugins.legend, position: 'right' },
+          tooltip: {
+            ...baseOpts.plugins.tooltip,
+            callbacks: {
+              label: (item) => {
+                const total = item.dataset.data.reduce((a, b) => a + b, 0) || 1;
+                const pct = ((item.parsed / total) * 100).toFixed(1);
+                return ` ${item.label}: ${pct}%  (${fmtThousands(item.parsed)}K)`;
+              },
+            },
+          },
+        },
+      },
+    }));
+  }
+
+  // Revenue trend (line)
+  {
+    const ctx = document.getElementById('dashRevTrend');
+    const vals = ['Q1','Q2','Q3','Q4'].map(q => agg.revByQuarter[q]);
+    setDashChart('revTrend', new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: ['Q1', 'Q2', 'Q3', 'Q4'],
+        datasets: [{
+          label: 'Revenues (K)',
+          data: vals.map(v => Math.round(v / 1000)),
+          fill: true,
+          backgroundColor: 'rgba(91, 141, 224, 0.18)',
+          borderColor: '#5b8de0',
+          borderWidth: 2,
+          tension: 0.35,
+          pointBackgroundColor: '#9bbdf2',
+          pointRadius: 4,
+        }],
+      },
+      options: {
+        ...baseOpts,
+        plugins: { ...baseOpts.plugins, legend: { display: false } },
+        scales: cartesianScales,
+      },
+    }));
+  }
+
+  // Revenue by Product (horizontal bar)
+  if (agg.revByProduct.length > 0) {
+    const ctx = document.getElementById('dashRevByProduct');
+    setDashChart('revByProduct', new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: agg.revByProduct.map(d => d.name),
+        datasets: [{
+          label: 'Revenue (K)',
+          data: agg.revByProduct.map(d => Math.round(d.value / 1000)),
+          backgroundColor: DASH_PALETTE[0],
+          borderRadius: 6,
+        }],
+      },
+      options: {
+        ...baseOpts,
+        indexAxis: 'y',
+        plugins: { ...baseOpts.plugins, legend: { display: false } },
+        scales: cartesianScales,
+      },
+    }));
+  }
+
+  // EBITDA by Product (vertical bar, signed)
+  if (agg.ebitdaByProduct.length > 0) {
+    const ctx = document.getElementById('dashEbitdaByProduct');
+    setDashChart('ebitdaByProduct', new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: agg.ebitdaByProduct.map(d => d.name),
+        datasets: [{
+          label: 'Adjusted EBITDA (K)',
+          data: agg.ebitdaByProduct.map(d => Math.round(d.ebitda / 1000)),
+          backgroundColor: (ctx) => (ctx.raw >= 0 ? '#5b8de0' : '#f2937f'),
+          borderRadius: 6,
+        }],
+      },
+      options: {
+        ...baseOpts,
+        plugins: { ...baseOpts.plugins, legend: { display: false } },
+        scales: {
+          ...cartesianScales,
+          y: { ...cartesianScales.y, grid: { color: DASH_GRID_COLOR, drawBorder: true } },
+        },
+      },
+    }));
+  }
+
+  // OPEX by Activity (vertical bar)
+  if (agg.opexByActivity.length > 0) {
+    const ctx = document.getElementById('dashOpexByActivity');
+    setDashChart('opexByActivity', new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: agg.opexByActivity.map(d => d.name),
+        datasets: [{
+          label: 'OPEX (K)',
+          data: agg.opexByActivity.map(d => Math.round(d.value / 1000)),
+          backgroundColor: DASH_PALETTE[3],
+          borderRadius: 6,
+        }],
+      },
+      options: {
+        ...baseOpts,
+        plugins: { ...baseOpts.plugins, legend: { display: false } },
+        scales: cartesianScales,
+      },
+    }));
+  }
+
+  // EBITDA by Division (vertical bar, signed)
+  if (agg.ebitdaByDivision.length > 0) {
+    const ctx = document.getElementById('dashEbitdaByDivision');
+    setDashChart('ebitdaByDivision', new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: agg.ebitdaByDivision.map(d => d.name),
+        datasets: [{
+          label: 'Adjusted EBITDA (K)',
+          data: agg.ebitdaByDivision.map(d => Math.round(d.ebitda / 1000)),
+          backgroundColor: (ctx) => (ctx.raw >= 0 ? '#8ed47b' : '#f2937f'),
+          borderRadius: 6,
+        }],
+      },
+      options: {
+        ...baseOpts,
+        plugins: { ...baseOpts.plugins, legend: { display: false } },
+        scales: cartesianScales,
+      },
+    }));
+  }
+
+  // OPEX mix by Department (pie)
+  if (agg.opexByDepartment.length > 0) {
+    const ctx = document.getElementById('dashOpexByDepartment');
+    setDashChart('opexByDepartment', new Chart(ctx, {
+      type: 'doughnut',
+      data: {
+        labels: agg.opexByDepartment.map(d => d.name),
+        datasets: [{
+          data: agg.opexByDepartment.map(d => d.value),
+          backgroundColor: DASH_PALETTE,
+          borderColor: 'rgba(10, 18, 38, 0.85)',
+          borderWidth: 2,
+        }],
+      },
+      options: {
+        ...baseOpts,
+        cutout: '60%',
+        plugins: {
+          ...baseOpts.plugins,
+          legend: { ...baseOpts.plugins.legend, position: 'right' },
+          tooltip: {
+            ...baseOpts.plugins.tooltip,
+            callbacks: {
+              label: (item) => {
+                const total = item.dataset.data.reduce((a, b) => a + b, 0) || 1;
+                const pct = ((item.parsed / total) * 100).toFixed(1);
+                return ` ${item.label}: ${pct}%  (${fmtThousands(item.parsed)}K)`;
+              },
+            },
+          },
+        },
+      },
+    }));
   }
 }
 

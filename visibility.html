@@ -8,10 +8,11 @@
   <meta http-equiv="Expires" content="0" />
   <title>Vision &amp; Virtue | Visibility</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="visibility.css?v=12" />
+  <link rel="stylesheet" href="visibility.css?v=13" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js" defer></script>
 </head>
 <body class="vis-page">
 
@@ -235,6 +236,7 @@
             <div class="vis-view-toggle" role="tablist" aria-label="Budget view">
               <button type="button" class="vis-view-tab is-active" data-view="structure" role="tab" aria-selected="true">Structure</button>
               <button type="button" class="vis-view-tab" data-view="pivot" role="tab" aria-selected="false">P&amp;L Pivot</button>
+              <button type="button" class="vis-view-tab" data-view="dashboard" role="tab" aria-selected="false">Dashboard</button>
             </div>
             <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="budgetExportBtn">⬇ Export to Excel</button>
             <span class="vis-status-pill" id="budgetStatusPill" data-status="draft">Draft</span>
@@ -407,6 +409,88 @@
             <div class="vis-empty" id="pivotEmpty">No data to pivot. Add Budget Structure rows first.</div>
           </section>
 
+          <!-- ── Dashboard (P&L visualizations) ──────────────────── -->
+          <section class="vis-dashboard" id="dashboardSection" hidden>
+            <div class="vis-banner vis-banner-info" id="dashScaleHint" hidden></div>
+            <div class="vis-empty" id="dashEmpty" hidden>No data to visualize. Add Budget Structure rows first.</div>
+
+            <!-- 1) TOP-LINE -->
+            <section class="vis-dash-area">
+              <h3 class="vis-dash-area-title">Top-line</h3>
+              <div class="vis-dash-grid vis-dash-grid-top">
+                <div class="vis-dash-cube vis-cube-kpi">
+                  <div class="vis-cube-label">Total Revenues</div>
+                  <div class="vis-cube-value" id="dashTotalRev">—</div>
+                  <div class="vis-cube-foot">in thousands</div>
+                </div>
+                <div class="vis-dash-cube vis-cube-chart">
+                  <div class="vis-cube-label">Revenue mix by category</div>
+                  <div class="vis-cube-chart-wrap"><canvas id="dashRevByCategory"></canvas></div>
+                </div>
+                <div class="vis-dash-cube vis-cube-chart">
+                  <div class="vis-cube-label">Revenue trend (Q1–Q4)</div>
+                  <div class="vis-cube-chart-wrap"><canvas id="dashRevTrend"></canvas></div>
+                </div>
+                <div class="vis-dash-cube vis-cube-kpi vis-cube-kpi-accent">
+                  <div class="vis-cube-label">Gross Margin %</div>
+                  <div class="vis-cube-value" id="dashGmPct">—</div>
+                  <div class="vis-cube-foot">FY</div>
+                </div>
+                <div class="vis-dash-cube vis-cube-chart vis-cube-chart-wide">
+                  <div class="vis-cube-label">Revenue by Product</div>
+                  <div class="vis-cube-chart-wrap"><canvas id="dashRevByProduct"></canvas></div>
+                </div>
+              </div>
+            </section>
+
+            <!-- 2) OPEX -->
+            <section class="vis-dash-area">
+              <h3 class="vis-dash-area-title">OPEX</h3>
+              <div class="vis-dash-grid vis-dash-grid-half">
+                <div class="vis-dash-cube vis-cube-kpi">
+                  <div class="vis-cube-label">Total OPEX</div>
+                  <div class="vis-cube-value" id="dashTotalOpex">—</div>
+                  <div class="vis-cube-foot vis-cube-foot-pct" id="dashOpexPct">—</div>
+                </div>
+                <div class="vis-dash-cube vis-cube-kpi vis-cube-kpi-accent">
+                  <div class="vis-cube-label">Salaries &amp; benefits / Total OPEX</div>
+                  <div class="vis-cube-value" id="dashSalariesPct">—</div>
+                  <div class="vis-cube-foot" id="dashSalariesAbs">—</div>
+                </div>
+              </div>
+            </section>
+
+            <!-- 3) PRODUCT & ACTIVITY -->
+            <section class="vis-dash-area">
+              <h3 class="vis-dash-area-title">Product &amp; Activity</h3>
+              <div class="vis-dash-grid vis-dash-grid-half">
+                <div class="vis-dash-cube vis-cube-chart">
+                  <div class="vis-cube-label">Adjusted EBITDA by Product</div>
+                  <div class="vis-cube-chart-wrap"><canvas id="dashEbitdaByProduct"></canvas></div>
+                </div>
+                <div class="vis-dash-cube vis-cube-chart">
+                  <div class="vis-cube-label">OPEX by Activity</div>
+                  <div class="vis-cube-chart-wrap"><canvas id="dashOpexByActivity"></canvas></div>
+                </div>
+              </div>
+            </section>
+
+            <!-- 4) DIVISIONS & DEPARTMENTS -->
+            <section class="vis-dash-area">
+              <h3 class="vis-dash-area-title">Divisions &amp; Departments</h3>
+              <div class="vis-dash-grid vis-dash-grid-half">
+                <div class="vis-dash-cube vis-cube-chart">
+                  <div class="vis-cube-label">Adjusted EBITDA by Division</div>
+                  <div class="vis-cube-chart-wrap"><canvas id="dashEbitdaByDivision"></canvas></div>
+                </div>
+                <div class="vis-dash-cube vis-cube-chart">
+                  <div class="vis-cube-label">OPEX mix by Department</div>
+                  <div class="vis-cube-chart-wrap"><canvas id="dashOpexByDepartment"></canvas></div>
+                </div>
+              </div>
+            </section>
+          </section>
+
           <footer class="vis-panel-actions">
             <span class="vis-validation-summary" id="bgFooterSummary"></span>
             <button type="button" class="vis-btn vis-btn-ghost"   id="budgetDeleteBtn">Delete budget</button>
@@ -444,6 +528,6 @@
     </div>
   </div>
 
-  <script src="visibility.js?v=24" defer></script>
+  <script src="visibility.js?v=25" defer></script>
 </body>
 </html>
