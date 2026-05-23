@@ -4,7 +4,7 @@ import { linkedInController } from '../controllers/linkedin.controller';
 import { authController, verifyPin } from '../controllers/auth.controller';
 import { chatController } from '../controllers/chat.controller';
 import { partnerController } from '../controllers/partner.controller';
-import { visibilityController, budgetsController, salariesController } from '../controllers/visibility.controller';
+import { visibilityController, budgetsController, salariesController, cashFlowController } from '../controllers/visibility.controller';
 import { requireRaphael, requireLinkedIn, requireAdminPin } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -259,6 +259,9 @@ router.post(
 );
 router.post(  '/visibility/budgets/:id/salaries/finalize',         (req, res) => salariesController.finalize(req, res));
 router.post(  '/visibility/budgets/:id/salaries/edit',             (req, res) => salariesController.edit(req, res));
+
+// ─── CF (Cash Flow) — spec §15 ──────────────────────────────────────────────
+router.get(   '/visibility/budgets/:id/cf',                        (req, res) => cashFlowController.getOrCreate(req, res));
 
 // ─── Admin (Raphael) — Partner Submissions ──────────────────────────────────
 // All admin endpoints require X-Admin-Pin header OR ?pin= query (matching

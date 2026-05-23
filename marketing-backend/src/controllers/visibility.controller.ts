@@ -28,6 +28,8 @@ import {
   salariesRowRepo,
   salariesStateRepo,
   SalariesRow,
+  cashFlowRepo,
+  CashFlowRow,
 } from '../db/visibility.repository';
 import { parseGLBuffer, parseSBBuffer, ParseError } from '../services/gl-parser.service';
 import { validateAndPivotSalaries, pivotEntryToCells } from '../services/salaries.service';
@@ -1109,5 +1111,49 @@ export const salariesController = {
     const ctx = requireBudget(req, res); if (!ctx) return;
     salariesStateRepo.setStatus(ctx.budget.id, 'editing');
     res.json({ status: 'editing' });
+  },
+};
+
+/* ============================================================
+   CF (Cash Flow) controller — Phase 1: scaffolding.
+   Only get-or-create exposed; sections/forecast/dashboard come
+   in later phases.
+   ============================================================ */
+
+function serializeCashFlow(row: CashFlowRow): Record<string, unknown> {
+  return {
+    id:          row.id,
+    budgetId:    row.budgetId,
+    openingCash: row.openingCash,
+    status:      row.status,
+    createdAt:   row.createdAt,
+    updatedAt:   row.updatedAt,
+  };
+}
+
+export const cashFlowController = {
+  /**
+   * GET /api/visibility/budgets/:id/cf
+   * CF is read-only-linked to a finalized budget (spec §10).
+   * If the budget is still a draft, return 409 so the FE can
+   * show "Finalize the budget first" guidance.
+   */
+  getOrCreate(req: Request, res: Response): void {
+    const ctx = requireBudget(req, res); if (!ctx) return;
+    if (ctx.budget.status !== 'finalized') {
+      res.status(409).json({
+        error: {
+          code: 'BUDGET_NOT_FINALIZED',
+          message: 'Finalize the budget before opening Cash Flow.',
+        },
+      });
+      return;
+    }
+    const cf = cashFlowRepo.ensureForBudget(ctx.budget.id);
+    res.json({
+      cf:         serializeCashFlow(cf),
+      budget:     serializeBudget(ctx.budget),
+      periodKeys: periodKeysFor(ctx.budget.granularity),
+    });
   },
 };

@@ -843,3 +843,82 @@ export const salariesStateRepo = {
       .run(budgetId, status, now);
   },
 };
+
+/* ============================================================
+   CF (Cash Flow) module — per spec §15.
+   One CashFlow per finalized budget. Subordinate sections
+   (payables / receivables / inventory / salaries / manual)
+   are added in later phases.
+   ============================================================ */
+
+export type CashFlowStatus = 'draft' | 'finalized';
+
+export interface CashFlowRow {
+  id: string;
+  budgetId: string;
+  openingCash: number;
+  status: CashFlowStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+interface DbCashFlowRow {
+  id: string;
+  budget_id: string;
+  opening_cash: number;
+  status: CashFlowStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+function toCashFlowDomain(r: DbCashFlowRow): CashFlowRow {
+  return {
+    id:          r.id,
+    budgetId:    r.budget_id,
+    openingCash: r.opening_cash,
+    status:      r.status,
+    createdAt:   r.created_at,
+    updatedAt:   r.updated_at,
+  };
+}
+
+export const cashFlowRepo = {
+  getByBudget(budgetId: string): CashFlowRow | null {
+    const row = getDb()
+      .prepare(`SELECT * FROM cash_flows WHERE budget_id = ?`)
+      .get(budgetId) as DbCashFlowRow | undefined;
+    return row ? toCashFlowDomain(row) : null;
+  },
+
+  /** Returns the existing CF for this budget, creating a draft if none. */
+  ensureForBudget(budgetId: string): CashFlowRow {
+    const existing = this.getByBudget(budgetId);
+    if (existing) return existing;
+    const id  = uuidv4();
+    const now = new Date().toISOString();
+    getDb()
+      .prepare(
+        `INSERT INTO cash_flows (id, budget_id, opening_cash, status, created_at, updated_at)
+         VALUES (?, ?, 0, 'draft', ?, ?)`,
+      )
+      .run(id, budgetId, now, now);
+    return {
+      id, budgetId, openingCash: 0, status: 'draft',
+      createdAt: now, updatedAt: now,
+    };
+  },
+
+  updateOpeningCash(id: string, openingCash: number): void {
+    const now = new Date().toISOString();
+    getDb()
+      .prepare(`UPDATE cash_flows SET opening_cash = ?, updated_at = ? WHERE id = ?`)
+      .run(openingCash, now, id);
+  },
+
+  setStatus(id: string, status: CashFlowStatus): void {
+    const now = new Date().toISOString();
+    getDb()
+      .prepare(`UPDATE cash_flows SET status = ?, updated_at = ? WHERE id = ?`)
+      .run(status, now, id);
+  },
+};
