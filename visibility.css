@@ -1207,6 +1207,42 @@
   background: rgba(255, 255, 255, 0.10);
 }
 
+/* ── CF (Cash Flow) — Phase 1 scaffolding ───────────────────── */
+.vis-cf-picker {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1rem 0 1.25rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+.vis-cf-picker-label {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+.vis-cf-picker-select {
+  flex: 1;
+  max-width: 460px;
+  padding: 0.5rem 0.75rem;
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  font-size: 0.95rem;
+}
+.vis-cf-picker-select:focus {
+  outline: none;
+  border-color: rgba(155, 189, 242, 0.7);
+  background: rgba(255, 255, 255, 0.10);
+}
+.vis-cf-picker-select:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 /* Responsive */
 @media (max-width: 700px) {
   .vis-hero        { padding: 5rem 1.25rem 3rem; }
@@ -1216,4 +1252,6 @@
   .vis-status-pill { align-self: flex-start; }
   .vis-tab         { flex: 1; padding: 0.7rem 0.75rem; font-size: 0.85rem; }
   .vis-org-grid    { grid-template-columns: 1fr; }
+  .vis-cf-picker   { flex-direction: column; align-items: stretch; }
+  .vis-cf-picker-select { max-width: 100%; }
 }

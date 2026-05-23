@@ -519,9 +519,18 @@ function activateTab(tabName) {
   }
   if (panelFS) panelFS.hidden = tabName !== 'financial-structure';
   if (panelOS) panelOS.hidden = tabName !== 'org-structure';
-  const panelB = document.getElementById('panelBudget');
-  if (panelB) panelB.hidden = tabName !== 'budget';
+  const panelB           = document.getElementById('panelBudget');
+  const panelCfStructure = document.getElementById('panelCfStructure');
+  const panelCfForecast  = document.getElementById('panelCfForecast');
+  const panelCfDashboard = document.getElementById('panelCfDashboard');
+  if (panelB)           panelB.hidden           = tabName !== 'budget';
+  if (panelCfStructure) panelCfStructure.hidden = tabName !== 'cf-structure';
+  if (panelCfForecast)  panelCfForecast.hidden  = tabName !== 'cf-forecast';
+  if (panelCfDashboard) panelCfDashboard.hidden = tabName !== 'cf-dashboard';
   if (tabName === 'budget') void loadBudgetList();
+  if (tabName === 'cf-structure' || tabName === 'cf-forecast' || tabName === 'cf-dashboard') {
+    void refreshCfBudgetPickers();
+  }
 }
 for (const t of tabs) {
   t.addEventListener('click', () => {
@@ -2821,6 +2830,81 @@ function promptModal(title, body, initialValue) {
     promptEl.addEventListener('click', onBackdrop);
   });
 }
+
+// ─────────────────────────────────────────────────────────────
+//  CF (Cash Flow) — Phase 1: scaffolding & shared budget picker
+// ─────────────────────────────────────────────────────────────
+
+let selectedCfBudgetId = null;
+let cfBudgetCache = []; // finalized budgets only
+
+/**
+ * Populate the three CF tabs' budget pickers from the budgets API.
+ * CF can only attach to finalized budgets (§10).
+ */
+async function refreshCfBudgetPickers() {
+  const selects = Array.from(document.querySelectorAll('[data-cf-budget-select]'));
+  if (selects.length === 0) return;
+  try {
+    const res = await api('/api/visibility/budgets');
+    if (!res.ok) return;
+    const data = await res.json();
+    cfBudgetCache = (data.budgets || []).filter(b => b.status === 'finalized');
+  } catch (_err) {
+    cfBudgetCache = [];
+  }
+  const hasAny = cfBudgetCache.length > 0;
+  if (selectedCfBudgetId && !cfBudgetCache.some(b => b.id === selectedCfBudgetId)) {
+    selectedCfBudgetId = null;
+  }
+  if (!selectedCfBudgetId && hasAny) {
+    selectedCfBudgetId = cfBudgetCache[0].id;
+  }
+  for (const sel of selects) {
+    sel.innerHTML = '';
+    if (!hasAny) {
+      const opt = document.createElement('option');
+      opt.value = '';
+      opt.textContent = 'No finalized budgets yet — finalize one in tab 3.';
+      sel.appendChild(opt);
+      sel.disabled = true;
+      continue;
+    }
+    sel.disabled = false;
+    for (const b of cfBudgetCache) {
+      const opt = document.createElement('option');
+      opt.value = b.id;
+      opt.textContent = `${b.name || '(unnamed)'} · FY ${b.year} · ${b.granularity}`;
+      if (b.id === selectedCfBudgetId) opt.selected = true;
+      sel.appendChild(opt);
+    }
+  }
+  updateCfEmptyStates();
+}
+
+function updateCfEmptyStates() {
+  const empties = [
+    document.getElementById('cfStructureEmpty'),
+    document.getElementById('cfForecastEmpty'),
+    document.getElementById('cfDashboardEmpty'),
+  ];
+  const noBudgets = cfBudgetCache.length === 0;
+  const msg = noBudgets
+    ? 'No finalized budgets yet. Finalize a budget in tab 3 to open Cash Flow.'
+    : 'Cash Flow editor coming in the next phase. Use the picker above to choose a finalized budget.';
+  for (const el of empties) { if (el) el.textContent = msg; }
+}
+
+document.addEventListener('change', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLSelectElement)) return;
+  if (!t.hasAttribute('data-cf-budget-select')) return;
+  selectedCfBudgetId = t.value || null;
+  // Mirror selection across the other CF tab pickers.
+  for (const other of document.querySelectorAll('[data-cf-budget-select]')) {
+    if (other !== t) other.value = selectedCfBudgetId || '';
+  }
+});
 
 // ─────────────────────────────────────────────────────────────
 //  BOOT

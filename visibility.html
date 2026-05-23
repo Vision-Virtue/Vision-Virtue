@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0" />
   <title>Vision &amp; Virtue | Visibility</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="visibility.css?v=13" />
+  <link rel="stylesheet" href="visibility.css?v=14" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
@@ -44,8 +44,8 @@
   <section class="vis-workspace">
     <div class="vis-workspace-inner">
 
-      <!-- Module tabs. Financial Structure and Organizational Structure are
-           interactive; Budget arrives in Phase 3. -->
+      <!-- Module tabs. Tabs 1–3 set up the budget; tabs 4–6 are the
+           Cash Flow module, each operating on a finalized budget. -->
       <nav class="vis-tabs" role="tablist">
         <button type="button" class="vis-tab is-active" data-tab="financial-structure" role="tab" aria-selected="true">
           1. Financial Structure
@@ -55,6 +55,15 @@
         </button>
         <button type="button" class="vis-tab" data-tab="budget" role="tab" aria-selected="false">
           3. Budget
+        </button>
+        <button type="button" class="vis-tab" data-tab="cf-structure" role="tab" aria-selected="false">
+          4. CF Structure
+        </button>
+        <button type="button" class="vis-tab" data-tab="cf-forecast" role="tab" aria-selected="false">
+          5. CF Forecast
+        </button>
+        <button type="button" class="vis-tab" data-tab="cf-dashboard" role="tab" aria-selected="false">
+          6. CF Dashboard
         </button>
       </nav>
 
@@ -500,6 +509,70 @@
 
       </div>
 
+      <!-- ── 4. CF Structure (Phase 1: empty shell) ───────────────── -->
+      <div class="vis-panel" id="panelCfStructure" role="tabpanel" hidden>
+
+        <header class="vis-panel-header">
+          <div>
+            <h2 class="vis-panel-title">CF Structure</h2>
+            <p class="vis-panel-sub">Configure Working Capital sections — Payables, Receivables, Inventory and Salaries — for a finalized budget. Manual sections (Other Adjustments / Financing / Capex) live here too.</p>
+          </div>
+          <span class="vis-status-pill" id="cfStructureStatusPill" data-status="draft">Draft</span>
+        </header>
+
+        <!-- Budget picker (shared across CF tabs) -->
+        <div class="vis-cf-picker">
+          <label for="cfBudgetSelect" class="vis-cf-picker-label">Finalized budget:</label>
+          <select id="cfBudgetSelect" class="vis-cf-picker-select" data-cf-budget-select></select>
+        </div>
+
+        <div class="vis-banner vis-banner-info" id="cfStructureInfoBanner" hidden></div>
+        <div class="vis-empty" id="cfStructureEmpty">Select a finalized budget to begin configuring Cash Flow sections.</div>
+
+      </div>
+
+      <!-- ── 5. CF Forecast (Phase 1: empty shell) ────────────────── -->
+      <div class="vis-panel" id="panelCfForecast" role="tabpanel" hidden>
+
+        <header class="vis-panel-header">
+          <div>
+            <h2 class="vis-panel-title">CF Forecast</h2>
+            <p class="vis-panel-sub">Period-by-period Cash Flow forecast — Opening Cash, Adjusted EBITDA, Working Capital, Salaries (WC accrual), Other Adjustments, Financing, Capex, Closing Cash.</p>
+          </div>
+          <span class="vis-status-pill" id="cfForecastStatusPill" data-status="draft">Draft</span>
+        </header>
+
+        <div class="vis-cf-picker">
+          <label for="cfForecastBudgetSelect" class="vis-cf-picker-label">Finalized budget:</label>
+          <select id="cfForecastBudgetSelect" class="vis-cf-picker-select" data-cf-budget-select></select>
+        </div>
+
+        <div class="vis-banner vis-banner-info" id="cfForecastInfoBanner" hidden></div>
+        <div class="vis-empty" id="cfForecastEmpty">Select a finalized budget to view the Cash Flow forecast.</div>
+
+      </div>
+
+      <!-- ── 6. CF Dashboard (Phase 1: empty shell) ───────────────── -->
+      <div class="vis-panel" id="panelCfDashboard" role="tabpanel" hidden>
+
+        <header class="vis-panel-header">
+          <div>
+            <h2 class="vis-panel-title">CF Dashboard</h2>
+            <p class="vis-panel-sub">At-a-glance Cash Flow KPIs — Opening / Closing cash, peak draw, runway, warning beacon and the Cash Flow waterfall.</p>
+          </div>
+          <span class="vis-status-pill" id="cfDashboardStatusPill" data-status="draft">Draft</span>
+        </header>
+
+        <div class="vis-cf-picker">
+          <label for="cfDashboardBudgetSelect" class="vis-cf-picker-label">Finalized budget:</label>
+          <select id="cfDashboardBudgetSelect" class="vis-cf-picker-select" data-cf-budget-select></select>
+        </div>
+
+        <div class="vis-banner vis-banner-info" id="cfDashboardInfoBanner" hidden></div>
+        <div class="vis-empty" id="cfDashboardEmpty">Select a finalized budget to view its Cash Flow dashboard.</div>
+
+      </div>
+
     </div>
   </section>
 
@@ -528,6 +601,6 @@
     </div>
   </div>
 
-  <script src="visibility.js?v=25" defer></script>
+  <script src="visibility.js?v=26" defer></script>
 </body>
 </html>
