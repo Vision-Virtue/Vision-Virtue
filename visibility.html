@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0" />
   <title>Vision &amp; Virtue | Visibility</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="visibility.css?v=14" />
+  <link rel="stylesheet" href="visibility.css?v=15" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
@@ -509,7 +509,7 @@
 
       </div>
 
-      <!-- ── 4. CF Structure (Phase 1: empty shell) ───────────────── -->
+      <!-- ── 4. CF Structure ──────────────────────────────────────── -->
       <div class="vis-panel" id="panelCfStructure" role="tabpanel" hidden>
 
         <header class="vis-panel-header">
@@ -526,8 +526,108 @@
           <select id="cfBudgetSelect" class="vis-cf-picker-select" data-cf-budget-select></select>
         </div>
 
-        <div class="vis-banner vis-banner-info" id="cfStructureInfoBanner" hidden></div>
-        <div class="vis-empty" id="cfStructureEmpty">Select a finalized budget to begin configuring Cash Flow sections.</div>
+        <div class="vis-banner vis-banner-error" id="cfStructureErrorBanner" hidden></div>
+        <div class="vis-banner vis-banner-info"  id="cfStructureInfoBanner"  hidden></div>
+        <div class="vis-empty" id="cfStructureEmpty" hidden>Select a finalized budget to begin configuring Cash Flow sections.</div>
+
+        <!-- Section list (spec §2). Each <details> is a collapsible
+             top-level section; bodies for §3–§9 are implemented in
+             later phases. -->
+        <div class="vis-cf-sections" id="cfStructureSections" hidden>
+
+          <!-- §2 / row 1 — Opening Cash Balance -->
+          <details class="vis-cf-section" data-cf-section="opening-cash" open>
+            <summary class="vis-cf-section-summary">
+              <span class="vis-cf-section-num">1</span>
+              <span class="vis-cf-section-title">O.B (Opening Cash Balance)</span>
+              <span class="vis-cf-section-status" data-cf-status="opening-cash">Required</span>
+            </summary>
+            <div class="vis-cf-section-body">
+              <label class="vis-cf-field">
+                <span class="vis-cf-field-label">Opening Cash Balance</span>
+                <span class="vis-cf-input-wrap">
+                  <span class="vis-cf-input-prefix">$</span>
+                  <input
+                    type="text"
+                    inputmode="decimal"
+                    class="vis-cf-input vis-cf-input-amount"
+                    id="cfOpeningCashInput"
+                    placeholder="0"
+                    autocomplete="off"
+                  />
+                </span>
+              </label>
+              <p class="vis-cf-field-hint">Cash on hand at the start of the budget year. Positive amount, debit balance.</p>
+            </div>
+          </details>
+
+          <!-- §2 / row 2 — WC -->
+          <details class="vis-cf-section" data-cf-section="wc">
+            <summary class="vis-cf-section-summary">
+              <span class="vis-cf-section-num">2</span>
+              <span class="vis-cf-section-title">WC — Working Capital</span>
+              <span class="vis-cf-section-status" data-cf-status="wc">Required</span>
+            </summary>
+            <div class="vis-cf-section-body">
+              <div class="vis-cf-coming">Payables, Receivables and Inventory editors arrive in a future phase.</div>
+            </div>
+          </details>
+
+          <!-- §2 / row 3 — Salaries & Benefits -->
+          <details class="vis-cf-section" data-cf-section="salaries">
+            <summary class="vis-cf-section-summary">
+              <span class="vis-cf-section-num">3</span>
+              <span class="vis-cf-section-title">Salaries &amp; Benefits</span>
+              <span class="vis-cf-section-status" data-cf-status="salaries">Required</span>
+            </summary>
+            <div class="vis-cf-section-body">
+              <div class="vis-cf-coming">Salaries cash flow editor arrives in a future phase.</div>
+            </div>
+          </details>
+
+          <!-- §2 / row 4 — Other Adjustments -->
+          <details class="vis-cf-section" data-cf-section="other-adj">
+            <summary class="vis-cf-section-summary">
+              <span class="vis-cf-section-num">4</span>
+              <span class="vis-cf-section-title">Other Adjustments</span>
+              <span class="vis-cf-section-status vis-cf-section-status-optional" data-cf-status="other-adj">Optional</span>
+            </summary>
+            <div class="vis-cf-section-body">
+              <div class="vis-cf-coming">Manual adjustment rows arrive in a future phase.</div>
+            </div>
+          </details>
+
+          <!-- §2 / row 5 — Financing -->
+          <details class="vis-cf-section" data-cf-section="financing">
+            <summary class="vis-cf-section-summary">
+              <span class="vis-cf-section-num">5</span>
+              <span class="vis-cf-section-title">Financing</span>
+              <span class="vis-cf-section-status vis-cf-section-status-optional" data-cf-status="financing">Optional</span>
+            </summary>
+            <div class="vis-cf-section-body">
+              <div class="vis-cf-coming">Financing rows arrive in a future phase.</div>
+            </div>
+          </details>
+
+          <!-- §2 / row 6 — Capex -->
+          <details class="vis-cf-section" data-cf-section="capex">
+            <summary class="vis-cf-section-summary">
+              <span class="vis-cf-section-num">6</span>
+              <span class="vis-cf-section-title">Capex</span>
+              <span class="vis-cf-section-status vis-cf-section-status-optional" data-cf-status="capex">Optional</span>
+            </summary>
+            <div class="vis-cf-section-body">
+              <div class="vis-cf-coming">Capex rows arrive in a future phase.</div>
+            </div>
+          </details>
+
+        </div>
+
+        <footer class="vis-panel-actions" id="cfStructureFooter" hidden>
+          <span class="vis-validation-summary" id="cfStructureSummary">Finalize unlocks after every required section is filled.</span>
+          <button type="button" class="vis-btn vis-btn-ghost" id="cfStructureEditBtn" hidden>Edit</button>
+          <button type="button" class="vis-btn vis-btn-primary" id="cfStructureFinalizeBtn" disabled>Finalize</button>
+        </footer>
 
       </div>
 
@@ -601,6 +701,6 @@
     </div>
   </div>
 
-  <script src="visibility.js?v=26" defer></script>
+  <script src="visibility.js?v=27" defer></script>
 </body>
 </html>
