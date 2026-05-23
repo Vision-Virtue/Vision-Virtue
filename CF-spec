@@ -1,0 +1,414 @@
+# Visibility Offering — Cash Flow (CF) Module Spec
+
+_Source of truth: the Excel workbook (CF tab, plus upstream Flow, Financial Structure, Organizational Structure, Salaries & Benefits, Budget). This file consolidates the rules captured there + clarifications, in the same shape as the Budget Module Spec._
+
+---
+
+## 0. Placement in the Vision & Virtue website
+
+- Sections **1 → 20** of this spec render in the website under **"4. CF Structure"**, immediately after **"3. Budget"** (the Budget Module).
+- Sections **21 → 22** render under **"5. CF Forecast"**.
+- Section **23** renders under **"6. CF Dashboard"**.
+- The CF module is **per-budget**: each finalized budget (Section 5.4 of the Budget Spec) has its own CF. The user picks an active budget before entering the CF flow.
+- Inherits from the active budget: **Year**, **Period granularity** (Monthly / Quarterly / Yearly), **Currency**, **Scale**. CF cannot change these — to change, the user edits the budget.
+- Cap and storage: a CF is part of the budget it belongs to (no separate 5-budget cap; deleting the budget deletes its CF).
+
+---
+
+## 1. Source dataset (the "budget metrics")
+
+The CF reads from the finalized Budget Structure of the active budget. Each budget row is one unique combination of:
+
+> **Company + Service Provider Name + Service Description + Division + Department + Product + Activity + Account/GL Name + Account/GL Number + P&L Section + Budget Category** + period amounts (Jan-2X … Dec-2X, or quarters / FY depending on granularity).
+
+This is treated as a **pivot-style dataset**. All CF allocations below aggregate (SUM) period amounts over a chosen subset of these dimension columns. No CF screen mutates the budget data; CF only reads.
+
+Sign convention used everywhere in the CF module:
+- **Costs** in the budget (COGS, R&D, S&M, G&A) are stored as **positive** numbers; in CF expense rows they are shown as **positive debit movement** and the matching **payments** are shown as **negative** (cash leaving).
+- **Revenues** in the budget are stored as **negative** numbers (per the CF tab example); in CF revenue rows they are shown as **negative credit movement** and the matching **collections** are shown as **positive** (cash entering).
+- Balances on liabilities (Payables, Salaries & Benefits opening balance) are presented as **negative in parentheses** `($X,XXX)`.
+- Balances on assets (Receivables, Inventory, Cash) are presented as **positive** `$X,XXX`.
+
+---
+
+## 2. CF Structure — top-level section list
+
+After the user enters "4. CF Structure" for a finalized budget, the screen shows a collapsible list with the following top-level sections (each with a `+` to expand):
+
+| # | Section | Drill-down |
+|---|---|---|
+| 1 | **O.B (Opening Cash Balance)** | Single free-input field. Number with thousands separator `$X,XXX`. |
+| 2 | **WC — Working Capital** | Expands to **Payables**, **Receivables**, **Inventory** (see §3, §4, §5). |
+| 3 | **Salaries & Benefits** | Single block per §6. |
+| 4 | **Other Adjustments** | Manual rows per §7. |
+| 5 | **Financing** | Manual rows per §8 (Interest expense, Interest on deposits, Fundraising). |
+| 6 | **Capex** | Manual rows per §9. |
+
+Order in the UI is the order above. Each section persists independently — the user can leave one section incomplete and return later. Auto-save runs continuously while typing (same behavior as Budget Structure §5.2).
+
+**Finalize** (Section 10) is only clickable once **every** required cell in every expanded section is filled. See §10 for the explicit checklist.
+
+---
+
+## 3. WC → Payables
+
+### 3.1 Opening Balance
+
+On clicking `+` next to **Payables**, an **O.B** field appears. The user enters the opening A/P balance as a plain positive number. The system stores and displays it as **negative in parentheses** `($X,XXX)` (credit balance).
+
+### 3.2 Allocation grid — what gets allocated
+
+Payables covers **all COGS and OPEX costs excluding employee salaries**. Concretely:
+- Include all budget rows where `P&L Section ∈ {COGS, R&D, S&M, G&A}`.
+- **Exclude** rows where `Budget Category = "Salaries and benefits"` (those are handled in §6).
+- **Exclude** Revenues, Financial Income/(Expenses), Tax, Other Income/(Expenses).
+
+### 3.3 Allocation columns (left → right)
+
+The grid starts with the minimum breakdown and the user may **add** further breakdown columns one at a time. Each added column splits existing aggregate rows into finer rows; whatever amount has not been explicitly allocated by the user shows as a **remaining-to-allocate** auto-row.
+
+| Step | Columns shown | Behavior |
+|---|---|---|
+| Default | Company → P&L Section → Budget Category | One row per unique combination from the dataset (filtered per §3.2). Sum of all rows = total COGS+OPEX (ex-salaries). |
+| +GL | Company → P&L → Budget Category → Account/GL Name | Each existing row may split into multiple GL rows; an auto-row labeled **"Unallocated — <Company / P&L / Category>"** carries any residual amount the user hasn't broken out. |
+| +Vendor | Company → P&L → Budget Category → GL → Service Provider Name | Final allowed level. Same residual-auto-row rule applies. |
+
+Adding/removing a breakdown column is per-grid (not per-row). The user cannot skip levels (no Vendor without GL).
+
+### 3.4 Expense row + Payment row pairing
+
+For **every** combination row in the grid, the table renders **two rows**:
+
+| Type | Source | Sign |
+|---|---|---|
+| **Expense** | SUM of period amounts from the budget dataset for that combination | Positive (debit movement) |
+| **Payment** | Computed from the Expense row above using the row's chosen **Payment terms** (see §3.6) | Negative (cash out) |
+
+Columns of the table: `Type | Company | P&L | Budget Section | Account/GL Name | Service Provider Name | Payment terms | Jan-2X … Dec-2X | FY-2X total`. Period columns follow the budget's granularity (§0).
+
+### 3.5 Finished goods special case
+
+For rows where `Budget Category = "Finished goods"` (under COGS), the **Expense** row's monthly amounts are **not** taken from the budget directly. Instead they pull from **Purchases** in the Inventory cycle (§5.3). Everything else (Payment terms, payment computation, vendor table aggregation) works the same.
+
+### 3.6 Payment terms (per row)
+
+Each expense row has a **Payment terms** dropdown. Options (matches the workbook key in CF!Z2:AA8):
+
+| Term | Meaning |
+|---|---|
+| Cash | Payment in the same month the expense is recorded |
+| Current | Payment in the same month the expense is recorded |
+| 30+ | Payment in the next month (expense Jan-26 → payment Feb-26) |
+| 60+ | Payment two months later (Jan-26 → Mar-26) |
+| 90+ | Payment three months later (Jan-26 → Apr-26) |
+| 120+ | Payment four months later (Jan-26 → May-26) |
+| 180+ | Payment five months later (Jan-26 → Jun-26) |
+
+### 3.7 Payment formula (canonical)
+
+Let `E[m]` = Expense amount in month `m`, and `lag` = number of months implied by the term (Cash/Current = 0, 30+ = 1, 60+ = 2, 90+ = 3, 120+ = 4, 180+ = 5).
+
+Payment row value in month `m`:
+
+```
+Payment[m] = - E[m - lag]   if (m - lag) is within the budget year
+Payment[m] = "Enter Free amount"   if (m - lag) is before the budget start (e.g. 30+ in Jan-26 needs Dec-25)
+Payment[m] = 0   if there is no matching expense (no expense in that lagged month)
+```
+
+The **"Enter Free amount"** cells are user-editable inputs for the prior-period carry-in. They accept a positive number and are then stored as negative (cash out) in the Payment row. Worked example from the workbook (`30+` term, Expense `1,000 → 10,000 → 19,000 … → 100,000`):
+
+- Jan payment = **Enter Free amount** (Dec-25 expense not in budget)
+- Feb payment = `-1,000`, Mar = `-10,000`, … Dec = `-91,000`. Dec-26's expense of `100,000` is **not** paid in 2026 (it lands in Jan-27 and is outside this CF).
+
+FY total of the Payment row = SUM of the 12 monthly values (a `-506,000` total in the worked example).
+
+### 3.8 Vendors summary table (auto, below the allocation grid)
+
+Once **every** payment-terms cell is set, a **Vendors summary** table renders below the allocation grid. Rows and column logic:
+
+| Row | Per-month formula | FY column |
+|---|---|---|
+| **O.B** | Jan: the amount set in §3.1, shown as `($X,XXX)`. Feb–Dec: previous month's **C.B**. | Same as Jan O.B. |
+| **Expenses** | SUM of all Expense rows in the grid for that month (COGS ex-salaries + OPEX ex-salaries). Displayed as **negative in parentheses** (credit movement — A/P increases). | Sum across months. |
+| **Payment** | SUM of all Payment rows in the grid for that month. Displayed as **positive** (debit movement — A/P decreases). | Sum across months. |
+| **C.B** | `O.B + Expenses − Payment` (signs as above; result is negative-in-parentheses for a credit balance). | Last month's C.B. |
+
+Notes:
+- The Expenses row sign-flip from the source grid (where Expense is positive) reflects the **credit movement** in the A/P liability.
+- C.B for month `m` = next month's O.B.
+
+---
+
+## 4. WC → Receivables
+
+### 4.1 Opening Balance
+
+On `+` next to **Receivables**, an **O.B** field appears. The user enters the opening A/R balance as a plain positive number, displayed as `$X,XXX` (debit balance).
+
+### 4.2 Allocation scope
+
+Receivables covers **all Revenues** in the budget: rows where `P&L Section = "Revenues"`. Revenue amounts in the budget are negative; in the CF Receivables grid the **Revenue** row is shown as negative (credit movement) and the **Payment** (collection) row is shown as positive (cash in).
+
+### 4.3 Allocation columns (left → right)
+
+Same incremental-breakdown UX as Payables (§3.3), with **Customer Name** as the deepest level instead of Service Provider Name.
+
+| Step | Columns shown |
+|---|---|
+| Default | Company → Budget Section |
+| +GL | Company → Budget Section → Account/GL Name |
+| +Customer | Company → Budget Section → GL → Customer Name |
+
+**Customer Name** is sourced from the budget's `Service Provider Name` column for Revenue rows (in the budget the buyer is recorded there — see CF tab example rows 6–7). The CF surfaces it relabeled as "Customer Name". Unallocated-residual auto-rows behave the same way as Payables.
+
+Table columns: `Company | Budget Section | GL | Customer Name | Payment terms | Jan-2X … Dec-2X | FY-2X total`.
+
+### 4.4 Revenue + Payment rows
+
+| Type | Source | Sign |
+|---|---|---|
+| **Revenue** | SUM of period amounts from the budget dataset for that combination | Negative (credit movement; matches budget storage) |
+| **Payment** | Computed from Revenue row using row's chosen Payment terms (same dropdown as §3.6) | Positive (cash in) |
+### 4.5 Payment formula (canonical)
+
+Same as Payables (§3.7) with sign flipped for cash-in:
+
+```
+Payment[m] = - Revenue[m - lag]   if (m - lag) is within the budget year   (Revenue is stored negative, so this yields a positive cash-in)
+Payment[m] = "Enter Free amount"   if (m - lag) is before the budget start
+Payment[m] = 0   if there is no matching revenue in that lagged month
+```
+
+### 4.6 Customers summary table (auto)
+
+Once all payment-terms cells are set, the **Customers summary** renders:
+
+| Row | Per-month formula |
+|---|---|
+| **O.B** | Jan: amount set in §4.1, positive. Feb–Dec: previous month's C.B. |
+| **Revenues** | SUM of Revenue rows for the month, displayed **positive** (debit movement — A/R increases). |
+| **Payment** | SUM of Payment rows for the month, displayed **negative in parentheses** (credit movement — A/R decreases). |
+| **C.B** | `O.B + Revenues − Payment` (with signs as above, result is positive debit balance). |
+
+FY column = sum across months (for O.B / C.B = Jan O.B and Dec C.B respectively).
+
+---
+
+## 5. WC → Inventory
+
+### 5.1 Opening Balance
+
+On `+` next to **Inventory**, an **O.B** field appears. Entered as a plain positive number, displayed `$X,XXX` (debit balance).
+
+### 5.2 No allocation grid
+
+Unlike Payables / Receivables, Inventory has **no per-row allocation**. Only the summary table below is shown.
+
+### 5.3 Inventory summary table
+
+| Row | Per-month formula |
+|---|---|
+| **O.B** | Jan: amount set in §5.1, positive. Feb–Dec: previous month's C.B. |
+| **Purchases** | **Free user input** per month (positive). The field starts empty and requires entry. This same Purchases stream feeds the **Finished goods** Expense row in Payables (§3.5). |
+| **COGS** | Auto-pulled from the budget: the **Finished goods** Budget Category under the **COGS** P&L Section for that month. Displayed as **negative** (credit movement — inventory consumed). |
+| **C.B** | `O.B + Purchases + COGS` (Purchases positive, COGS negative). |
+
+Validation: if `C.B` would go below 0 in any month, show a non-blocking warning ("Inventory goes negative in <month>. Increase Purchases or check COGS mapping.").
+
+---
+
+## 6. Salaries & Benefits (CF)
+
+### 6.1 Opening Balance
+
+On `+` next to **Salaries & Benefits**, an **O.B** field appears — the closing accrued salary liability from the prior year. Entered positive, displayed as **negative in parentheses** `($X,XXX)` (credit balance).
+
+### 6.2 Summary table
+
+Only a single summary table — no per-vendor allocation. Salaries flow as a single block per month.
+
+| Row | Per-month formula |
+|---|---|
+| **O.B** | Jan: amount from §6.1, shown `($X,XXX)`. Feb–Dec: previous month's C.B. |
+| **Expenses** | Auto-pulled from the budget: **SUM of all rows with `Budget Category = "Salaries and benefits"`** for that month (across COGS / R&D / S&M / G&A). Positive in the table (the credit-movement sign convention is applied to C.B). |
+| **Payment** | Jan: **free user input** (positive number) representing payment for the prior December (the O.B drawdown). Feb–Dec: auto = **− Expenses of the previous month** (salaries are paid one month in arrears, fixed). |
+| **C.B** | `O.B + Expenses(as credit) − Payment` → `($X,XXX)`. |
+
+Payment terms are **fixed at "30+" (one-month arrears)** for salaries — no per-row terms dropdown. The Jan field is the only free input.
+
+---
+
+## 7. Other Adjustments
+
+- On `+`, an empty manual entry row is added with 12 month columns + FY total.
+- Each cell: free numeric input. Positive `$X,XXX` or negative `($X,XXX)`.
+- User can add multiple rows (each row labeled by free text in a `Description` column at the left).
+- FY column = SUM of the 12 months for that row.
+- A footer **Total** row sums all Other Adjustments rows per month and FY.
+
+---
+
+## 8. Financing
+
+- Same UX as §7 (manual rows, free numeric input, FY = sum).
+- Each row's `Description` is free text but typical entries are: **Interest expense**, **Interest on deposits**, **Fundraising**.
+- Footer **Total** row sums all Financing rows per month and FY.
+
+---
+
+## 9. Capex
+
+- Same UX as §7. Manual rows, free numeric input, FY = sum.
+- Each row labeled by free-text `Description` (e.g. "Laptops", "Office build-out", "Lab equipment").
+- Footer **Total** row sums all Capex rows.
+
+---
+
+## 10. Finalize gate
+
+The **Finalize** button (bottom of "4. CF Structure") is **disabled** until all of the following are true:
+
+- Section 1 (O.B Cash) has a value.
+- Payables: O.B set; **every** row in the allocation grid (including residual auto-rows) has Payment terms selected; **every** required "Enter Free amount" cell has a value.
+- Receivables: Same as Payables.
+- Inventory: O.B set; every Purchases cell filled.
+- Salaries & Benefits: O.B set; Jan Payment cell filled.
+- Other Adjustments, Financing, Capex: optional sections — if a row is added, every period cell in that row must have a value (or 0).
+
+Inline errors block Finalize and point to the first offending cell (same pattern as Budget Spec §9).
+
+On Finalize, the CF is **saved** under the active budget and the user is routed to "5. CF Forecast" (§11).
+
+Finalized CFs are **editable** (re-opening any section saves overwrite the same CF; no version history).
+
+---
+
+## 11. CF Forecast (under website section "5. CF Forecast")
+
+### 11.1 View controls
+
+Three independent toggles at the top of the Forecast view:
+
+| Control | Options | Behavior |
+|---|---|---|
+| **Period** | Monthly / Quarterly / FY | Re-aggregates all rows. Monthly→Quarterly sums Jan+Feb+Mar etc.; Quarterly→FY sums Q1+Q2+Q3+Q4. |
+| **Scale** | Standard / Thousands | Display only — underlying values untouched. Thousands separator always shown. |
+| **Burn detail** | Collapsed / Expanded | Collapsed: single **Burn** row. Expanded: three rows — Adjusted EBITDA, WC, Other Adjustments. Toggle via `+`/`–` next to the Burn label. |
+
+### 11.2 Main CF table (Monthly view shown)
+
+| Row | Per-month formula | FY column |
+|---|---|---|
+| **O.B** | Jan: amount from §2 row 1 (Opening Cash). Feb–Dec: previous month's C.B. | Jan O.B value. |
+| **Adjusted EBITDA** | SUM(budget rows) per month where P&L ∈ {Revenues, COGS, R&D, S&M, G&A}. **Includes all rows, including `Budget Category = "Salaries and benefits"`** — salaries expenses stay inside EBITDA. (Revenues negative + Costs positive = the operating burn, shown as a single signed number per month.) | Sum across months. |
+| **WC** | `− (ΔPayables + ΔReceivables + ΔInventory)` per month, i.e. the cash impact of WC movements. **Salaries Δliability is excluded from WC** — it is shown as its own Forecast row below. See §12 for the underlying breakdown. | Sum across months. |
+| **Salaries & Benefits** | `− (Salaries.C.B(m) − Salaries.C.B(m−1))` per month, where the Salaries C.B / O.B come from the §6 Salaries summary block (O.B + Expense − Payment = C.B, all in the credit-balance convention of §6). For January, `m−1` C.B = the Salaries O.B (per §6.1). This formula gives the **cash adjustment that converts the salary expense inside Adjusted EBITDA into actual salary cash paid**: it adds back the expense (already in EBITDA) and subtracts the payment. **No double-count occurs** because EBITDA includes the expense and this row reverses it back to the cash figure. **It is not a WC component** — it is its own Forecast row. | Sum across months. |
+| **Other Adjustments** | Footer Total row from §7 for that month. | Sum across months. |
+| **Burn (collapsed)** | `Adjusted EBITDA + WC + Salaries & Benefits + Other Adjustments` per month. Used when the user collapses the four sub-rows. | Sum across months. |
+| **Financing** | Footer Total row from §8 for that month. | Sum across months. |
+| **Capex** | Footer Total row from §9 for that month. | Sum across months. |
+| **C.B** | `O.B + Adjusted EBITDA + WC + Salaries & Benefits + Other Adjustments + Financing + Capex`. | Dec C.B. |
+
+Salaries are treated as their **own Forecast row**, separate from WC. Salaries expenses **remain inside Adjusted EBITDA** (they are not stripped out). The Salaries Forecast row is the **balance-sheet movement of the salary liability** between each month's C.B and O.B in the §6 Salaries summary: `− (C.B − O.B)` per month. Because the §6 summary embeds the full salary expense (via the Expense row pulled from the budget) and the actual payment, this single movement number already does the EBITDA-to-cash conversion for salaries: it adds back the non-cash expense and reflects only the cash payment. The WC row (§12) excludes the salaries-liability movement to avoid duplicating this adjustment.
+
+Sign formatting: all rows show positive `$X,XXX` and negative `($X,XXX)`.
+### 11.3 Aggregation when Period control changes
+
+- Monthly → Quarterly: each row's quarter = sum of its three months. O.B(Q1) = Jan O.B; C.B(Q1) = Mar C.B.
+- Quarterly → FY: O.B(FY) = Jan O.B; C.B(FY) = Dec C.B; movement rows sum all months.
+
+---
+
+## 12. WC breakdown table (under the main CF, same screen)
+
+Renders below the main CF table on "5. CF Forecast". One row per WC component, computed from the summary tables in §3, §4, §5.
+
+| Row | Per-month formula |
+|---|---|
+| **Payables** | `− (Payables.C.B(m) − Payables.C.B(m-1))`. An increase in A/P liability is a **positive** cash impact (we owe more, paid less). Sign of the displayed number follows the cash-impact convention: positive `$X,XXX` if A/P grew, negative `($X,XXX)` if A/P shrank. |
+| **Receivables** | `− (Receivables.C.B(m) − Receivables.C.B(m-1))`. An increase in A/R is a **negative** cash impact (customers owe us more, collected less). |
+| **Inventory** | `− (Inventory.C.B(m) − Inventory.C.B(m-1))`. Inventory build = negative cash impact; drawdown = positive cash impact. |
+| **Total** | SUM of the three above (Payables + Receivables + Inventory only — **salaries are not in WC**). This equals the **WC** row in §11.2. |
+
+For January: `m-1` C.B is the **O.B** of that section (per §3.8 / §4.6 / §5.3).
+
+FY column = sum of months for movement rows; Total FY must reconcile to `Dec C.B − O.B` of each section's summary (audit check).
+
+---
+
+## 13. CF Dashboard (under website section "6. CF Dashboard")
+
+All values pulled from §11 (CF Forecast). Six tiles + one alert tile.
+
+| Tile | Value | Format |
+|---|---|---|
+| **End-of-year Cash** | C.B of December (FY view's C.B). | `$X,XXX` in thousands, with `$` sign. Negative shown as `($X,XXX)`. |
+| **FY WC movement** | Sum of WC row across the 12 months (= Total row FY column in §12). | Thousands, `$` prefix. |
+| **FY Burn** | `Adjusted EBITDA + WC + Salaries & Benefits + Other Adjustments` summed across the 12 months. | Thousands, `$` prefix. |
+| **Avg Monthly Burn** | `FY Burn / 12`. | Thousands, `$` prefix. |
+| **Avg Quarterly Burn** | `FY Burn / 4`. | Thousands, `$` prefix. |
+| **Lowest WC Quarter** | The quarter (Q1–Q4) with the most negative WC sum. Show: quarter label + amount + which component (Payables / Receivables / Inventory) contributed the largest negative move + that component's amount. | Quarter as `Qn-2X`. Amounts in thousands `$X,XXX`. |
+| **Warning beacon** | UX element next to the Lowest WC Quarter tile: a pulsing/beeping indicator (color: amber) prompting the user to investigate. | Visual only; tooltip: "Review <component> in <quarter> — largest WC drag of the year." |
+
+Tiles refresh automatically when any upstream input changes (CF is live-linked to the budget and to the input sections §3–§9).
+
+---
+
+## 14. Granularity behavior (CF vs Budget granularity)
+
+The CF inherits the budget's granularity. **Payment terms options and their calculation rules are identical across all granularities** — the dropdown always shows Cash / 30+ / 60+ / 90+ / 120+ / 180+, and the cash-out month is always computed as `expense month + lag-in-days`, regardless of whether columns are months, quarters, or a single FY.
+
+Rationale: payment lags do not snap to column boundaries. An expense booked in March with 60+ terms hits cash in May; if the budget is quarterly, that means the expense lives in Q1 but the cash impact lands in Q2. The system must therefore compute the cash hit at day-level and then aggregate into whichever column the budget uses.
+
+| Budget granularity | CF column layout | Payment terms behavior |
+|---|---|---|
+| Monthly | 12 monthly columns + FY across every CF table. | Cash = same month; 30+ = +1 month; 60+ = +2 months; 90+ = +3 months; 120+ = +4 months; 180+ = +6 months. Cash hits that land beyond December roll into the next FY's opening AP/AR balance and are shown in a "Carry to next FY" footer row. |
+| Quarterly | 4 quarterly columns + FY across every CF table. | Same dropdown. Internally the system assumes each quarterly expense bucket lands at the **midpoint of the quarter** (mid-month-2 of the quarter) and applies the lag in days. Resulting cash hit is bucketed into whichever quarter contains that date. Example: an expense in Q1 with 60+ terms → expense midpoint mid-Feb + 60 days = mid-Apr → cash hits **Q2**. With 30+ terms → mid-Mar → still **Q1**. |
+| Yearly | 1 FY column. | Same dropdown. Cash hits within the FY bucket into FY. Cash hits past Dec-31 (i.e. 120+/180+ on Q3/Q4 expenses, or any term applied to a late-FY expense) roll into a **"Carry to next FY"** footer row, which becomes the opening AP/AR balance of the next CF. |
+
+The Period toggle on the CF Forecast view (§11.1) can only **roll up** to coarser granularities, never down (i.e. a Yearly budget cannot be viewed Monthly in CF).
+
+---
+
+## 15. Entity model (CF additions to the Budget entity model)
+
+```
+Budget
+  └── CashFlow (one per finalized budget)
+        ├── openingCash
+        ├── PayablesSection
+        │     ├── openingBalance
+        │     └── AllocationRow[]  (Company, P&L, BudgetCategory, GLAccountId?, ServiceProviderName?, paymentTerm, priorPeriodCarryIn[])
+        ├── ReceivablesSection
+        │     ├── openingBalance
+        │     └── AllocationRow[]  (Company, BudgetSection, GLAccountId?, CustomerName?, paymentTerm, priorPeriodCarryIn[])
+        ├── InventorySection
+        │     ├── openingBalance
+        │     └── purchasesByPeriod[]
+        ├── SalariesCFSection
+        │     ├── openingBalance
+        │     └── januaryPayment   (free input; Feb–Dec auto)
+        ├── OtherAdjustmentsSection → ManualRow[] (description, amountByPeriod[])
+        ├── FinancingSection        → ManualRow[] (description, amountByPeriod[])
+        └── CapexSection            → ManualRow[] (description, amountByPeriod[])
+```
+
+All computed rows (Forecast table, WC breakdown, Dashboard tiles) are **derived** — not stored. They re-compute on every read.
+
+---
+
+## 16. Resolved decisions (formerly TBD)
+- **Salaries treatment:** Salaries are a **separate row in the CF Forecast**, sitting between WC and Other Adjustments (§11.2). Salaries expenses **remain inside Adjusted EBITDA** (no filter is applied to EBITDA). Salaries are **not** in WC. The Salaries Forecast row sources from the §6 Salaries summary as `− (C.B_salaries(m) − C.B_salaries(m−1))` — the end-of-month-to-end-of-month movement of the salary liability. Because §6 builds C.B as `O.B + Expense − Payment` (credit-balance convention), this single movement number already converts the salary expense embedded in EBITDA into the actual cash paid: it implicitly adds back the expense and subtracts the payment. No double-count. The WC row excludes the salaries-liability Δ to avoid duplicating this conversion. Salaries are **not** routed through the Payables cycle and are **not** subject to per-row payment terms — §6 hard-codes one-month arrears (Jan Payment settles prior Dec; Feb–Dec Payment = prior month's Expense).
+- **Finished goods linkage:** the Payables `Expense` row for `Budget Category = Finished goods` is overridden to pull from Inventory.Purchases (§3.5 / §5.3). The budget's own Finished-goods line is what feeds Inventory.COGS — it is **not** double-counted in Payables.
+- **Re-finalization of the budget:** if the user edits the active budget after the CF is finalized, the CF re-reads the dataset on next open. Auto-rows and computed rows refresh. Any manual rows whose dimension combo no longer exists in the budget become **orphan CF rows** with a banner: _"N CF row(s) reference combinations no longer in the budget. Review or delete in <section>."_
+- **Currency / scale change:** CF inherits live from the budget; no FX conversion (same rule as Budget §6).
+- **CF deletion:** deleting the parent budget deletes its CF. No standalone CF delete.
+- **Cap:** no separate CF cap; constrained by the 5-budget cap on the parent budget.
+---
+
+## 17. Help & onboarding
+
+- **Pre-entry help screen** before "4. CF Structure" loads for the first time: explains O.B inputs, the sign convention (§1), and the payment-terms model (§3.6 / §3.7) with the worked example.
+- Inline tooltips on every O.B field describing whether it is a debit or credit balance.
+- Step validation at **Finalize** (§10) — clear inline errors before the user can proceed (same pattern as Budget Spec §9).
