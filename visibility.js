@@ -2915,6 +2915,7 @@ async function loadCurrentCf() {
     );
   }
   renderCfStructure();
+  await loadPayables(true);
 }
 
 function renderCfStructure() {
@@ -3056,6 +3057,356 @@ document.addEventListener('blur', (ev) => {
   const value = parseCfAmount(t.value);
   t.value = value ? formatCfAmount(value) : '';
 }, true);
+
+// ─────────────────────────────────────────────────────────────
+//  CF — Payables (spec §3)
+// ─────────────────────────────────────────────────────────────
+
+const CF_PAYMENT_TERMS = ['Cash', 'Current', '30+', '60+', '90+', '120+', '180+'];
+let currentPayables = null;          // server response { payables, paymentTerms }
+let lastPayablesBudgetId = null;     // remember which budget we loaded for
+
+/** Format a positive magnitude as $X,XXX. Empty if zero AND blank=true. */
+function fmtCfMag(n, blank) {
+  const v = Math.round(Number(n) || 0);
+  if (!v && blank) return '';
+  return v.toLocaleString('en-US');
+}
+
+/** Format as ($X,XXX) for credit balances (Payables O.B/Expenses/C.B). */
+function fmtCfCredit(n, blank) {
+  const v = Math.round(Math.abs(Number(n) || 0));
+  if (!v && blank) return '';
+  return `(${v.toLocaleString('en-US')})`;
+}
+
+/** Friendly month label for an M01..M12 / Q1..Q4 / FY period key. */
+function cfPeriodLabel(key, year) {
+  const MMM = { M01:'Jan', M02:'Feb', M03:'Mar', M04:'Apr', M05:'May', M06:'Jun',
+                M07:'Jul', M08:'Aug', M09:'Sep', M10:'Oct', M11:'Nov', M12:'Dec' }[key];
+  if (MMM) {
+    const yy = String(year).slice(-2);
+    return `${MMM}-${yy}`;
+  }
+  if (key.startsWith('Q')) return key;
+  if (key === 'FY') return 'FY';
+  return key;
+}
+
+/** Company name lookup (Org Structure cache). */
+function lookupCompanyName(id) {
+  if (!id) return '—';
+  const list = (osEntities && osEntities.company) || [];
+  const found = list.find(e => e.id === id);
+  return found ? found.name : '—';
+}
+
+async function loadPayables(force) {
+  if (!selectedCfBudgetId) { currentPayables = null; renderPayables(); return; }
+  if (!force && lastPayablesBudgetId === selectedCfBudgetId && currentPayables) {
+    renderPayables(); return;
+  }
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(selectedCfBudgetId)}/cf/payables`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showBanner(
+        document.getElementById('cfStructureErrorBanner'),
+        htmlEsc(body?.error?.message || `Could not load Payables (${res.status}).`),
+      );
+      currentPayables = null;
+      lastPayablesBudgetId = null;
+      renderPayables();
+      return;
+    }
+    currentPayables = await res.json();
+    lastPayablesBudgetId = selectedCfBudgetId;
+  } catch (err) {
+    showBanner(
+      document.getElementById('cfStructureErrorBanner'),
+      htmlEsc(`Could not load Payables: ${(err && err.message) || err}`),
+    );
+    currentPayables = null;
+  }
+  renderPayables();
+}
+
+function renderPayables() {
+  const body  = document.getElementById('cfPayablesBody');
+  const warn  = document.getElementById('cfPayablesGranularityWarn');
+  const empty = document.getElementById('cfPayablesEmpty');
+  const tHead = document.getElementById('cfPayablesTableHead');
+  const tBody = document.getElementById('cfPayablesTableBody');
+  const sHead = document.getElementById('cfPayablesSummaryHead');
+  const sBody = document.getElementById('cfPayablesSummaryBody');
+  const obIn  = document.getElementById('cfPayablesObInput');
+  if (!body || !tHead || !tBody) return;
+
+  if (!currentPayables) {
+    tHead.innerHTML = ''; tBody.innerHTML = '';
+    sHead.innerHTML = ''; sBody.innerHTML = '';
+    empty.hidden = true;
+    if (warn) warn.hidden = true;
+    if (obIn) obIn.value = '';
+    refreshPayablesStatus();
+    return;
+  }
+
+  const grid = currentPayables.payables;
+  const { periodKeys, rows, summary, openingBalance, monthlySupported } = grid;
+  const yr = currentCf?.budget?.year || new Date().getFullYear();
+
+  // Granularity warning (Phase 3 supports monthly only).
+  if (warn) {
+    if (!monthlySupported) {
+      warn.innerHTML = 'Payables computation is monthly-only in this phase. Switch the budget to <strong>Monthly</strong> granularity to see Expense / Payment values.';
+      warn.hidden = false;
+    } else {
+      warn.hidden = true;
+    }
+  }
+
+  // Opening balance (preserve focus / avoid stomping mid-edit).
+  if (obIn) {
+    const formatted = fmtCfMag(openingBalance, true);
+    if (document.activeElement !== obIn && obIn.value !== formatted) {
+      obIn.value = formatted;
+    }
+  }
+
+  // ── Allocation grid ───────────────────────────────────────
+  // Header: Type | Company | P&L | Budget Category | Payment terms | <periods> | FY
+  const headPeriods = periodKeys.map(p => `<th class="vis-cf-num">${cfPeriodLabel(p, yr)}</th>`).join('');
+  tHead.innerHTML = `
+    <tr>
+      <th class="vis-cf-col-type">Type</th>
+      <th>Company</th>
+      <th>P&amp;L</th>
+      <th>Budget Category</th>
+      <th>Payment terms</th>
+      ${headPeriods}
+      <th class="vis-cf-num">FY</th>
+    </tr>`;
+
+  tBody.innerHTML = '';
+  if (rows.length === 0) {
+    empty.hidden = false;
+  } else {
+    empty.hidden = true;
+    for (const r of rows) {
+      const company = htmlEsc(lookupCompanyName(r.companyId));
+      const pl      = htmlEsc(r.plSection);
+      const cat     = htmlEsc(r.budgetCategory);
+      const termOpts = ['<option value="">—</option>']
+        .concat(CF_PAYMENT_TERMS.map(t =>
+          `<option value="${t}"${t === r.paymentTerm ? ' selected' : ''}>${t}</option>`))
+        .join('');
+
+      // ── Expense row ──
+      const expCells = periodKeys.map(p => {
+        const v = Number(r.expense[p] || 0);
+        return `<td class="vis-cf-num">${v ? v.toLocaleString('en-US', { maximumFractionDigits: 0 }) : '—'}</td>`;
+      }).join('');
+      const expFy = Math.round(r.fyExpense || 0);
+      tBody.innerHTML += `
+        <tr class="vis-cf-row-expense" data-cf-row="${r.rowId}">
+          <td class="vis-cf-col-type">Expense</td>
+          <td>${company}</td>
+          <td>${pl}</td>
+          <td>${cat}</td>
+          <td rowspan="2" class="vis-cf-col-term">
+            <select class="vis-cf-term-select" data-cf-term="${r.rowId}">${termOpts}</select>
+          </td>
+          ${expCells}
+          <td class="vis-cf-num">${expFy ? expFy.toLocaleString('en-US') : '—'}</td>
+        </tr>`;
+
+      // ── Payment row ──
+      const payCells = periodKeys.map(p => {
+        const needs = r.paymentNeedsCarry[p];
+        if (needs) {
+          const v = Number(r.priorCarry[p] || 0);
+          return `<td class="vis-cf-num"><input
+            type="text"
+            inputmode="decimal"
+            class="vis-cf-carry-input"
+            data-cf-carry="${r.rowId}|${p}"
+            placeholder="Enter"
+            value="${v ? v.toLocaleString('en-US') : ''}"
+          /></td>`;
+        }
+        const v = Number(r.payment[p] || 0);
+        if (!v) return `<td class="vis-cf-num vis-cf-num-muted">—</td>`;
+        // Payment magnitudes are stored negative; display as ($X,XXX).
+        const mag = Math.round(Math.abs(v));
+        return `<td class="vis-cf-num vis-cf-num-out">(${mag.toLocaleString('en-US')})</td>`;
+      }).join('');
+      const payFy = Math.round(Math.abs(r.fyPayment || 0));
+      tBody.innerHTML += `
+        <tr class="vis-cf-row-payment" data-cf-row="${r.rowId}">
+          <td class="vis-cf-col-type">Payment</td>
+          <td colspan="3" class="vis-cf-row-payment-spacer"></td>
+          ${payCells}
+          <td class="vis-cf-num vis-cf-num-out">${payFy ? `(${payFy.toLocaleString('en-US')})` : '—'}</td>
+        </tr>`;
+    }
+  }
+
+  // ── Vendors summary (§3.8) ───────────────────────────────
+  sHead.innerHTML = `
+    <tr>
+      <th>Row</th>
+      ${periodKeys.map(p => `<th class="vis-cf-num">${cfPeriodLabel(p, yr)}</th>`).join('')}
+      <th class="vis-cf-num">FY</th>
+    </tr>`;
+  const sumRow = (label, mode, values) => {
+    const cells = periodKeys.map(p => {
+      const v = Math.round(Number(values[p] || 0));
+      if (!v) return `<td class="vis-cf-num vis-cf-num-muted">—</td>`;
+      return `<td class="vis-cf-num">${
+        mode === 'credit' ? `(${v.toLocaleString('en-US')})` : v.toLocaleString('en-US')
+      }</td>`;
+    }).join('');
+    // FY column rules per §3.8: O.B = Jan O.B, C.B = Dec C.B, others sum.
+    let fy;
+    if (label === 'O.B')      fy = Number(values[periodKeys[0]] || 0);
+    else if (label === 'C.B') fy = Number(values[periodKeys[periodKeys.length - 1]] || 0);
+    else                      fy = periodKeys.reduce((s, p) => s + Number(values[p] || 0), 0);
+    fy = Math.round(fy);
+    const fyCell = !fy
+      ? `<td class="vis-cf-num vis-cf-num-muted">—</td>`
+      : `<td class="vis-cf-num">${mode === 'credit' ? `(${fy.toLocaleString('en-US')})` : fy.toLocaleString('en-US')}</td>`;
+    return `<tr><th>${label}</th>${cells}${fyCell}</tr>`;
+  };
+  sBody.innerHTML =
+    sumRow('O.B',      'credit', summary.ob) +
+    sumRow('Expenses', 'credit', summary.expenses) +
+    sumRow('Payment',  'debit',  summary.payment) +
+    sumRow('C.B',      'credit', summary.cb);
+
+  refreshPayablesStatus();
+}
+
+/** Update the Payables section badge: Filled iff O.B set AND every
+ *  row has a term AND every needed prior-carry cell has a value. */
+function refreshPayablesStatus() {
+  const badge = document.querySelector('[data-cf-status="payables"]');
+  if (!badge) return;
+  if (!currentPayables) {
+    badge.textContent = 'Required';
+    badge.classList.remove('vis-cf-section-status-filled');
+    return;
+  }
+  const g = currentPayables.payables;
+  const obOk = (g.openingBalance || 0) > 0;
+  const allTerms = g.rows.every(r => !!r.paymentTerm);
+  const allCarryFilled = g.rows.every(r =>
+    Object.entries(r.paymentNeedsCarry).every(([p, needs]) =>
+      !needs || (r.priorCarry[p] || 0) > 0),
+  );
+  const filled = obOk && allTerms && allCarryFilled && g.rows.length > 0;
+  badge.textContent = filled ? 'Filled' : 'Required';
+  badge.classList.toggle('vis-cf-section-status-filled', filled);
+}
+
+function patchPayablesSectionSoon(openingBalance) {
+  if (!selectedCfBudgetId) return;
+  debounce(`cf:payables:section:${selectedCfBudgetId}`, async () => {
+    try {
+      const res = await api(`/api/visibility/budgets/${encodeURIComponent(selectedCfBudgetId)}/cf/payables`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ openingBalance }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        showBanner(document.getElementById('cfStructureErrorBanner'),
+          htmlEsc(body?.error?.message || `Save failed (${res.status}).`));
+        return;
+      }
+      // Re-fetch so the summary refreshes against the new O.B.
+      await loadPayables(true);
+    } catch (err) {
+      showBanner(document.getElementById('cfStructureErrorBanner'),
+        htmlEsc(`Save failed: ${(err && err.message) || err}`));
+    }
+  }, 400);
+}
+
+async function patchPayablesRow(rowId, fields) {
+  if (!selectedCfBudgetId) return;
+  try {
+    const res = await api(
+      `/api/visibility/budgets/${encodeURIComponent(selectedCfBudgetId)}/cf/payables/rows/${encodeURIComponent(rowId)}`,
+      {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(fields),
+      },
+    );
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showBanner(document.getElementById('cfStructureErrorBanner'),
+        htmlEsc(body?.error?.message || `Save failed (${res.status}).`));
+      return;
+    }
+    const data = await res.json();
+    if (data?.payables) {
+      currentPayables = { ...currentPayables, payables: data.payables };
+      renderPayables();
+    }
+  } catch (err) {
+    showBanner(document.getElementById('cfStructureErrorBanner'),
+      htmlEsc(`Save failed: ${(err && err.message) || err}`));
+  }
+}
+
+// O.B autosave + reformat on blur.
+document.addEventListener('input', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (t.id !== 'cfPayablesObInput') return;
+  patchPayablesSectionSoon(parseCfAmount(t.value));
+});
+document.addEventListener('blur', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (t.id !== 'cfPayablesObInput') return;
+  const v = parseCfAmount(t.value);
+  t.value = v ? fmtCfMag(v) : '';
+}, true);
+
+// Payment-term dropdown change.
+document.addEventListener('change', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLSelectElement)) return;
+  const rowId = t.getAttribute('data-cf-term');
+  if (!rowId) return;
+  const term = t.value || null;
+  void patchPayablesRow(rowId, { paymentTerm: term });
+});
+
+// Prior-carry cell — debounced PATCH per row.
+document.addEventListener('input', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  const handle = t.getAttribute('data-cf-carry');
+  if (!handle) return;
+  const [rowId, periodKey] = handle.split('|');
+  if (!rowId || !periodKey) return;
+  const value = parseCfAmount(t.value);
+  debounce(`cf:payables:carry:${rowId}:${periodKey}`, () => {
+    void patchPayablesRow(rowId, { priorCarry: { [periodKey]: value } });
+  }, 400);
+});
+document.addEventListener('blur', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (!t.hasAttribute('data-cf-carry')) return;
+  const v = parseCfAmount(t.value);
+  t.value = v ? fmtCfMag(v) : '';
+}, true);
+
 
 // ─────────────────────────────────────────────────────────────
 //  BOOT

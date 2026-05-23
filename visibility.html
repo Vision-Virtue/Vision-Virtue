@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0" />
   <title>Vision &amp; Virtue | Visibility</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="visibility.css?v=15" />
+  <link rel="stylesheet" href="visibility.css?v=16" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
@@ -569,7 +569,71 @@
               <span class="vis-cf-section-status" data-cf-status="wc">Required</span>
             </summary>
             <div class="vis-cf-section-body">
-              <div class="vis-cf-coming">Payables, Receivables and Inventory editors arrive in a future phase.</div>
+
+              <!-- §3 — Payables -->
+              <details class="vis-cf-subsection" data-cf-subsection="payables">
+                <summary class="vis-cf-subsection-summary">
+                  <span class="vis-cf-subsection-title">Payables</span>
+                  <span class="vis-cf-section-status" data-cf-status="payables">Required</span>
+                </summary>
+                <div class="vis-cf-subsection-body" id="cfPayablesBody">
+                  <div class="vis-banner vis-banner-warn" id="cfPayablesGranularityWarn" hidden></div>
+                  <label class="vis-cf-field">
+                    <span class="vis-cf-field-label">Opening Balance (A/P)</span>
+                    <span class="vis-cf-input-wrap">
+                      <span class="vis-cf-input-prefix">$</span>
+                      <input
+                        type="text"
+                        inputmode="decimal"
+                        class="vis-cf-input vis-cf-input-amount"
+                        id="cfPayablesObInput"
+                        placeholder="0"
+                        autocomplete="off"
+                      />
+                    </span>
+                  </label>
+                  <p class="vis-cf-field-hint">Closing A/P from the prior year. Positive amount; displayed as ($X,XXX) — credit balance.</p>
+
+                  <div class="vis-cf-grid-wrap">
+                    <table class="vis-cf-grid" id="cfPayablesTable">
+                      <thead id="cfPayablesTableHead"></thead>
+                      <tbody id="cfPayablesTableBody"></tbody>
+                    </table>
+                  </div>
+                  <div class="vis-empty" id="cfPayablesEmpty" hidden>
+                    No COGS/OPEX rows (ex-salaries) found in this budget yet.
+                  </div>
+
+                  <h4 class="vis-cf-summary-title">Vendors summary</h4>
+                  <div class="vis-cf-grid-wrap">
+                    <table class="vis-cf-grid vis-cf-summary-table" id="cfPayablesSummaryTable">
+                      <thead id="cfPayablesSummaryHead"></thead>
+                      <tbody id="cfPayablesSummaryBody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </details>
+
+              <!-- §4 / §5 — Receivables / Inventory placeholders -->
+              <details class="vis-cf-subsection" data-cf-subsection="receivables">
+                <summary class="vis-cf-subsection-summary">
+                  <span class="vis-cf-subsection-title">Receivables</span>
+                  <span class="vis-cf-section-status" data-cf-status="receivables">Required</span>
+                </summary>
+                <div class="vis-cf-subsection-body">
+                  <div class="vis-cf-coming">Receivables editor arrives in a future phase.</div>
+                </div>
+              </details>
+              <details class="vis-cf-subsection" data-cf-subsection="inventory">
+                <summary class="vis-cf-subsection-summary">
+                  <span class="vis-cf-subsection-title">Inventory</span>
+                  <span class="vis-cf-section-status" data-cf-status="inventory">Required</span>
+                </summary>
+                <div class="vis-cf-subsection-body">
+                  <div class="vis-cf-coming">Inventory editor arrives in a future phase.</div>
+                </div>
+              </details>
+
             </div>
           </details>
 
@@ -701,6 +765,6 @@
     </div>
   </div>
 
-  <script src="visibility.js?v=27" defer></script>
+  <script src="visibility.js?v=28" defer></script>
 </body>
 </html>

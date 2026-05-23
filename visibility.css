@@ -1388,6 +1388,143 @@
 .vis-cf-input:disabled { color: rgba(255, 255, 255, 0.5); }
 .vis-cf-input-amount { text-align: right; min-width: 180px; }
 
+/* ── Nested subsections (Payables / Receivables / Inventory) ─── */
+.vis-cf-subsection {
+  margin-top: 0.75rem;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.vis-cf-subsection[open] { border-color: rgba(155, 189, 242, 0.25); }
+.vis-cf-subsection-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.7rem 1rem;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+.vis-cf-subsection-summary::-webkit-details-marker { display: none; }
+.vis-cf-subsection-summary::before {
+  content: '▸';
+  font-size: 0.7rem;
+  color: rgba(255, 255, 255, 0.5);
+  transition: transform 0.12s;
+  width: 1em;
+}
+.vis-cf-subsection[open] .vis-cf-subsection-summary::before { content: '▾'; }
+.vis-cf-subsection-title {
+  flex: 1;
+  font-weight: 600;
+  color: #ffffff;
+  font-size: 0.92rem;
+}
+.vis-cf-subsection-body { padding: 0.5rem 1.1rem 1.1rem; }
+
+/* ── Payables grid (§3.4) ──────────────────────────────────── */
+.vis-cf-grid-wrap {
+  overflow-x: auto;
+  margin-top: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.vis-cf-grid {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 1100px;
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+}
+.vis-cf-grid thead th {
+  background: rgba(91, 141, 224, 0.12);
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 600;
+  text-align: left;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+}
+.vis-cf-grid tbody td {
+  padding: 0.4rem 0.7rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.vis-cf-grid .vis-cf-num { text-align: right; }
+.vis-cf-grid .vis-cf-num-muted { color: rgba(255, 255, 255, 0.3); }
+.vis-cf-grid .vis-cf-num-out  { color: #f0c763; }
+.vis-cf-row-expense { background: rgba(255, 255, 255, 0.015); }
+.vis-cf-row-payment { background: rgba(91, 141, 224, 0.04); }
+.vis-cf-col-type {
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 700;
+  width: 5.5rem;
+}
+.vis-cf-row-payment .vis-cf-col-type { color: #cfe0ff; }
+.vis-cf-col-term { vertical-align: middle; }
+.vis-cf-term-select {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+  padding: 0.25rem 0.4rem;
+  font-size: 0.82rem;
+  font-family: inherit;
+}
+.vis-cf-term-select:focus {
+  outline: none;
+  border-color: rgba(155, 189, 242, 0.7);
+}
+.vis-cf-carry-input {
+  width: 5.5rem;
+  background: rgba(217, 156, 33, 0.10);
+  color: #f0c763;
+  border: 1px dashed rgba(217, 156, 33, 0.45);
+  border-radius: 4px;
+  padding: 0.2rem 0.4rem;
+  font-size: 0.82rem;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.vis-cf-carry-input:focus {
+  outline: none;
+  border-style: solid;
+  border-color: #f0c763;
+  background: rgba(217, 156, 33, 0.18);
+}
+.vis-cf-row-payment-spacer {
+  color: rgba(255, 255, 255, 0.2);
+  font-style: italic;
+  font-size: 0.75rem;
+}
+
+/* Vendors summary */
+.vis-cf-summary-title {
+  margin: 1.5rem 0 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+}
+.vis-cf-summary-table { min-width: 800px; }
+.vis-cf-summary-table tbody th {
+  text-align: left;
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.65);
+  background: rgba(255, 255, 255, 0.02);
+  padding: 0.4rem 0.7rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
 /* Responsive */
 @media (max-width: 700px) {
   .vis-hero        { padding: 5rem 1.25rem 3rem; }
