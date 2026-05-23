@@ -1131,4 +1131,39 @@ exports.cashFlowController = {
             periodKeys: (0, visibility_repository_1.periodKeysFor)(ctx.budget.granularity),
         });
     },
+    /**
+     * PATCH /api/visibility/budgets/:id/cf
+     * Updates CF-level fields (openingCash, status). Section-level
+     * fields (Payables/Receivables/Inventory/Salaries/Manual) get
+     * their own endpoints in later phases.
+     */
+    patch(req, res) {
+        const ctx = requireBudget(req, res);
+        if (!ctx)
+            return;
+        if (ctx.budget.status !== 'finalized') {
+            res.status(409).json({
+                error: { code: 'BUDGET_NOT_FINALIZED', message: 'Finalize the budget first.' },
+            });
+            return;
+        }
+        const Schema = zod_1.z.object({
+            openingCash: zod_1.z.number().finite().optional(),
+            status: zod_1.z.enum(['draft', 'finalized']).optional(),
+        });
+        const parsed = Schema.safeParse(req.body);
+        if (!parsed.success) {
+            res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid CF patch payload.' } });
+            return;
+        }
+        const cf = visibility_repository_1.cashFlowRepo.ensureForBudget(ctx.budget.id);
+        if (parsed.data.openingCash !== undefined) {
+            visibility_repository_1.cashFlowRepo.updateOpeningCash(cf.id, parsed.data.openingCash);
+        }
+        if (parsed.data.status !== undefined) {
+            visibility_repository_1.cashFlowRepo.setStatus(cf.id, parsed.data.status);
+        }
+        const updated = visibility_repository_1.cashFlowRepo.getByBudget(ctx.budget.id);
+        res.json({ cf: updated ? serializeCashFlow(updated) : null });
+    },
 };

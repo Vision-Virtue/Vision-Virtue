@@ -262,6 +262,7 @@ router.post(  '/visibility/budgets/:id/salaries/edit',             (req, res) =>
 
 // ─── CF (Cash Flow) — spec §15 ──────────────────────────────────────────────
 router.get(   '/visibility/budgets/:id/cf',                        (req, res) => cashFlowController.getOrCreate(req, res));
+router.patch( '/visibility/budgets/:id/cf',                        (req, res) => cashFlowController.patch(req, res));
 
 // ─── Admin (Raphael) — Partner Submissions ──────────────────────────────────
 // All admin endpoints require X-Admin-Pin header OR ?pin= query (matching

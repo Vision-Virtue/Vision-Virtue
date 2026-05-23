@@ -2832,11 +2832,12 @@ function promptModal(title, body, initialValue) {
 }
 
 // ─────────────────────────────────────────────────────────────
-//  CF (Cash Flow) — Phase 1: scaffolding & shared budget picker
+//  CF (Cash Flow) — Phase 1 scaffolding + Phase 2 O.B Cash
 // ─────────────────────────────────────────────────────────────
 
 let selectedCfBudgetId = null;
 let cfBudgetCache = []; // finalized budgets only
+let currentCf = null;   // { cf, budget, periodKeys } for the selected budget
 
 /**
  * Populate the three CF tabs' budget pickers from the budgets API.
@@ -2879,20 +2880,147 @@ async function refreshCfBudgetPickers() {
       sel.appendChild(opt);
     }
   }
-  updateCfEmptyStates();
+  await loadCurrentCf();
 }
 
-function updateCfEmptyStates() {
-  const empties = [
-    document.getElementById('cfStructureEmpty'),
-    document.getElementById('cfForecastEmpty'),
-    document.getElementById('cfDashboardEmpty'),
-  ];
-  const noBudgets = cfBudgetCache.length === 0;
-  const msg = noBudgets
-    ? 'No finalized budgets yet. Finalize a budget in tab 3 to open Cash Flow.'
-    : 'Cash Flow editor coming in the next phase. Use the picker above to choose a finalized budget.';
-  for (const el of empties) { if (el) el.textContent = msg; }
+/**
+ * Fetch the CF for `selectedCfBudgetId` and render whichever CF
+ * panel is currently active. Called on tab activation and after
+ * the picker changes.
+ */
+async function loadCurrentCf() {
+  const noBudget = !selectedCfBudgetId;
+  if (noBudget) {
+    currentCf = null;
+    renderCfStructure();
+    return;
+  }
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(selectedCfBudgetId)}/cf`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      const banner = document.getElementById('cfStructureErrorBanner');
+      showBanner(banner, htmlEsc(body?.error?.message || `Could not load CF (${res.status}).`));
+      currentCf = null;
+      renderCfStructure();
+      return;
+    }
+    currentCf = await res.json();
+    showBanner(document.getElementById('cfStructureErrorBanner'), '');
+  } catch (err) {
+    currentCf = null;
+    showBanner(
+      document.getElementById('cfStructureErrorBanner'),
+      htmlEsc(`Could not load CF: ${(err && err.message) || err}`),
+    );
+  }
+  renderCfStructure();
+}
+
+function renderCfStructure() {
+  const sectionsEl = document.getElementById('cfStructureSections');
+  const emptyEl    = document.getElementById('cfStructureEmpty');
+  const footerEl   = document.getElementById('cfStructureFooter');
+  const pillEl     = document.getElementById('cfStructureStatusPill');
+  const obInput    = document.getElementById('cfOpeningCashInput');
+  if (!sectionsEl || !emptyEl || !footerEl) return;
+
+  const haveCf = !!currentCf;
+  sectionsEl.hidden = !haveCf;
+  footerEl.hidden   = !haveCf;
+  emptyEl.hidden    = haveCf;
+
+  if (!haveCf) {
+    emptyEl.textContent = cfBudgetCache.length === 0
+      ? 'No finalized budgets yet. Finalize a budget in tab 3 to open Cash Flow.'
+      : 'Select a finalized budget to begin configuring Cash Flow sections.';
+    if (pillEl) {
+      pillEl.dataset.status = 'draft';
+      pillEl.textContent = 'Draft';
+    }
+    return;
+  }
+
+  // Status pill mirrors the CF's persisted status.
+  const status = currentCf.cf?.status || 'draft';
+  if (pillEl) {
+    pillEl.dataset.status = status === 'finalized' ? 'finalized' : 'draft';
+    pillEl.textContent = status === 'finalized' ? 'Finalized' : 'Draft';
+  }
+
+  // Section 1 — Opening Cash. Echo the persisted value into the
+  // input only when it differs (avoids fighting the user mid-type).
+  if (obInput) {
+    const persisted = Number(currentCf.cf?.openingCash || 0);
+    const formatted = formatCfAmount(persisted);
+    if (document.activeElement !== obInput && obInput.value !== formatted) {
+      obInput.value = persisted ? formatted : '';
+    }
+    obInput.disabled = status === 'finalized';
+  }
+
+  refreshCfSectionStatuses();
+}
+
+/** Section-level status badges (Filled / Required / Optional). */
+function refreshCfSectionStatuses() {
+  if (!currentCf) return;
+  const ob = Number(currentCf.cf?.openingCash || 0);
+  const obBadge = document.querySelector('[data-cf-status="opening-cash"]');
+  if (obBadge) {
+    if (ob > 0 || obBadge.dataset.userTouched === '1') {
+      obBadge.textContent = ob !== 0 ? 'Filled' : 'Required';
+      obBadge.classList.toggle('vis-cf-section-status-filled', ob !== 0);
+    } else {
+      obBadge.textContent = 'Required';
+      obBadge.classList.remove('vis-cf-section-status-filled');
+    }
+  }
+}
+
+/** Format an amount with thousands separators, no currency symbol. */
+function formatCfAmount(n) {
+  if (!Number.isFinite(n)) return '';
+  return Math.round(n).toLocaleString('en-US');
+}
+
+/** Parse a user-entered amount string back to a Number. Strips
+ *  commas and whitespace; returns 0 for empty/invalid input. */
+function parseCfAmount(s) {
+  const cleaned = String(s || '').replace(/[,  ]/g, '').trim();
+  if (!cleaned) return 0;
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Debounced PATCH for Opening Cash. */
+function patchCfOpeningCashSoon(value) {
+  if (!selectedCfBudgetId) return;
+  debounce(`cf:openingCash:${selectedCfBudgetId}`, async () => {
+    try {
+      const res = await api(`/api/visibility/budgets/${encodeURIComponent(selectedCfBudgetId)}/cf`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ openingCash: value }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        showBanner(
+          document.getElementById('cfStructureErrorBanner'),
+          htmlEsc(body?.error?.message || `Save failed (${res.status}).`),
+        );
+        return;
+      }
+      const data = await res.json();
+      if (currentCf && data?.cf) currentCf.cf = data.cf;
+      refreshCfSectionStatuses();
+    } catch (err) {
+      showBanner(
+        document.getElementById('cfStructureErrorBanner'),
+        htmlEsc(`Save failed: ${(err && err.message) || err}`),
+      );
+    }
+  }, 400);
 }
 
 document.addEventListener('change', (ev) => {
@@ -2900,11 +3028,34 @@ document.addEventListener('change', (ev) => {
   if (!(t instanceof HTMLSelectElement)) return;
   if (!t.hasAttribute('data-cf-budget-select')) return;
   selectedCfBudgetId = t.value || null;
-  // Mirror selection across the other CF tab pickers.
   for (const other of document.querySelectorAll('[data-cf-budget-select]')) {
     if (other !== t) other.value = selectedCfBudgetId || '';
   }
+  void loadCurrentCf();
 });
+
+// Live edits on the Opening Cash field — debounced autosave; the
+// input itself stays a plain text box while typing, gets reformatted
+// with thousands separators on blur.
+document.addEventListener('input', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (t.id !== 'cfOpeningCashInput') return;
+  const badge = document.querySelector('[data-cf-status="opening-cash"]');
+  if (badge) badge.dataset.userTouched = '1';
+  const value = parseCfAmount(t.value);
+  patchCfOpeningCashSoon(value);
+  if (currentCf?.cf) currentCf.cf.openingCash = value;
+  refreshCfSectionStatuses();
+});
+
+document.addEventListener('blur', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (t.id !== 'cfOpeningCashInput') return;
+  const value = parseCfAmount(t.value);
+  t.value = value ? formatCfAmount(value) : '';
+}, true);
 
 // ─────────────────────────────────────────────────────────────
 //  BOOT

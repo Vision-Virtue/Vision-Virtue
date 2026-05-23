@@ -1156,4 +1156,38 @@ export const cashFlowController = {
       periodKeys: periodKeysFor(ctx.budget.granularity),
     });
   },
+
+  /**
+   * PATCH /api/visibility/budgets/:id/cf
+   * Updates CF-level fields (openingCash, status). Section-level
+   * fields (Payables/Receivables/Inventory/Salaries/Manual) get
+   * their own endpoints in later phases.
+   */
+  patch(req: Request, res: Response): void {
+    const ctx = requireBudget(req, res); if (!ctx) return;
+    if (ctx.budget.status !== 'finalized') {
+      res.status(409).json({
+        error: { code: 'BUDGET_NOT_FINALIZED', message: 'Finalize the budget first.' },
+      });
+      return;
+    }
+    const Schema = z.object({
+      openingCash: z.number().finite().optional(),
+      status:      z.enum(['draft', 'finalized']).optional(),
+    });
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid CF patch payload.' } });
+      return;
+    }
+    const cf = cashFlowRepo.ensureForBudget(ctx.budget.id);
+    if (parsed.data.openingCash !== undefined) {
+      cashFlowRepo.updateOpeningCash(cf.id, parsed.data.openingCash);
+    }
+    if (parsed.data.status !== undefined) {
+      cashFlowRepo.setStatus(cf.id, parsed.data.status);
+    }
+    const updated = cashFlowRepo.getByBudget(ctx.budget.id);
+    res.json({ cf: updated ? serializeCashFlow(updated) : null });
+  },
 };
