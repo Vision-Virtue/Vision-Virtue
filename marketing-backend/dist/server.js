@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const dotenv_1 = __importDefault(require("dotenv"));
 dotenv_1.default.config();
+const v8_1 = __importDefault(require("v8"));
 const app_1 = __importDefault(require("./app"));
 const database_1 = require("./db/database");
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -27,11 +28,17 @@ async function start() {
     if (!process.env.LINKEDIN_CLIENT_ID || !process.env.LINKEDIN_CLIENT_SECRET) {
         warnings.push('LinkedIn OAuth credentials are not set — LinkedIn features will not work');
     }
-    if (!process.env.RAPHAEL_PASSCODE) {
-        warnings.push('RAPHAEL_PASSCODE is not set — using default "raphael2025"');
+    if (!process.env.ACCESS_CODE) {
+        warnings.push('ACCESS_CODE is not set — the authorized personnel PIN gate will fail');
     }
-    if (process.env.SESSION_SECRET === 'change-this-in-production') {
-        warnings.push('SESSION_SECRET is using the default value — change it in production');
+    if (!process.env.RAPHAEL_PASSCODE) {
+        warnings.push('RAPHAEL_PASSCODE is not set — approval endpoint will fail');
+    }
+    else if (process.env.RAPHAEL_PASSCODE === 'raphael2025') {
+        warnings.push('RAPHAEL_PASSCODE is still the default value — change it before going live');
+    }
+    if (!process.env.SESSION_SECRET || process.env.SESSION_SECRET === 'change-this-in-production-please') {
+        warnings.push('SESSION_SECRET is not set or is using the default value — change it in production');
     }
     if (warnings.length > 0) {
         console.warn('\n[SERVER] ⚠️  Configuration warnings:');
@@ -48,6 +55,8 @@ async function start() {
         console.log(`  Health:   http://localhost:${PORT}/api/health`);
         console.log(`  Frontend: ${process.env.FRONTEND_URL || 'http://localhost:3000'}`);
         console.log(`  Env:      ${process.env.NODE_ENV || 'development'}`);
+        const heapLimitMB = Math.round(v8_1.default.getHeapStatistics().heap_size_limit / (1024 * 1024));
+        console.log(`  Heap:     ${heapLimitMB} MB (max-old-space-size)`);
         console.log('\n  Agents:');
         console.log('    - Dr. Ethan Ross (Chief Economist)');
         console.log('    - Sofia Chen (Manager of Marketing)');

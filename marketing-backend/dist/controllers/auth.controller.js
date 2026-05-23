@@ -1,8 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.authController = exports.AuthController = void 0;
+exports.verifyPin = verifyPin;
 const uuid_1 = require("uuid");
+const crypto_1 = require("crypto");
 const repository_1 = require("../db/repository");
+const database_1 = require("../db/database");
 const linkedin_service_1 = require("../services/linkedin.service");
 function getLinkedInService() {
     return new linkedin_service_1.LinkedInService(process.env.LINKEDIN_CLIENT_ID || '', process.env.LINKEDIN_CLIENT_SECRET || '', process.env.LINKEDIN_REDIRECT_URI || '', process.env.LINKEDIN_ORGANIZATION_ID || '');
@@ -41,7 +44,7 @@ class AuthController {
         }
         // Verify CSRF state
         const sessionState = req.session['oauth_state'];
-        if (sessionState && state && sessionState !== state) {
+        if (!state || !sessionState || sessionState !== state) {
             res.status(400).json({
                 error: { code: 'INVALID_STATE', message: 'OAuth state mismatch. Possible CSRF attack.' },
             });
@@ -78,6 +81,7 @@ class AuthController {
                 credentials_configured: credentialsConfigured,
                 expires_at: new Date(token.expires_at).toISOString(),
                 organization_id: token.organization_id,
+                person_urn: token.person_urn,
                 token_age_hours: Math.round((Date.now() - new Date(token.created_at).getTime()) / 3600000),
                 is_expired: isExpired,
             },
@@ -95,10 +99,26 @@ class AuthController {
         // Instead, we'll just mark as expired by returning a helpful message
         // The simplest approach: delete by saving a dummy expired token
         // Actually, let's just use a direct DB call
-        const db = require('../db/database').getDb();
-        db.prepare('DELETE FROM linkedin_accounts').run();
+        (0, database_1.getDb)().prepare('DELETE FROM linkedin_accounts').run();
         res.json({ success: true, message: 'LinkedIn disconnected successfully' });
     }
 }
 exports.AuthController = AuthController;
 exports.authController = new AuthController();
+// POST /api/auth/verify-pin
+function verifyPin(req, res) {
+    const { pin } = req.body;
+    const expected = process.env.ACCESS_CODE;
+    if (!expected) {
+        res.status(500).json({ error: { code: 'NOT_CONFIGURED', message: 'Access code not configured on server' } });
+        return;
+    }
+    if (!pin || typeof pin !== 'string') {
+        res.status(400).json({ valid: false });
+        return;
+    }
+    const a = (0, crypto_1.createHash)('sha256').update(pin).digest();
+    const b = (0, crypto_1.createHash)('sha256').update(expected).digest();
+    const valid = (0, crypto_1.timingSafeEqual)(a, b);
+    res.json({ valid });
+}

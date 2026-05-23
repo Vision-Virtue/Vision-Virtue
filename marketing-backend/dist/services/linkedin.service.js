@@ -21,11 +21,10 @@ class LinkedInService {
     }
     // ── OAuth ─────────────────────────────────────────────────────────────────────
     getAuthorizationUrl(state) {
-        // Share on LinkedIn — Default Tier, no approval needed.
-        // w_member_social is the only scope required for posting as the authenticated member.
-        // TODO: add r_organization_social w_organization_social rw_organization_admin
-        //       once LinkedIn approves the Community Management API application.
-        const scopes = ['w_member_social'].join(' ');
+        // openid + profile: "Sign In with LinkedIn using OpenID Connect" (Default Tier, no approval)
+        // w_member_social:  "Share on LinkedIn" (Default Tier, no approval)
+        // Together they let us get the correct member sub from /v2/userinfo for posting.
+        const scopes = ['openid', 'profile', 'w_member_social'].join(' ');
         const params = new URLSearchParams({
             response_type: 'code',
             client_id: this.clientId,
@@ -36,7 +35,20 @@ class LinkedInService {
         return `${LINKEDIN_AUTH_BASE}/authorization?${params.toString()}`;
     }
     async getPersonUrn(token) {
-        // Try /v2/me — works for many apps even without an explicit r_liteprofile scope
+        // /v2/userinfo (OIDC) — returns sub when openid+profile scope is granted.
+        // The sub here is the correct identifier for urn:li:member: posts.
+        try {
+            const response = await axios_1.default.get(`${LINKEDIN_API_BASE}/v2/userinfo`, {
+                headers: { Authorization: `Bearer ${token}` },
+            });
+            const sub = response.data.sub;
+            if (sub) {
+                console.log(`[AUTH] person URN from userinfo sub: ${sub}`);
+                return `urn:li:person:${sub}`;
+            }
+        }
+        catch { /* fall through */ }
+        // /v2/me — works when r_liteprofile scope is available (legacy fallback)
         try {
             const response = await axios_1.default.get(`${LINKEDIN_API_BASE}/v2/me`, {
                 headers: {
@@ -45,10 +57,26 @@ class LinkedInService {
                 },
             });
             const id = response.data.id;
-            if (id)
+            if (id) {
+                console.log(`[AUTH] person URN from /v2/me: ${id}`);
                 return `urn:li:person:${id}`;
+            }
         }
-        catch { /* fall through to env var */ }
+        catch { /* fall through */ }
+        // Token introspection fallback
+        try {
+            const intro = await axios_1.default.post(`${LINKEDIN_AUTH_BASE}/introspectToken`, new URLSearchParams({
+                token,
+                client_id: this.clientId,
+                client_secret: this.clientSecret,
+            }).toString(), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+            const d = intro.data;
+            console.log(`[AUTH] introspection scope="${d.scope}" sub="${d.sub}"`);
+            const sub = d.sub;
+            if (sub)
+                return `urn:li:person:${sub}`;
+        }
+        catch { /* fall through */ }
         // Fallback: LINKEDIN_PERSON_URN env var (set manually in Render dashboard)
         const envUrn = process.env.LINKEDIN_PERSON_URN;
         if (envUrn)
@@ -132,11 +160,10 @@ class LinkedInService {
                 headers: {
                     Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json',
+                    'LinkedIn-Version': '202604',
                     'X-Restli-Protocol-Version': '2.0.0',
-                    'LinkedIn-Version': '202401',
                 },
             });
-            // LinkedIn returns the post ID in the x-restli-id header or response body
             const postId = response.headers['x-restli-id'] ||
                 response.data?.id ||
                 (0, uuid_1.v4)();
@@ -148,22 +175,24 @@ class LinkedInService {
     }
     async createImagePost(token, text, imageUrl, authorUrn) {
         try {
-            // Step 1: Initialize image upload
-            const initResponse = await axios_1.default.post(`${LINKEDIN_API_BASE}/rest/images?action=initializeUpload`, {
-                initializeUploadRequest: {
-                    owner: authorUrn,
-                },
-            }, {
+            // Step 1: Initialize image upload via new REST images API
+            const initResponse = await axios_1.default.post(`${LINKEDIN_API_BASE}/rest/images?action=initializeUpload`, { initializeUploadRequest: { owner: authorUrn } }, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json',
+                    'LinkedIn-Version': '202604',
                     'X-Restli-Protocol-Version': '2.0.0',
-                    'LinkedIn-Version': '202401',
                 },
             });
-            const { uploadUrl, image } = initResponse.data.value;
-            // Step 2: Fetch image data from URL
-            const imageResponse = await axios_1.default.get(imageUrl, { responseType: 'arraybuffer' });
+            const initData = initResponse.data;
+            const uploadUrl = initData.value.uploadUrl;
+            const imageUrn = initData.value.image;
+            // Step 2: Fetch image data from URL (SSRF guard: https only)
+            const parsedUrl = new URL(imageUrl);
+            if (parsedUrl.protocol !== 'https:') {
+                throw new types_1.ApiError(400, 'Image URL must use HTTPS', 'INVALID_URL');
+            }
+            const imageResponse = await axios_1.default.get(imageUrl, { responseType: 'arraybuffer', maxRedirects: 3 });
             const imageBuffer = Buffer.from(imageResponse.data);
             // Step 3: Upload image binary
             await axios_1.default.put(uploadUrl, imageBuffer, {
@@ -172,7 +201,7 @@ class LinkedInService {
                     'Content-Type': 'application/octet-stream',
                 },
             });
-            // Step 4: Create post with image
+            // Step 4: Create post with image via new REST posts API
             const payload = {
                 author: authorUrn,
                 commentary: text,
@@ -185,7 +214,7 @@ class LinkedInService {
                 content: {
                     media: {
                         title: 'Vision & Virtue',
-                        id: image,
+                        id: imageUrn,
                     },
                 },
                 lifecycleState: 'PUBLISHED',
@@ -195,8 +224,8 @@ class LinkedInService {
                 headers: {
                     Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json',
+                    'LinkedIn-Version': '202604',
                     'X-Restli-Protocol-Version': '2.0.0',
-                    'LinkedIn-Version': '202401',
                 },
             });
             const postId = postResponse.headers['x-restli-id'] ||
@@ -211,23 +240,35 @@ class LinkedInService {
     async uploadMediaAsset(token, filePath) {
         try {
             const absolutePath = path_1.default.resolve(filePath);
-            if (!fs_1.default.existsSync(absolutePath)) {
-                throw new types_1.ApiError(400, `File not found: ${filePath}`, 'FILE_NOT_FOUND');
+            const uploadDir = path_1.default.resolve(process.env.UPLOAD_DIR || path_1.default.join(process.cwd(), 'uploads'));
+            if (!absolutePath.startsWith(uploadDir + path_1.default.sep)) {
+                throw new types_1.ApiError(400, 'Invalid file path', 'INVALID_PATH');
             }
-            // Initialize upload
-            const initResponse = await axios_1.default.post(`${LINKEDIN_API_BASE}/rest/images?action=initializeUpload`, {
-                initializeUploadRequest: {
+            if (!fs_1.default.existsSync(absolutePath)) {
+                throw new types_1.ApiError(400, 'File not found', 'FILE_NOT_FOUND');
+            }
+            // Register upload via v2 assets API
+            const registerResponse = await axios_1.default.post(`${LINKEDIN_API_BASE}/v2/assets?action=registerUpload`, {
+                registerUploadRequest: {
+                    recipes: ['urn:li:digitalmediaRecipe:feedshare-image'],
                     owner: `urn:li:organization:${this.organizationId}`,
+                    serviceRelationships: [
+                        {
+                            relationshipType: 'OWNER',
+                            identifier: 'urn:li:userGeneratedContent',
+                        },
+                    ],
                 },
             }, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                     'Content-Type': 'application/json',
                     'X-Restli-Protocol-Version': '2.0.0',
-                    'LinkedIn-Version': '202401',
                 },
             });
-            const { uploadUrl, image: assetUrn } = initResponse.data.value;
+            const registerData = registerResponse.data;
+            const uploadUrl = registerData.value.uploadMechanism['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest'].uploadUrl;
+            const assetUrn = registerData.value.asset;
             // Upload binary
             const fileBuffer = fs_1.default.readFileSync(absolutePath);
             await axios_1.default.put(uploadUrl, fileBuffer, {
@@ -246,11 +287,10 @@ class LinkedInService {
     }
     async getPostAnalytics(token, postId) {
         try {
-            const response = await axios_1.default.get(`${LINKEDIN_API_BASE}/rest/organizationalEntityShareStatistics?q=organizationalEntity&organizationalEntity=urn:li:organization:${this.organizationId}&shares=List(${encodeURIComponent(postId)})`, {
+            const response = await axios_1.default.get(`${LINKEDIN_API_BASE}/v2/organizationalEntityShareStatistics?q=organizationalEntity&organizationalEntity=urn:li:organization:${this.organizationId}&shares=List(${encodeURIComponent(postId)})`, {
                 headers: {
                     Authorization: `Bearer ${token}`,
                     'X-Restli-Protocol-Version': '2.0.0',
-                    'LinkedIn-Version': '202401',
                 },
             });
             return response.data;
