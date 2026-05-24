@@ -2916,6 +2916,7 @@ async function loadCurrentCf() {
   }
   renderCfStructure();
   await loadPayables(true);
+  await loadReceivables(true);
 }
 
 function renderCfStructure() {
@@ -3469,6 +3470,331 @@ document.addEventListener('blur', (ev) => {
   const t = ev.target;
   if (!(t instanceof HTMLInputElement)) return;
   if (!t.hasAttribute('data-cf-carry')) return;
+  const v = parseCfSigned(t.value);
+  t.value = fmtCfSigned(v, true);
+}, true);
+
+// ─────────────────────────────────────────────────────────────
+//  CF — Receivables (spec §4)  — mirror of Payables
+// ─────────────────────────────────────────────────────────────
+
+let currentReceivables = null;
+let lastReceivablesBudgetId = null;
+
+async function loadReceivables(force) {
+  if (!selectedCfBudgetId) { currentReceivables = null; renderReceivables(); return; }
+  if (!force && lastReceivablesBudgetId === selectedCfBudgetId && currentReceivables) {
+    renderReceivables(); return;
+  }
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(selectedCfBudgetId)}/cf/receivables`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showBanner(
+        document.getElementById('cfStructureErrorBanner'),
+        htmlEsc(body?.error?.message || `Could not load Receivables (${res.status}).`),
+      );
+      currentReceivables = null;
+      lastReceivablesBudgetId = null;
+      renderReceivables();
+      return;
+    }
+    currentReceivables = await res.json();
+    lastReceivablesBudgetId = selectedCfBudgetId;
+  } catch (err) {
+    showBanner(
+      document.getElementById('cfStructureErrorBanner'),
+      htmlEsc(`Could not load Receivables: ${(err && err.message) || err}`),
+    );
+    currentReceivables = null;
+  }
+  renderReceivables();
+}
+
+function renderReceivables() {
+  const warn  = document.getElementById('cfReceivablesGranularityWarn');
+  const empty = document.getElementById('cfReceivablesEmpty');
+  const tHead = document.getElementById('cfReceivablesTableHead');
+  const tBody = document.getElementById('cfReceivablesTableBody');
+  const sHead = document.getElementById('cfReceivablesSummaryHead');
+  const sBody = document.getElementById('cfReceivablesSummaryBody');
+  const obIn  = document.getElementById('cfReceivablesObInput');
+  if (!tHead || !tBody) return;
+
+  if (!currentReceivables) {
+    tHead.innerHTML = ''; tBody.innerHTML = '';
+    sHead.innerHTML = ''; sBody.innerHTML = '';
+    if (empty) empty.hidden = true;
+    if (warn)  warn.hidden  = true;
+    if (obIn)  obIn.value   = '';
+    refreshReceivablesStatus();
+    return;
+  }
+
+  const grid = currentReceivables.receivables;
+  const { periodKeys, rows, summary, openingBalance, monthlySupported } = grid;
+  const yr = currentCf?.budget?.year || new Date().getFullYear();
+
+  if (warn) {
+    if (!monthlySupported) {
+      warn.innerHTML = 'Receivables computation is monthly-only in this phase. Switch the budget to <strong>Monthly</strong> granularity to see Revenue / Payment values.';
+      warn.hidden = false;
+    } else {
+      warn.hidden = true;
+    }
+  }
+
+  if (obIn) {
+    const formatted = fmtCfSigned(openingBalance, true);
+    if (document.activeElement !== obIn && obIn.value !== formatted) {
+      obIn.value = formatted;
+    }
+  }
+
+  // ── Allocation grid ───────────────────────────────────────
+  const headPeriods = periodKeys.map(p => `<th class="vis-cf-num">${cfPeriodLabel(p, yr)}</th>`).join('');
+  tHead.innerHTML = `
+    <tr>
+      <th class="vis-cf-col-type">Type</th>
+      <th>Company</th>
+      <th>Budget Section</th>
+      <th>Payment terms</th>
+      ${headPeriods}
+      <th class="vis-cf-num">FY</th>
+    </tr>`;
+
+  tBody.innerHTML = '';
+  if (rows.length === 0) {
+    if (empty) empty.hidden = false;
+  } else {
+    if (empty) empty.hidden = true;
+    for (const r of rows) {
+      const company = htmlEsc(lookupCompanyName(r.companyId));
+      const section = htmlEsc(r.plSection);
+      const termOpts = ['<option value="">—</option>']
+        .concat(CF_PAYMENT_TERMS.map(t =>
+          `<option value="${t}"${t === r.paymentTerm ? ' selected' : ''}>${t}</option>`))
+        .join('');
+
+      // Revenue row — preserves the budget's negative sign.
+      const revCells = periodKeys.map(p => {
+        const v = Number(r.revenue[p] || 0);
+        if (!v) return `<td class="vis-cf-num vis-cf-num-muted">—</td>`;
+        const mag = Math.round(Math.abs(v));
+        return v < 0
+          ? `<td class="vis-cf-num vis-cf-num-out">(${mag.toLocaleString('en-US')})</td>`
+          : `<td class="vis-cf-num">${mag.toLocaleString('en-US')}</td>`;
+      }).join('');
+      const revFy = Math.round(Math.abs(r.fyRevenue || 0));
+      tBody.innerHTML += `
+        <tr class="vis-cf-row-expense" data-cf-rec-row="${r.rowId}">
+          <td class="vis-cf-col-type">Revenue</td>
+          <td>${company}</td>
+          <td>${section}</td>
+          <td rowspan="2" class="vis-cf-col-term">
+            <select class="vis-cf-term-select" data-cf-rec-term="${r.rowId}">${termOpts}</select>
+          </td>
+          ${revCells}
+          <td class="vis-cf-num vis-cf-num-out">${revFy ? `(${revFy.toLocaleString('en-US')})` : '—'}</td>
+        </tr>`;
+
+      // Payment row — cash-in, positive.
+      const payCells = periodKeys.map(p => {
+        const needs = r.paymentNeedsCarry[p];
+        if (needs) {
+          const v = Number(r.priorCarry[p] || 0);
+          const display = fmtCfSigned(v, true);
+          return `<td class="vis-cf-num"><input
+            type="text"
+            inputmode="decimal"
+            class="vis-cf-carry-input vis-cf-carry-input-in"
+            data-cf-rec-carry="${r.rowId}|${p}"
+            placeholder="Enter"
+            value="${display}"
+          /></td>`;
+        }
+        const v = Number(r.payment[p] || 0);
+        if (!v) return `<td class="vis-cf-num vis-cf-num-muted">—</td>`;
+        return `<td class="vis-cf-num">${Math.round(v).toLocaleString('en-US')}</td>`;
+      }).join('');
+      const payFy = Math.round(r.fyPayment || 0);
+      tBody.innerHTML += `
+        <tr class="vis-cf-row-payment" data-cf-rec-row="${r.rowId}">
+          <td class="vis-cf-col-type">Payment</td>
+          <td colspan="2" class="vis-cf-row-payment-spacer"></td>
+          ${payCells}
+          <td class="vis-cf-num">${payFy ? payFy.toLocaleString('en-US') : '—'}</td>
+        </tr>`;
+    }
+  }
+
+  // ── Customers summary (§4.6) ──────────────────────────────
+  sHead.innerHTML = `
+    <tr>
+      <th>Row</th>
+      ${periodKeys.map(p => `<th class="vis-cf-num">${cfPeriodLabel(p, yr)}</th>`).join('')}
+      <th class="vis-cf-num">FY</th>
+    </tr>`;
+  // mode = 'signed' → sign-aware (O.B / C.B; can be either).
+  // mode = 'debit'  → always positive plain (Revenues row — debit
+  //                   movement growing A/R).
+  // mode = 'credit' → always parens (Payment row — credit
+  //                   movement shrinking A/R).
+  const sumRow = (label, mode, values) => {
+    const cellHtml = (v) => {
+      if (!v) return `<td class="vis-cf-num vis-cf-num-muted">—</td>`;
+      let text;
+      if (mode === 'signed')      text = fmtCfSigned(v, false);
+      else if (mode === 'credit') text = `(${Math.abs(v).toLocaleString('en-US')})`;
+      else                        text = Math.abs(v).toLocaleString('en-US');
+      return `<td class="vis-cf-num">${text}</td>`;
+    };
+    const cells = periodKeys.map(p => cellHtml(Math.round(Number(values[p] || 0)))).join('');
+    let fy;
+    if (label === 'O.B')      fy = Number(values[periodKeys[0]] || 0);
+    else if (label === 'C.B') fy = Number(values[periodKeys[periodKeys.length - 1]] || 0);
+    else                      fy = periodKeys.reduce((s, p) => s + Number(values[p] || 0), 0);
+    return `<tr><th>${label}</th>${cells}${cellHtml(Math.round(fy))}</tr>`;
+  };
+  sBody.innerHTML =
+    sumRow('O.B',      'signed', summary.ob) +
+    sumRow('Revenues', 'debit',  summary.revenues) +
+    sumRow('Payment',  'credit', summary.payment) +
+    sumRow('C.B',      'signed', summary.cb);
+
+  refreshReceivablesStatus();
+}
+
+function refreshReceivablesStatus() {
+  const badge = document.querySelector('[data-cf-status="receivables"]');
+  if (!badge) return;
+  if (!currentReceivables) {
+    badge.textContent = 'Required';
+    badge.classList.remove('vis-cf-section-status-filled');
+    return;
+  }
+  const g = currentReceivables.receivables;
+  const obOk = (g.openingBalance || 0) !== 0;
+  const allTerms = g.rows.every(r => !!r.paymentTerm);
+  const allCarryFilled = g.rows.every(r =>
+    Object.entries(r.paymentNeedsCarry).every(([p, needs]) =>
+      !needs || (r.priorCarry[p] || 0) !== 0),
+  );
+  const filled = obOk && allTerms && allCarryFilled && g.rows.length > 0;
+  badge.textContent = filled ? 'Filled' : 'Required';
+  badge.classList.toggle('vis-cf-section-status-filled', filled);
+}
+
+function patchReceivablesSectionSoon(openingBalance) {
+  if (!selectedCfBudgetId) return;
+  debounce(`cf:receivables:section:${selectedCfBudgetId}`, async () => {
+    try {
+      const res = await api(`/api/visibility/budgets/${encodeURIComponent(selectedCfBudgetId)}/cf/receivables`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ openingBalance }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        showBanner(document.getElementById('cfStructureErrorBanner'),
+          htmlEsc(body?.error?.message || `Save failed (${res.status}).`));
+        return;
+      }
+      await loadReceivables(true);
+    } catch (err) {
+      showBanner(document.getElementById('cfStructureErrorBanner'),
+        htmlEsc(`Save failed: ${(err && err.message) || err}`));
+    }
+  }, 400);
+}
+
+async function patchReceivablesRow(rowId, fields) {
+  if (!selectedCfBudgetId) return;
+  try {
+    const res = await api(
+      `/api/visibility/budgets/${encodeURIComponent(selectedCfBudgetId)}/cf/receivables/rows/${encodeURIComponent(rowId)}`,
+      {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(fields),
+      },
+    );
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showBanner(document.getElementById('cfStructureErrorBanner'),
+        htmlEsc(body?.error?.message || `Save failed (${res.status}).`));
+      return;
+    }
+    const data = await res.json();
+    if (data?.receivables) {
+      currentReceivables = { ...currentReceivables, receivables: data.receivables };
+      renderReceivables();
+    }
+  } catch (err) {
+    showBanner(document.getElementById('cfStructureErrorBanner'),
+      htmlEsc(`Save failed: ${(err && err.message) || err}`));
+  }
+}
+
+// Receivables O.B — signed input.
+document.addEventListener('input', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (t.id !== 'cfReceivablesObInput') return;
+  patchReceivablesSectionSoon(parseCfSigned(t.value));
+});
+document.addEventListener('focus', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (t.id !== 'cfReceivablesObInput') return;
+  const v = parseCfSigned(t.value);
+  if (!v) { t.value = ''; return; }
+  const abs = Math.round(Math.abs(v)).toLocaleString('en-US');
+  t.value = v < 0 ? `-${abs}` : abs;
+}, true);
+document.addEventListener('blur', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (t.id !== 'cfReceivablesObInput') return;
+  const v = parseCfSigned(t.value);
+  t.value = fmtCfSigned(v, true);
+}, true);
+
+// Payment-term dropdown change.
+document.addEventListener('change', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLSelectElement)) return;
+  const rowId = t.getAttribute('data-cf-rec-term');
+  if (!rowId) return;
+  void patchReceivablesRow(rowId, { paymentTerm: t.value || null });
+});
+
+// Prior-carry cell — debounced PATCH per row.
+document.addEventListener('input', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  const handle = t.getAttribute('data-cf-rec-carry');
+  if (!handle) return;
+  const [rowId, periodKey] = handle.split('|');
+  if (!rowId || !periodKey) return;
+  const value = parseCfSigned(t.value);
+  debounce(`cf:receivables:carry:${rowId}:${periodKey}`, () => {
+    void patchReceivablesRow(rowId, { priorCarry: { [periodKey]: value } });
+  }, 400);
+});
+document.addEventListener('focus', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (!t.hasAttribute('data-cf-rec-carry')) return;
+  const v = parseCfSigned(t.value);
+  if (!v) { t.value = ''; return; }
+  const abs = Math.round(Math.abs(v)).toLocaleString('en-US');
+  t.value = v < 0 ? `-${abs}` : abs;
+}, true);
+document.addEventListener('blur', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (!t.hasAttribute('data-cf-rec-carry')) return;
   const v = parseCfSigned(t.value);
   t.value = fmtCfSigned(v, true);
 }, true);

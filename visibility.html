@@ -614,14 +614,47 @@
                 </div>
               </details>
 
-              <!-- §4 / §5 — Receivables / Inventory placeholders -->
+              <!-- §4 — Receivables -->
               <details class="vis-cf-subsection" data-cf-subsection="receivables">
                 <summary class="vis-cf-subsection-summary">
                   <span class="vis-cf-subsection-title">Receivables</span>
                   <span class="vis-cf-section-status" data-cf-status="receivables">Required</span>
                 </summary>
-                <div class="vis-cf-subsection-body">
-                  <div class="vis-cf-coming">Receivables editor arrives in a future phase.</div>
+                <div class="vis-cf-subsection-body" id="cfReceivablesBody">
+                  <div class="vis-banner vis-banner-warn" id="cfReceivablesGranularityWarn" hidden></div>
+                  <label class="vis-cf-field">
+                    <span class="vis-cf-field-label">Opening Balance (A/R)</span>
+                    <span class="vis-cf-input-wrap">
+                      <span class="vis-cf-input-prefix">$</span>
+                      <input
+                        type="text"
+                        inputmode="decimal"
+                        class="vis-cf-input vis-cf-input-amount"
+                        id="cfReceivablesObInput"
+                        placeholder="0"
+                        autocomplete="off"
+                      />
+                    </span>
+                  </label>
+                  <p class="vis-cf-field-hint">Opening A/R from the prior year. Positive = debit balance (typical asset); negative = credit balance (rare; customer overpayments).</p>
+
+                  <div class="vis-cf-grid-wrap">
+                    <table class="vis-cf-grid" id="cfReceivablesTable">
+                      <thead id="cfReceivablesTableHead"></thead>
+                      <tbody id="cfReceivablesTableBody"></tbody>
+                    </table>
+                  </div>
+                  <div class="vis-empty" id="cfReceivablesEmpty" hidden>
+                    No Revenue rows found in this budget yet.
+                  </div>
+
+                  <h4 class="vis-cf-summary-title">Customers summary</h4>
+                  <div class="vis-cf-grid-wrap">
+                    <table class="vis-cf-grid vis-cf-summary-table" id="cfReceivablesSummaryTable">
+                      <thead id="cfReceivablesSummaryHead"></thead>
+                      <tbody id="cfReceivablesSummaryBody"></tbody>
+                    </table>
+                  </div>
                 </div>
               </details>
               <details class="vis-cf-subsection" data-cf-subsection="inventory">
@@ -765,6 +798,6 @@
     </div>
   </div>
 
-  <script src="visibility.js?v=30" defer></script>
+  <script src="visibility.js?v=31" defer></script>
 </body>
 </html>
