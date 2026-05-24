@@ -3081,6 +3081,35 @@ function fmtCfCredit(n, blank) {
   return `(${v.toLocaleString('en-US')})`;
 }
 
+/**
+ * Sign-aware accounting format. Positive numbers display as plain
+ * $X,XXX (debit balance / debit movement); negative numbers display
+ * as ($X,XXX) (credit balance / credit movement); zero returns the
+ * dash placeholder or empty when `blank=true`.
+ */
+function fmtCfSigned(n, blank) {
+  const num = Number(n) || 0;
+  const v = Math.round(Math.abs(num));
+  if (!v) return blank ? '' : '—';
+  return num < 0 ? `(${v.toLocaleString('en-US')})` : v.toLocaleString('en-US');
+}
+
+/**
+ * Parse a possibly-signed user-entered amount. Recognizes both an
+ * explicit minus (e.g. "-5,000") and the accounting parens form
+ * ("(5,000)") as negative. Returns 0 for blank/invalid input.
+ */
+function parseCfSigned(s) {
+  const raw = String(s || '').trim();
+  if (!raw) return 0;
+  const negative = /^\(.*\)$/.test(raw) || /^-/.test(raw);
+  const cleaned = raw.replace(/[,  ()\-]/g, '');
+  if (!cleaned) return 0;
+  const n = Number(cleaned);
+  if (!Number.isFinite(n)) return 0;
+  return negative ? -n : n;
+}
+
 /** Friendly month label for an M01..M12 / Q1..Q4 / FY period key. */
 function cfPeriodLabel(key, year) {
   const MMM = { M01:'Jan', M02:'Feb', M03:'Mar', M04:'Apr', M05:'May', M06:'Jun',
@@ -3167,9 +3196,11 @@ function renderPayables() {
     }
   }
 
-  // Opening balance (preserve focus / avoid stomping mid-edit).
+  // Opening balance — signed display. Positive = debit balance
+  // (no parens), negative = credit balance (parens). Preserve focus
+  // so we don't stomp the user mid-edit.
   if (obIn) {
-    const formatted = fmtCfMag(openingBalance, true);
+    const formatted = fmtCfSigned(openingBalance, true);
     if (document.activeElement !== obIn && obIn.value !== formatted) {
       obIn.value = formatted;
     }
@@ -3227,12 +3258,10 @@ function renderPayables() {
         const needs = r.paymentNeedsCarry[p];
         if (needs) {
           const v = Number(r.priorCarry[p] || 0);
-          // Display the user-entered amount with the same sign convention
-          // as the auto-computed payments above — credit movement, in
-          // parens. The input strips parens on focus so the user types
-          // a positive magnitude (which we then store negative server-
-          // side via the Payment formula).
-          const display = v ? `(${Math.round(v).toLocaleString('en-US')})` : '';
+          // Display the user-entered amount with the same sign
+          // convention as the auto-computed payments around it
+          // (negative → parens, positive → plain).
+          const display = fmtCfSigned(v, true);
           return `<td class="vis-cf-num"><input
             type="text"
             inputmode="decimal"
@@ -3266,30 +3295,35 @@ function renderPayables() {
       ${periodKeys.map(p => `<th class="vis-cf-num">${cfPeriodLabel(p, yr)}</th>`).join('')}
       <th class="vis-cf-num">FY</th>
     </tr>`;
+  // mode = 'signed' → render based on the value's sign (debit if
+  //                   positive, credit-in-parens if negative).
+  //                   Used for O.B and C.B which can be either.
+  // mode = 'credit' → always parens. Expenses row in §3.8 is a
+  //                   credit movement on A/P (liability grows).
+  // mode = 'debit'  → always plain positive. Payment row in §3.8
+  //                   is a debit movement on A/P (liability shrinks).
   const sumRow = (label, mode, values) => {
-    const cells = periodKeys.map(p => {
-      const v = Math.round(Number(values[p] || 0));
+    const cellHtml = (v) => {
       if (!v) return `<td class="vis-cf-num vis-cf-num-muted">—</td>`;
-      return `<td class="vis-cf-num">${
-        mode === 'credit' ? `(${v.toLocaleString('en-US')})` : v.toLocaleString('en-US')
-      }</td>`;
-    }).join('');
+      let text;
+      if (mode === 'signed')      text = fmtCfSigned(v, false);
+      else if (mode === 'credit') text = `(${Math.abs(v).toLocaleString('en-US')})`;
+      else                        text = Math.abs(v).toLocaleString('en-US');
+      return `<td class="vis-cf-num">${text}</td>`;
+    };
+    const cells = periodKeys.map(p => cellHtml(Math.round(Number(values[p] || 0)))).join('');
     // FY column rules per §3.8: O.B = Jan O.B, C.B = Dec C.B, others sum.
     let fy;
     if (label === 'O.B')      fy = Number(values[periodKeys[0]] || 0);
     else if (label === 'C.B') fy = Number(values[periodKeys[periodKeys.length - 1]] || 0);
     else                      fy = periodKeys.reduce((s, p) => s + Number(values[p] || 0), 0);
-    fy = Math.round(fy);
-    const fyCell = !fy
-      ? `<td class="vis-cf-num vis-cf-num-muted">—</td>`
-      : `<td class="vis-cf-num">${mode === 'credit' ? `(${fy.toLocaleString('en-US')})` : fy.toLocaleString('en-US')}</td>`;
-    return `<tr><th>${label}</th>${cells}${fyCell}</tr>`;
+    return `<tr><th>${label}</th>${cells}${cellHtml(Math.round(fy))}</tr>`;
   };
   sBody.innerHTML =
-    sumRow('O.B',      'credit', summary.ob) +
+    sumRow('O.B',      'signed', summary.ob) +
     sumRow('Expenses', 'credit', summary.expenses) +
     sumRow('Payment',  'debit',  summary.payment) +
-    sumRow('C.B',      'credit', summary.cb);
+    sumRow('C.B',      'signed', summary.cb);
 
   refreshPayablesStatus();
 }
@@ -3305,11 +3339,11 @@ function refreshPayablesStatus() {
     return;
   }
   const g = currentPayables.payables;
-  const obOk = (g.openingBalance || 0) > 0;
+  const obOk = (g.openingBalance || 0) !== 0;
   const allTerms = g.rows.every(r => !!r.paymentTerm);
   const allCarryFilled = g.rows.every(r =>
     Object.entries(r.paymentNeedsCarry).every(([p, needs]) =>
-      !needs || (r.priorCarry[p] || 0) > 0),
+      !needs || (r.priorCarry[p] || 0) !== 0),
   );
   const filled = obOk && allTerms && allCarryFilled && g.rows.length > 0;
   badge.textContent = filled ? 'Filled' : 'Required';
@@ -3368,19 +3402,31 @@ async function patchPayablesRow(rowId, fields) {
   }
 }
 
-// O.B autosave + reformat on blur.
+// Payables O.B — signed input. Parser recognises both "-N" and "(N)"
+// as negative. Focused state shows the value with a minus sign for
+// negatives (easier to edit than parens); blurred state shows the
+// accounting format.
 document.addEventListener('input', (ev) => {
   const t = ev.target;
   if (!(t instanceof HTMLInputElement)) return;
   if (t.id !== 'cfPayablesObInput') return;
-  patchPayablesSectionSoon(parseCfAmount(t.value));
+  patchPayablesSectionSoon(parseCfSigned(t.value));
 });
+document.addEventListener('focus', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (t.id !== 'cfPayablesObInput') return;
+  const v = parseCfSigned(t.value);
+  if (!v) { t.value = ''; return; }
+  const abs = Math.round(Math.abs(v)).toLocaleString('en-US');
+  t.value = v < 0 ? `-${abs}` : abs;
+}, true);
 document.addEventListener('blur', (ev) => {
   const t = ev.target;
   if (!(t instanceof HTMLInputElement)) return;
   if (t.id !== 'cfPayablesObInput') return;
-  const v = parseCfAmount(t.value);
-  t.value = v ? fmtCfMag(v) : '';
+  const v = parseCfSigned(t.value);
+  t.value = fmtCfSigned(v, true);
 }, true);
 
 // Payment-term dropdown change.
@@ -3393,7 +3439,8 @@ document.addEventListener('change', (ev) => {
   void patchPayablesRow(rowId, { paymentTerm: term });
 });
 
-// Prior-carry cell — debounced PATCH per row.
+// Prior-carry cell — debounced PATCH per row. Accepts signed input;
+// recognises both an explicit "-N" and the accounting "(N)" form.
 document.addEventListener('input', (ev) => {
   const t = ev.target;
   if (!(t instanceof HTMLInputElement)) return;
@@ -3401,27 +3448,29 @@ document.addEventListener('input', (ev) => {
   if (!handle) return;
   const [rowId, periodKey] = handle.split('|');
   if (!rowId || !periodKey) return;
-  const value = parseCfAmount(t.value);
+  const value = parseCfSigned(t.value);
   debounce(`cf:payables:carry:${rowId}:${periodKey}`, () => {
     void patchPayablesRow(rowId, { priorCarry: { [periodKey]: value } });
   }, 400);
 });
-// Carry input — strip parens on focus so the user types a plain
-// positive magnitude; reformat to ($X,XXX) on blur to match the
-// sign convention of the surrounding auto-computed payment cells.
+// Focus → show with minus sign for negatives (matches the negative
+// display of the auto-computed payment cells around it, but easier
+// to edit than parens). Blur → reformat to the accounting form.
 document.addEventListener('focus', (ev) => {
   const t = ev.target;
   if (!(t instanceof HTMLInputElement)) return;
   if (!t.hasAttribute('data-cf-carry')) return;
-  const v = parseCfAmount(t.value);
-  t.value = v ? fmtCfMag(v) : '';
+  const v = parseCfSigned(t.value);
+  if (!v) { t.value = ''; return; }
+  const abs = Math.round(Math.abs(v)).toLocaleString('en-US');
+  t.value = v < 0 ? `-${abs}` : abs;
 }, true);
 document.addEventListener('blur', (ev) => {
   const t = ev.target;
   if (!(t instanceof HTMLInputElement)) return;
   if (!t.hasAttribute('data-cf-carry')) return;
-  const v = parseCfAmount(t.value);
-  t.value = v ? `(${Math.round(v).toLocaleString('en-US')})` : '';
+  const v = parseCfSigned(t.value);
+  t.value = fmtCfSigned(v, true);
 }, true);
 
 

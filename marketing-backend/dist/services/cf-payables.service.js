@@ -118,8 +118,11 @@ function computePayablesGrid(budget, cashFlowId, customerKeyId) {
                 }
                 else if (lag > 0) {
                     needsCarry[p] = true;
-                    const carry = priorCarry[p] || 0;
-                    payment[p] = -carry;
+                    // priorCarry is signed: a typical entry is negative
+                    // (cash-out, credit movement on cash) and renders as
+                    // ($X,XXX) in the grid. A positive value represents a
+                    // rare cash-in (refund). We trust the user's sign.
+                    payment[p] = priorCarry[p] || 0;
                 }
             }
         }
@@ -140,24 +143,29 @@ function computePayablesGrid(budget, cashFlowId, customerKeyId) {
         });
     }
     // ── Vendors summary (§3.8) ────────────────────────────────
+    // openingBalance is signed: negative = credit balance (typical A/P),
+    // positive = debit balance (rare; e.g. supplier prepayments). The
+    // movement rows (expenses / payment) stay as positive magnitudes.
+    // Roll-forward: a credit balance (negative O.B) grows MORE negative
+    // with new expenses and LESS negative with payments. Same formula
+    // works for a positive (debit) O.B in reverse, which is what we
+    // want when prepayments are present.
     const section = visibility_repository_1.cfPayablesSectionRepo.get(cashFlowId);
-    const openingBalance = section.openingBalance; // positive magnitude
+    const openingBalance = section.openingBalance; // signed
     const ob = emptyPeriodMap(periodKeys);
     const expenses = emptyPeriodMap(periodKeys);
     const payment = emptyPeriodMap(periodKeys);
     const cb = emptyPeriodMap(periodKeys);
-    // Sum movements per period (positive magnitudes for both)
     for (const r of outRows) {
         for (const p of periodKeys) {
-            expenses[p] += (r.expense[p] || 0); // already positive
-            payment[p] += Math.abs(r.payment[p] || 0); // cash-out magnitude
+            expenses[p] += (r.expense[p] || 0); // positive magnitude
+            payment[p] += Math.abs(r.payment[p] || 0); // positive magnitude
         }
     }
-    // Roll the balance forward.
     let prevCb = openingBalance;
     for (const p of periodKeys) {
         ob[p] = prevCb;
-        cb[p] = prevCb + expenses[p] - payment[p];
+        cb[p] = prevCb - expenses[p] + payment[p]; // signed roll-forward
         prevCb = cb[p];
     }
     return {

@@ -1198,10 +1198,12 @@ exports.cfPayablesController = {
         const ctx = requireFinalizedBudgetCf(req, res);
         if (!ctx)
             return;
-        const Schema = zod_1.z.object({ openingBalance: zod_1.z.number().finite().min(0) });
+        // openingBalance is signed: positive = debit balance (e.g. supplier
+        // prepayments), negative = credit balance (typical A/P).
+        const Schema = zod_1.z.object({ openingBalance: zod_1.z.number().finite() });
         const parsed = Schema.safeParse(req.body);
         if (!parsed.success) {
-            res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'openingBalance must be a non-negative number.' } });
+            res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'openingBalance must be a finite number.' } });
             return;
         }
         visibility_repository_1.cfPayablesSectionRepo.upsert(ctx.cfId, parsed.data.openingBalance);
@@ -1222,7 +1224,7 @@ exports.cfPayablesController = {
         }
         const Schema = zod_1.z.object({
             paymentTerm: zod_1.z.union([zod_1.z.enum(visibility_repository_1.PAYMENT_TERMS), zod_1.z.null()]).optional(),
-            priorCarry: zod_1.z.record(zod_1.z.string(), zod_1.z.number().finite().min(0)).optional(),
+            priorCarry: zod_1.z.record(zod_1.z.string(), zod_1.z.number().finite()).optional(),
         });
         const parsed = Schema.safeParse(req.body);
         if (!parsed.success) {
