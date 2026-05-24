@@ -3,7 +3,7 @@
    Visibility offering — Controller (Phase 1: Financial Structure)
    ============================================================ */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cfPayablesController = exports.cashFlowController = exports.salariesController = exports.budgetsController = exports.visibilityController = exports.BUDGET_CATEGORIES_BY_SECTION = exports.PL_SECTIONS = void 0;
+exports.cfReceivablesController = exports.cfPayablesController = exports.cashFlowController = exports.salariesController = exports.budgetsController = exports.visibilityController = exports.BUDGET_CATEGORIES_BY_SECTION = exports.PL_SECTIONS = void 0;
 const zod_1 = require("zod");
 const partner_repository_1 = require("../db/partner.repository");
 const visibility_repository_1 = require("../db/visibility.repository");
@@ -12,6 +12,7 @@ const salaries_service_1 = require("../services/salaries.service");
 const pivot_service_1 = require("../services/pivot.service");
 const budget_export_service_1 = require("../services/budget-export.service");
 const cf_payables_service_1 = require("../services/cf-payables.service");
+const cf_receivables_service_1 = require("../services/cf-receivables.service");
 // ─── Constants from spec §2.3 (single source of truth, mirrored on FE) ─────
 exports.PL_SECTIONS = [
     'Revenues', 'COGS', 'R&D', 'S&M', 'G&A',
@@ -1242,5 +1243,65 @@ exports.cfPayablesController = {
         // Re-compute the full grid so the FE gets fresh Payment values.
         const grid = (0, cf_payables_service_1.computePayablesGrid)(ctx.budget, ctx.cfId, ctx.customerKeyId);
         res.json({ payables: grid });
+    },
+};
+/* ============================================================
+   CF — Receivables controller (spec §4) — mirror of Payables.
+   ============================================================ */
+exports.cfReceivablesController = {
+    /** GET /api/visibility/budgets/:id/cf/receivables */
+    get(req, res) {
+        const ctx = requireFinalizedBudgetCf(req, res);
+        if (!ctx)
+            return;
+        const grid = (0, cf_receivables_service_1.computeReceivablesGrid)(ctx.budget, ctx.cfId, ctx.customerKeyId);
+        res.json({ receivables: grid, paymentTerms: visibility_repository_1.PAYMENT_TERMS });
+    },
+    /** PATCH /api/visibility/budgets/:id/cf/receivables — section-level (openingBalance, signed). */
+    patchSection(req, res) {
+        const ctx = requireFinalizedBudgetCf(req, res);
+        if (!ctx)
+            return;
+        const Schema = zod_1.z.object({ openingBalance: zod_1.z.number().finite() });
+        const parsed = Schema.safeParse(req.body);
+        if (!parsed.success) {
+            res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'openingBalance must be a finite number.' } });
+            return;
+        }
+        visibility_repository_1.cfReceivablesSectionRepo.upsert(ctx.cfId, parsed.data.openingBalance);
+        res.json({ section: visibility_repository_1.cfReceivablesSectionRepo.get(ctx.cfId) });
+    },
+    /**
+     * PATCH /api/visibility/budgets/:id/cf/receivables/rows/:rowId
+     * Body: { paymentTerm?, priorCarry?: { periodKey: amount } }
+     */
+    patchRow(req, res) {
+        const ctx = requireFinalizedBudgetCf(req, res);
+        if (!ctx)
+            return;
+        const row = visibility_repository_1.cfReceivablesRowRepo.getById(req.params.rowId);
+        if (!row || row.cashFlowId !== ctx.cfId) {
+            res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Receivables row not found.' } });
+            return;
+        }
+        const Schema = zod_1.z.object({
+            paymentTerm: zod_1.z.union([zod_1.z.enum(visibility_repository_1.PAYMENT_TERMS), zod_1.z.null()]).optional(),
+            priorCarry: zod_1.z.record(zod_1.z.string(), zod_1.z.number().finite()).optional(),
+        });
+        const parsed = Schema.safeParse(req.body);
+        if (!parsed.success) {
+            res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid row patch payload.' } });
+            return;
+        }
+        if (parsed.data.paymentTerm !== undefined) {
+            visibility_repository_1.cfReceivablesRowRepo.updatePaymentTerm(row.id, parsed.data.paymentTerm);
+        }
+        if (parsed.data.priorCarry) {
+            for (const [periodKey, amount] of Object.entries(parsed.data.priorCarry)) {
+                visibility_repository_1.cfReceivablesPriorCarryRepo.upsert(row.id, periodKey, amount);
+            }
+        }
+        const grid = (0, cf_receivables_service_1.computeReceivablesGrid)(ctx.budget, ctx.cfId, ctx.customerKeyId);
+        res.json({ receivables: grid });
     },
 };

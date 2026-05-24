@@ -4,7 +4,7 @@
    Tables: gl_accounts, financial_structure_state.
    ============================================================ */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cfPayablesPriorCarryRepo = exports.cfPayablesRowRepo = exports.cfPayablesSectionRepo = exports.PAYMENT_TERMS = exports.cashFlowRepo = exports.salariesStateRepo = exports.salariesRowRepo = exports.budgetCellRepo = exports.budgetLineRepo = exports.budgetRepo = exports.BUDGET_CAP_PER_CUSTOMER = exports.SCALES = exports.CURRENCIES = exports.GRANULARITIES = exports.orgStructureRepo = exports.orgEntityRepo = exports.ORG_DIMENSIONS = exports.financialStructureRepo = exports.glAccountRepo = void 0;
+exports.cfReceivablesPriorCarryRepo = exports.cfReceivablesRowRepo = exports.cfReceivablesSectionRepo = exports.cfPayablesPriorCarryRepo = exports.cfPayablesRowRepo = exports.cfPayablesSectionRepo = exports.PAYMENT_TERMS = exports.cashFlowRepo = exports.salariesStateRepo = exports.salariesRowRepo = exports.budgetCellRepo = exports.budgetLineRepo = exports.budgetRepo = exports.BUDGET_CAP_PER_CUSTOMER = exports.SCALES = exports.CURRENCIES = exports.GRANULARITIES = exports.orgStructureRepo = exports.orgEntityRepo = exports.ORG_DIMENSIONS = exports.financialStructureRepo = exports.glAccountRepo = void 0;
 exports.periodKeysFor = periodKeysFor;
 const uuid_1 = require("uuid");
 const database_1 = require("./database");
@@ -791,6 +791,99 @@ exports.cfPayablesPriorCarryRepo = {
             .prepare(`INSERT INTO cf_payables_prior_carry (cf_payables_row_id, period_key, amount)
          VALUES (?, ?, ?)
          ON CONFLICT(cf_payables_row_id, period_key) DO UPDATE SET amount = excluded.amount`)
+            .run(rowId, periodKey, amount);
+    },
+};
+/* ============================================================
+   CF — Receivables sub-repos (spec §4). Same shape as Payables
+   with customer_name instead of service_provider_name and
+   pl_section pinned to 'Revenues'.
+   ============================================================ */
+exports.cfReceivablesSectionRepo = {
+    get(cashFlowId) {
+        const row = (0, database_1.getDb)()
+            .prepare(`SELECT opening_balance FROM cf_receivables_section WHERE cash_flow_id = ?`)
+            .get(cashFlowId);
+        return { openingBalance: row?.opening_balance ?? 0 };
+    },
+    upsert(cashFlowId, openingBalance) {
+        (0, database_1.getDb)()
+            .prepare(`INSERT INTO cf_receivables_section (cash_flow_id, opening_balance)
+         VALUES (?, ?)
+         ON CONFLICT(cash_flow_id) DO UPDATE SET opening_balance = excluded.opening_balance`)
+            .run(cashFlowId, openingBalance);
+    },
+};
+function toReceivablesRowDomain(r) {
+    return {
+        id: r.id,
+        cashFlowId: r.cash_flow_id,
+        companyId: r.company_id,
+        plSection: r.pl_section,
+        glAccountId: r.gl_account_id,
+        customerName: r.customer_name,
+        paymentTerm: r.payment_term,
+        orderIndex: r.order_index,
+    };
+}
+exports.cfReceivablesRowRepo = {
+    listByCf(cashFlowId) {
+        const rows = (0, database_1.getDb)()
+            .prepare(`SELECT * FROM cf_receivables_rows WHERE cash_flow_id = ?
+         ORDER BY order_index ASC, created_at ASC`)
+            .all(cashFlowId);
+        return rows.map(toReceivablesRowDomain);
+    },
+    getById(id) {
+        const row = (0, database_1.getDb)()
+            .prepare(`SELECT * FROM cf_receivables_rows WHERE id = ?`)
+            .get(id);
+        return row ? toReceivablesRowDomain(row) : null;
+    },
+    /** Find or create the default-level (no GL, no Customer) row for
+     *  (cf, company) — default Receivables level groups by Company only
+     *  (P&L is always 'Revenues' at this level). */
+    findOrCreateDefault(cashFlowId, companyId, orderIndex) {
+        const db = (0, database_1.getDb)();
+        const existing = db
+            .prepare(`SELECT * FROM cf_receivables_rows
+          WHERE cash_flow_id = ?
+            AND (company_id IS ? OR company_id = ?)
+            AND gl_account_id IS NULL
+            AND customer_name IS NULL`)
+            .get(cashFlowId, companyId, companyId);
+        if (existing)
+            return toReceivablesRowDomain(existing);
+        const id = (0, uuid_1.v4)();
+        const now = new Date().toISOString();
+        db.prepare(`INSERT INTO cf_receivables_rows
+         (id, cash_flow_id, company_id, pl_section, gl_account_id,
+          customer_name, payment_term, order_index, created_at, updated_at)
+       VALUES (?, ?, ?, 'Revenues', NULL, NULL, NULL, ?, ?, ?)`).run(id, cashFlowId, companyId, orderIndex, now, now);
+        return this.getById(id);
+    },
+    updatePaymentTerm(id, term) {
+        const now = new Date().toISOString();
+        (0, database_1.getDb)()
+            .prepare(`UPDATE cf_receivables_rows SET payment_term = ?, updated_at = ? WHERE id = ?`)
+            .run(term, now, id);
+    },
+};
+exports.cfReceivablesPriorCarryRepo = {
+    listByRow(rowId) {
+        const rows = (0, database_1.getDb)()
+            .prepare(`SELECT period_key, amount FROM cf_receivables_prior_carry WHERE cf_receivables_row_id = ?`)
+            .all(rowId);
+        const out = {};
+        for (const r of rows)
+            out[r.period_key] = r.amount;
+        return out;
+    },
+    upsert(rowId, periodKey, amount) {
+        (0, database_1.getDb)()
+            .prepare(`INSERT INTO cf_receivables_prior_carry (cf_receivables_row_id, period_key, amount)
+         VALUES (?, ?, ?)
+         ON CONFLICT(cf_receivables_row_id, period_key) DO UPDATE SET amount = excluded.amount`)
             .run(rowId, periodKey, amount);
     },
 };

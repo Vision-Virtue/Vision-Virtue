@@ -1070,3 +1070,140 @@ export const cfPayablesPriorCarryRepo = {
       .run(rowId, periodKey, amount);
   },
 };
+
+/* ============================================================
+   CF — Receivables sub-repos (spec §4). Same shape as Payables
+   with customer_name instead of service_provider_name and
+   pl_section pinned to 'Revenues'.
+   ============================================================ */
+
+export const cfReceivablesSectionRepo = {
+  get(cashFlowId: string): { openingBalance: number } {
+    const row = getDb()
+      .prepare(`SELECT opening_balance FROM cf_receivables_section WHERE cash_flow_id = ?`)
+      .get(cashFlowId) as { opening_balance: number } | undefined;
+    return { openingBalance: row?.opening_balance ?? 0 };
+  },
+  upsert(cashFlowId: string, openingBalance: number): void {
+    getDb()
+      .prepare(
+        `INSERT INTO cf_receivables_section (cash_flow_id, opening_balance)
+         VALUES (?, ?)
+         ON CONFLICT(cash_flow_id) DO UPDATE SET opening_balance = excluded.opening_balance`,
+      )
+      .run(cashFlowId, openingBalance);
+  },
+};
+
+export interface CfReceivablesRow {
+  id: string;
+  cashFlowId: string;
+  companyId: string | null;
+  plSection: string | null;
+  glAccountId: string | null;
+  customerName: string | null;
+  paymentTerm: PaymentTerm | null;
+  orderIndex: number;
+}
+
+interface DbCfReceivablesRow {
+  id: string;
+  cash_flow_id: string;
+  company_id: string | null;
+  pl_section: string | null;
+  gl_account_id: string | null;
+  customer_name: string | null;
+  payment_term: PaymentTerm | null;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
+
+function toReceivablesRowDomain(r: DbCfReceivablesRow): CfReceivablesRow {
+  return {
+    id:           r.id,
+    cashFlowId:   r.cash_flow_id,
+    companyId:    r.company_id,
+    plSection:    r.pl_section,
+    glAccountId:  r.gl_account_id,
+    customerName: r.customer_name,
+    paymentTerm:  r.payment_term,
+    orderIndex:   r.order_index,
+  };
+}
+
+export const cfReceivablesRowRepo = {
+  listByCf(cashFlowId: string): CfReceivablesRow[] {
+    const rows = getDb()
+      .prepare(
+        `SELECT * FROM cf_receivables_rows WHERE cash_flow_id = ?
+         ORDER BY order_index ASC, created_at ASC`,
+      )
+      .all(cashFlowId) as DbCfReceivablesRow[];
+    return rows.map(toReceivablesRowDomain);
+  },
+
+  getById(id: string): CfReceivablesRow | null {
+    const row = getDb()
+      .prepare(`SELECT * FROM cf_receivables_rows WHERE id = ?`)
+      .get(id) as DbCfReceivablesRow | undefined;
+    return row ? toReceivablesRowDomain(row) : null;
+  },
+
+  /** Find or create the default-level (no GL, no Customer) row for
+   *  (cf, company) — default Receivables level groups by Company only
+   *  (P&L is always 'Revenues' at this level). */
+  findOrCreateDefault(
+    cashFlowId: string,
+    companyId: string | null,
+    orderIndex: number,
+  ): CfReceivablesRow {
+    const db = getDb();
+    const existing = db
+      .prepare(
+        `SELECT * FROM cf_receivables_rows
+          WHERE cash_flow_id = ?
+            AND (company_id IS ? OR company_id = ?)
+            AND gl_account_id IS NULL
+            AND customer_name IS NULL`,
+      )
+      .get(cashFlowId, companyId, companyId) as DbCfReceivablesRow | undefined;
+    if (existing) return toReceivablesRowDomain(existing);
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO cf_receivables_rows
+         (id, cash_flow_id, company_id, pl_section, gl_account_id,
+          customer_name, payment_term, order_index, created_at, updated_at)
+       VALUES (?, ?, ?, 'Revenues', NULL, NULL, NULL, ?, ?, ?)`,
+    ).run(id, cashFlowId, companyId, orderIndex, now, now);
+    return this.getById(id)!;
+  },
+
+  updatePaymentTerm(id: string, term: PaymentTerm | null): void {
+    const now = new Date().toISOString();
+    getDb()
+      .prepare(`UPDATE cf_receivables_rows SET payment_term = ?, updated_at = ? WHERE id = ?`)
+      .run(term, now, id);
+  },
+};
+
+export const cfReceivablesPriorCarryRepo = {
+  listByRow(rowId: string): Record<string, number> {
+    const rows = getDb()
+      .prepare(`SELECT period_key, amount FROM cf_receivables_prior_carry WHERE cf_receivables_row_id = ?`)
+      .all(rowId) as Array<{ period_key: string; amount: number }>;
+    const out: Record<string, number> = {};
+    for (const r of rows) out[r.period_key] = r.amount;
+    return out;
+  },
+  upsert(rowId: string, periodKey: string, amount: number): void {
+    getDb()
+      .prepare(
+        `INSERT INTO cf_receivables_prior_carry (cf_receivables_row_id, period_key, amount)
+         VALUES (?, ?, ?)
+         ON CONFLICT(cf_receivables_row_id, period_key) DO UPDATE SET amount = excluded.amount`,
+      )
+      .run(rowId, periodKey, amount);
+  },
+};

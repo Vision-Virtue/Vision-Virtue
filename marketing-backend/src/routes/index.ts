@@ -4,7 +4,7 @@ import { linkedInController } from '../controllers/linkedin.controller';
 import { authController, verifyPin } from '../controllers/auth.controller';
 import { chatController } from '../controllers/chat.controller';
 import { partnerController } from '../controllers/partner.controller';
-import { visibilityController, budgetsController, salariesController, cashFlowController, cfPayablesController } from '../controllers/visibility.controller';
+import { visibilityController, budgetsController, salariesController, cashFlowController, cfPayablesController, cfReceivablesController } from '../controllers/visibility.controller';
 import { requireRaphael, requireLinkedIn, requireAdminPin } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -265,9 +265,14 @@ router.get(   '/visibility/budgets/:id/cf',                        (req, res) =>
 router.patch( '/visibility/budgets/:id/cf',                        (req, res) => cashFlowController.patch(req, res));
 
 // CF — Payables (spec §3)
-router.get(   '/visibility/budgets/:id/cf/payables',               (req, res) => cfPayablesController.get(req, res));
-router.patch( '/visibility/budgets/:id/cf/payables',               (req, res) => cfPayablesController.patchSection(req, res));
-router.patch( '/visibility/budgets/:id/cf/payables/rows/:rowId',   (req, res) => cfPayablesController.patchRow(req, res));
+router.get(   '/visibility/budgets/:id/cf/payables',                  (req, res) => cfPayablesController.get(req, res));
+router.patch( '/visibility/budgets/:id/cf/payables',                  (req, res) => cfPayablesController.patchSection(req, res));
+router.patch( '/visibility/budgets/:id/cf/payables/rows/:rowId',      (req, res) => cfPayablesController.patchRow(req, res));
+
+// CF — Receivables (spec §4)
+router.get(   '/visibility/budgets/:id/cf/receivables',               (req, res) => cfReceivablesController.get(req, res));
+router.patch( '/visibility/budgets/:id/cf/receivables',               (req, res) => cfReceivablesController.patchSection(req, res));
+router.patch( '/visibility/budgets/:id/cf/receivables/rows/:rowId',   (req, res) => cfReceivablesController.patchRow(req, res));
 
 // ─── Admin (Raphael) — Partner Submissions ──────────────────────────────────
 // All admin endpoints require X-Admin-Pin header OR ?pin= query (matching
