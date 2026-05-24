@@ -662,8 +662,32 @@
                   <span class="vis-cf-subsection-title">Inventory</span>
                   <span class="vis-cf-section-status" data-cf-status="inventory">Required</span>
                 </summary>
-                <div class="vis-cf-subsection-body">
-                  <div class="vis-cf-coming">Inventory editor arrives in a future phase.</div>
+                <div class="vis-cf-subsection-body" id="cfInventoryBody">
+                  <div class="vis-banner vis-banner-warn" id="cfInventoryNegativeWarn" hidden></div>
+                  <label class="vis-cf-field">
+                    <span class="vis-cf-field-label">Opening Balance (Inventory)</span>
+                    <span class="vis-cf-input-wrap">
+                      <span class="vis-cf-input-prefix">$</span>
+                      <input
+                        type="text"
+                        inputmode="decimal"
+                        class="vis-cf-input vis-cf-input-amount"
+                        id="cfInventoryObInput"
+                        placeholder="0"
+                        autocomplete="off"
+                      />
+                    </span>
+                  </label>
+                  <p class="vis-cf-field-hint">Opening inventory from the prior year. Positive = debit balance (asset). Negative is rare (e.g. an inventory write-down already booked).</p>
+
+                  <h4 class="vis-cf-summary-title">Inventory summary</h4>
+                  <div class="vis-cf-grid-wrap">
+                    <table class="vis-cf-grid vis-cf-summary-table" id="cfInventoryTable">
+                      <thead id="cfInventoryHead"></thead>
+                      <tbody id="cfInventoryBodyTable"></tbody>
+                    </table>
+                  </div>
+                  <p class="vis-cf-field-hint">Purchases are free-input per month. COGS is auto-pulled from the budget — sum of all lines whose Budget Category is <strong>Finished goods</strong> under COGS.</p>
                 </div>
               </details>
 
@@ -798,6 +822,6 @@
     </div>
   </div>
 
-  <script src="visibility.js?v=32" defer></script>
+  <script src="visibility.js?v=33" defer></script>
 </body>
 </html>
