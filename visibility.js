@@ -3557,7 +3557,7 @@ function renderReceivables() {
     <tr>
       <th class="vis-cf-col-type">Type</th>
       <th>Company</th>
-      <th>Budget Section</th>
+      <th>Budget Category</th>
       <th>Payment terms</th>
       ${headPeriods}
       <th class="vis-cf-num">FY</th>
@@ -3570,7 +3570,7 @@ function renderReceivables() {
     if (empty) empty.hidden = true;
     for (const r of rows) {
       const company = htmlEsc(lookupCompanyName(r.companyId));
-      const section = htmlEsc(r.plSection);
+      const cat     = htmlEsc(r.budgetCategory || '—');
       const termOpts = ['<option value="">—</option>']
         .concat(CF_PAYMENT_TERMS.map(t =>
           `<option value="${t}"${t === r.paymentTerm ? ' selected' : ''}>${t}</option>`))
@@ -3590,7 +3590,7 @@ function renderReceivables() {
         <tr class="vis-cf-row-expense" data-cf-rec-row="${r.rowId}">
           <td class="vis-cf-col-type">Revenue</td>
           <td>${company}</td>
-          <td>${section}</td>
+          <td>${cat}</td>
           <td rowspan="2" class="vis-cf-col-term">
             <select class="vis-cf-term-select" data-cf-rec-term="${r.rowId}">${termOpts}</select>
           </td>
