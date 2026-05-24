@@ -2986,9 +2986,10 @@ function formatCfAmount(n) {
 }
 
 /** Parse a user-entered amount string back to a Number. Strips
- *  commas and whitespace; returns 0 for empty/invalid input. */
+ *  commas, whitespace, parens, and a leading minus. Returns 0 for
+ *  empty/invalid input. */
 function parseCfAmount(s) {
-  const cleaned = String(s || '').replace(/[,  ]/g, '').trim();
+  const cleaned = String(s || '').replace(/[,  ()\-]/g, '').trim();
   if (!cleaned) return 0;
   const n = Number(cleaned);
   return Number.isFinite(n) ? n : 0;
@@ -3226,13 +3227,19 @@ function renderPayables() {
         const needs = r.paymentNeedsCarry[p];
         if (needs) {
           const v = Number(r.priorCarry[p] || 0);
+          // Display the user-entered amount with the same sign convention
+          // as the auto-computed payments above — credit movement, in
+          // parens. The input strips parens on focus so the user types
+          // a positive magnitude (which we then store negative server-
+          // side via the Payment formula).
+          const display = v ? `(${Math.round(v).toLocaleString('en-US')})` : '';
           return `<td class="vis-cf-num"><input
             type="text"
             inputmode="decimal"
             class="vis-cf-carry-input"
             data-cf-carry="${r.rowId}|${p}"
             placeholder="Enter"
-            value="${v ? v.toLocaleString('en-US') : ''}"
+            value="${display}"
           /></td>`;
         }
         const v = Number(r.payment[p] || 0);
@@ -3399,12 +3406,22 @@ document.addEventListener('input', (ev) => {
     void patchPayablesRow(rowId, { priorCarry: { [periodKey]: value } });
   }, 400);
 });
-document.addEventListener('blur', (ev) => {
+// Carry input — strip parens on focus so the user types a plain
+// positive magnitude; reformat to ($X,XXX) on blur to match the
+// sign convention of the surrounding auto-computed payment cells.
+document.addEventListener('focus', (ev) => {
   const t = ev.target;
   if (!(t instanceof HTMLInputElement)) return;
   if (!t.hasAttribute('data-cf-carry')) return;
   const v = parseCfAmount(t.value);
   t.value = v ? fmtCfMag(v) : '';
+}, true);
+document.addEventListener('blur', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (!t.hasAttribute('data-cf-carry')) return;
+  const v = parseCfAmount(t.value);
+  t.value = v ? `(${Math.round(v).toLocaleString('en-US')})` : '';
 }, true);
 
 
