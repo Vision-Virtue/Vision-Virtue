@@ -2917,6 +2917,7 @@ async function loadCurrentCf() {
   renderCfStructure();
   await loadPayables(true);
   await loadReceivables(true);
+  await loadInventory(true);
 }
 
 function renderCfStructure() {
@@ -3797,6 +3798,220 @@ document.addEventListener('blur', (ev) => {
   if (!t.hasAttribute('data-cf-rec-carry')) return;
   const v = parseCfSigned(t.value);
   t.value = fmtCfSigned(v, true);
+}, true);
+
+// ─────────────────────────────────────────────────────────────
+//  CF — Inventory (spec §5)
+// ─────────────────────────────────────────────────────────────
+
+let currentInventory = null;
+let lastInventoryBudgetId = null;
+
+async function loadInventory(force) {
+  if (!selectedCfBudgetId) { currentInventory = null; renderInventory(); return; }
+  if (!force && lastInventoryBudgetId === selectedCfBudgetId && currentInventory) {
+    renderInventory(); return;
+  }
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(selectedCfBudgetId)}/cf/inventory`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showBanner(
+        document.getElementById('cfStructureErrorBanner'),
+        htmlEsc(body?.error?.message || `Could not load Inventory (${res.status}).`),
+      );
+      currentInventory = null;
+      lastInventoryBudgetId = null;
+      renderInventory();
+      return;
+    }
+    currentInventory = await res.json();
+    lastInventoryBudgetId = selectedCfBudgetId;
+  } catch (err) {
+    showBanner(
+      document.getElementById('cfStructureErrorBanner'),
+      htmlEsc(`Could not load Inventory: ${(err && err.message) || err}`),
+    );
+    currentInventory = null;
+  }
+  renderInventory();
+}
+
+function renderInventory() {
+  const warn  = document.getElementById('cfInventoryNegativeWarn');
+  const tHead = document.getElementById('cfInventoryHead');
+  const tBody = document.getElementById('cfInventoryBodyTable');
+  const obIn  = document.getElementById('cfInventoryObInput');
+  if (!tHead || !tBody) return;
+
+  if (!currentInventory) {
+    tHead.innerHTML = ''; tBody.innerHTML = '';
+    if (warn) warn.hidden = true;
+    if (obIn) obIn.value = '';
+    refreshInventoryStatus();
+    return;
+  }
+
+  const grid = currentInventory.inventory;
+  const { periodKeys, summary, openingBalance, negativeMonths } = grid;
+  const yr = currentCf?.budget?.year || new Date().getFullYear();
+
+  // Negative-C.B warning (§5.3).
+  if (warn) {
+    if (negativeMonths && negativeMonths.length > 0) {
+      const labels = negativeMonths.map(p => cfPeriodLabel(p, yr)).join(', ');
+      warn.innerHTML = `Inventory goes negative in <strong>${htmlEsc(labels)}</strong>. Increase Purchases or check the COGS mapping (Finished goods category under COGS).`;
+      warn.hidden = false;
+    } else {
+      warn.hidden = true;
+    }
+  }
+
+  if (obIn) {
+    const formatted = fmtCfSigned(openingBalance, true);
+    if (document.activeElement !== obIn && obIn.value !== formatted) {
+      obIn.value = formatted;
+    }
+  }
+
+  // ── Summary table ─────────────────────────────────────────
+  tHead.innerHTML = `
+    <tr>
+      <th>Row</th>
+      ${periodKeys.map(p => `<th class="vis-cf-num">${cfPeriodLabel(p, yr)}</th>`).join('')}
+      <th class="vis-cf-num">FY</th>
+    </tr>`;
+
+  // mode = 'signed' | 'debit' | 'credit' (see Payables for the convention).
+  const fmtCell = (v, mode) => {
+    if (!v) return `<td class="vis-cf-num vis-cf-num-muted">—</td>`;
+    if (mode === 'signed') return `<td class="vis-cf-num">${fmtCfSigned(v, false)}</td>`;
+    if (mode === 'credit') return `<td class="vis-cf-num">(${Math.abs(v).toLocaleString('en-US')})</td>`;
+    return `<td class="vis-cf-num">${Math.abs(v).toLocaleString('en-US')}</td>`;
+  };
+  const obCells   = periodKeys.map(p => fmtCell(Math.round(Number(summary.ob[p]   || 0)), 'signed')).join('');
+  const cogsCells = periodKeys.map(p => fmtCell(Math.round(Number(summary.cogs[p] || 0)), 'credit')).join('');
+  const cbCells   = periodKeys.map(p => fmtCell(Math.round(Number(summary.cb[p]   || 0)), 'signed')).join('');
+
+  // Purchases row — editable inputs per period.
+  const purchasesCells = periodKeys.map(p => {
+    const v = Number(summary.purchases[p] || 0);
+    const display = v ? Math.round(v).toLocaleString('en-US') : '';
+    return `<td class="vis-cf-num"><input
+      type="text"
+      inputmode="decimal"
+      class="vis-cf-carry-input vis-cf-purchases-input"
+      data-cf-inv-purchases="${p}"
+      placeholder="0"
+      value="${display}"
+    /></td>`;
+  }).join('');
+
+  const obFy   = Math.round(Number(summary.ob[periodKeys[0]]                    || 0));
+  const purFy  = periodKeys.reduce((s, p) => s + Number(summary.purchases[p]    || 0), 0);
+  const cogsFy = periodKeys.reduce((s, p) => s + Number(summary.cogs[p]         || 0), 0);
+  const cbFy   = Math.round(Number(summary.cb[periodKeys[periodKeys.length - 1]] || 0));
+
+  tBody.innerHTML =
+    `<tr><th>O.B</th>${obCells}${fmtCell(obFy, 'signed')}</tr>` +
+    `<tr><th>Purchases</th>${purchasesCells}${fmtCell(Math.round(purFy), 'debit')}</tr>` +
+    `<tr><th>COGS</th>${cogsCells}${fmtCell(Math.round(cogsFy), 'credit')}</tr>` +
+    `<tr><th>C.B</th>${cbCells}${fmtCell(cbFy, 'signed')}</tr>`;
+
+  refreshInventoryStatus();
+}
+
+function refreshInventoryStatus() {
+  const badge = document.querySelector('[data-cf-status="inventory"]');
+  if (!badge) return;
+  if (!currentInventory) {
+    badge.textContent = 'Required';
+    badge.classList.remove('vis-cf-section-status-filled');
+    return;
+  }
+  const g = currentInventory.inventory;
+  const obOk = (g.openingBalance || 0) !== 0;
+  // Per §10: every Purchases cell must be filled (or 0). We treat any
+  // user-touched value as "filled". Since 0 is allowed, we just look
+  // for the section to have any rows of activity.
+  const filled = obOk;  // O.B is the binding required value
+  badge.textContent = filled ? 'Filled' : 'Required';
+  badge.classList.toggle('vis-cf-section-status-filled', filled);
+}
+
+function patchInventorySoon(fields) {
+  if (!selectedCfBudgetId) return;
+  // Distinct debounce key per logical change set so concurrent O.B
+  // and per-period edits don't stomp each other.
+  const key = fields.openingBalance !== undefined
+    ? `cf:inv:ob:${selectedCfBudgetId}`
+    : `cf:inv:purchases:${selectedCfBudgetId}:${Object.keys(fields.purchases || {}).join(',')}`;
+  debounce(key, async () => {
+    try {
+      const res = await api(`/api/visibility/budgets/${encodeURIComponent(selectedCfBudgetId)}/cf/inventory`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(fields),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        showBanner(document.getElementById('cfStructureErrorBanner'),
+          htmlEsc(body?.error?.message || `Save failed (${res.status}).`));
+        return;
+      }
+      const data = await res.json();
+      if (data?.inventory) {
+        currentInventory = { ...currentInventory, inventory: data.inventory };
+        renderInventory();
+      }
+    } catch (err) {
+      showBanner(document.getElementById('cfStructureErrorBanner'),
+        htmlEsc(`Save failed: ${(err && err.message) || err}`));
+    }
+  }, 400);
+}
+
+// Inventory O.B (signed) handlers.
+document.addEventListener('input', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (t.id !== 'cfInventoryObInput') return;
+  patchInventorySoon({ openingBalance: parseCfSigned(t.value) });
+});
+document.addEventListener('focus', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (t.id !== 'cfInventoryObInput') return;
+  const v = parseCfSigned(t.value);
+  if (!v) { t.value = ''; return; }
+  const abs = Math.round(Math.abs(v)).toLocaleString('en-US');
+  t.value = v < 0 ? `-${abs}` : abs;
+}, true);
+document.addEventListener('blur', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (t.id !== 'cfInventoryObInput') return;
+  const v = parseCfSigned(t.value);
+  t.value = fmtCfSigned(v, true);
+}, true);
+
+// Inventory Purchases (positive magnitude per period) handlers.
+document.addEventListener('input', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  const periodKey = t.getAttribute('data-cf-inv-purchases');
+  if (!periodKey) return;
+  // parseCfSigned strips parens / minus → magnitude. We force-abs
+  // so a stray paren / minus can't push purchases negative.
+  const value = Math.abs(parseCfSigned(t.value));
+  patchInventorySoon({ purchases: { [periodKey]: value } });
+});
+document.addEventListener('blur', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (!t.hasAttribute('data-cf-inv-purchases')) return;
+  const v = Math.abs(parseCfSigned(t.value));
+  t.value = v ? Math.round(v).toLocaleString('en-US') : '';
 }, true);
 
 
