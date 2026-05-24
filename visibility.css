@@ -1481,6 +1481,12 @@
   outline: none;
   border-color: rgba(155, 189, 242, 0.7);
 }
+/* Open-state option list — browsers default to OS colors (white-on-white
+   on Windows dark theme). Force a dark palette. */
+.vis-cf-term-select option {
+  background: #0f1a33;
+  color: #ffffff;
+}
 .vis-cf-carry-input {
   width: 5.5rem;
   background: rgba(217, 156, 33, 0.10);
