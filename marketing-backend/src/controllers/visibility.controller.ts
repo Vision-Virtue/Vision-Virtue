@@ -36,6 +36,8 @@ import {
   cfReceivablesSectionRepo,
   cfReceivablesRowRepo,
   cfReceivablesPriorCarryRepo,
+  cfInventorySectionRepo,
+  cfInventoryPurchasesRepo,
   PAYMENT_TERMS,
   PaymentTerm,
 } from '../db/visibility.repository';
@@ -52,6 +54,7 @@ import {
 import { buildBudgetExport } from '../services/budget-export.service';
 import { computePayablesGrid } from '../services/cf-payables.service';
 import { computeReceivablesGrid } from '../services/cf-receivables.service';
+import { computeInventoryGrid } from '../services/cf-inventory.service';
 
 // ─── Constants from spec §2.3 (single source of truth, mirrored on FE) ─────
 
@@ -1332,5 +1335,43 @@ export const cfReceivablesController = {
     }
     const grid = computeReceivablesGrid(ctx.budget, ctx.cfId, ctx.customerKeyId);
     res.json({ receivables: grid });
+  },
+};
+
+/* ============================================================
+   CF — Inventory controller (spec §5)
+   ============================================================ */
+
+export const cfInventoryController = {
+  /** GET /api/visibility/budgets/:id/cf/inventory */
+  get(req: Request, res: Response): void {
+    const ctx = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const grid = computeInventoryGrid(ctx.budget, ctx.cfId, ctx.customerKeyId);
+    res.json({ inventory: grid });
+  },
+
+  /** PATCH /api/visibility/budgets/:id/cf/inventory — { openingBalance? (signed),
+   *  purchases? : { periodKey: amount, ... } (positive magnitudes) }. */
+  patch(req: Request, res: Response): void {
+    const ctx = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const Schema = z.object({
+      openingBalance: z.number().finite().optional(),
+      purchases:      z.record(z.string(), z.number().finite().min(0)).optional(),
+    });
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid inventory patch payload.' } });
+      return;
+    }
+    if (parsed.data.openingBalance !== undefined) {
+      cfInventorySectionRepo.upsert(ctx.cfId, parsed.data.openingBalance);
+    }
+    if (parsed.data.purchases) {
+      for (const [periodKey, amount] of Object.entries(parsed.data.purchases)) {
+        cfInventoryPurchasesRepo.upsert(ctx.cfId, periodKey, amount);
+      }
+    }
+    const grid = computeInventoryGrid(ctx.budget, ctx.cfId, ctx.customerKeyId);
+    res.json({ inventory: grid });
   },
 };

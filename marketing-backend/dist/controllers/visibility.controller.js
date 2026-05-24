@@ -3,7 +3,7 @@
    Visibility offering — Controller (Phase 1: Financial Structure)
    ============================================================ */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cfReceivablesController = exports.cfPayablesController = exports.cashFlowController = exports.salariesController = exports.budgetsController = exports.visibilityController = exports.BUDGET_CATEGORIES_BY_SECTION = exports.PL_SECTIONS = void 0;
+exports.cfInventoryController = exports.cfReceivablesController = exports.cfPayablesController = exports.cashFlowController = exports.salariesController = exports.budgetsController = exports.visibilityController = exports.BUDGET_CATEGORIES_BY_SECTION = exports.PL_SECTIONS = void 0;
 const zod_1 = require("zod");
 const partner_repository_1 = require("../db/partner.repository");
 const visibility_repository_1 = require("../db/visibility.repository");
@@ -13,6 +13,7 @@ const pivot_service_1 = require("../services/pivot.service");
 const budget_export_service_1 = require("../services/budget-export.service");
 const cf_payables_service_1 = require("../services/cf-payables.service");
 const cf_receivables_service_1 = require("../services/cf-receivables.service");
+const cf_inventory_service_1 = require("../services/cf-inventory.service");
 // ─── Constants from spec §2.3 (single source of truth, mirrored on FE) ─────
 exports.PL_SECTIONS = [
     'Revenues', 'COGS', 'R&D', 'S&M', 'G&A',
@@ -1303,5 +1304,44 @@ exports.cfReceivablesController = {
         }
         const grid = (0, cf_receivables_service_1.computeReceivablesGrid)(ctx.budget, ctx.cfId, ctx.customerKeyId);
         res.json({ receivables: grid });
+    },
+};
+/* ============================================================
+   CF — Inventory controller (spec §5)
+   ============================================================ */
+exports.cfInventoryController = {
+    /** GET /api/visibility/budgets/:id/cf/inventory */
+    get(req, res) {
+        const ctx = requireFinalizedBudgetCf(req, res);
+        if (!ctx)
+            return;
+        const grid = (0, cf_inventory_service_1.computeInventoryGrid)(ctx.budget, ctx.cfId, ctx.customerKeyId);
+        res.json({ inventory: grid });
+    },
+    /** PATCH /api/visibility/budgets/:id/cf/inventory — { openingBalance? (signed),
+     *  purchases? : { periodKey: amount, ... } (positive magnitudes) }. */
+    patch(req, res) {
+        const ctx = requireFinalizedBudgetCf(req, res);
+        if (!ctx)
+            return;
+        const Schema = zod_1.z.object({
+            openingBalance: zod_1.z.number().finite().optional(),
+            purchases: zod_1.z.record(zod_1.z.string(), zod_1.z.number().finite().min(0)).optional(),
+        });
+        const parsed = Schema.safeParse(req.body);
+        if (!parsed.success) {
+            res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid inventory patch payload.' } });
+            return;
+        }
+        if (parsed.data.openingBalance !== undefined) {
+            visibility_repository_1.cfInventorySectionRepo.upsert(ctx.cfId, parsed.data.openingBalance);
+        }
+        if (parsed.data.purchases) {
+            for (const [periodKey, amount] of Object.entries(parsed.data.purchases)) {
+                visibility_repository_1.cfInventoryPurchasesRepo.upsert(ctx.cfId, periodKey, amount);
+            }
+        }
+        const grid = (0, cf_inventory_service_1.computeInventoryGrid)(ctx.budget, ctx.cfId, ctx.customerKeyId);
+        res.json({ inventory: grid });
     },
 };

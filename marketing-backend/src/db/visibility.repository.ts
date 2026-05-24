@@ -1213,3 +1213,46 @@ export const cfReceivablesPriorCarryRepo = {
       .run(rowId, periodKey, amount);
   },
 };
+
+/* ============================================================
+   CF — Inventory sub-repos (spec §5). No per-row allocation;
+   just O.B + per-period purchases.
+   ============================================================ */
+
+export const cfInventorySectionRepo = {
+  get(cashFlowId: string): { openingBalance: number } {
+    const row = getDb()
+      .prepare(`SELECT opening_balance FROM cf_inventory_section WHERE cash_flow_id = ?`)
+      .get(cashFlowId) as { opening_balance: number } | undefined;
+    return { openingBalance: row?.opening_balance ?? 0 };
+  },
+  upsert(cashFlowId: string, openingBalance: number): void {
+    getDb()
+      .prepare(
+        `INSERT INTO cf_inventory_section (cash_flow_id, opening_balance)
+         VALUES (?, ?)
+         ON CONFLICT(cash_flow_id) DO UPDATE SET opening_balance = excluded.opening_balance`,
+      )
+      .run(cashFlowId, openingBalance);
+  },
+};
+
+export const cfInventoryPurchasesRepo = {
+  listByCf(cashFlowId: string): Record<string, number> {
+    const rows = getDb()
+      .prepare(`SELECT period_key, amount FROM cf_inventory_purchases WHERE cash_flow_id = ?`)
+      .all(cashFlowId) as Array<{ period_key: string; amount: number }>;
+    const out: Record<string, number> = {};
+    for (const r of rows) out[r.period_key] = r.amount;
+    return out;
+  },
+  upsert(cashFlowId: string, periodKey: string, amount: number): void {
+    getDb()
+      .prepare(
+        `INSERT INTO cf_inventory_purchases (cash_flow_id, period_key, amount)
+         VALUES (?, ?, ?)
+         ON CONFLICT(cash_flow_id, period_key) DO UPDATE SET amount = excluded.amount`,
+      )
+      .run(cashFlowId, periodKey, amount);
+  },
+};

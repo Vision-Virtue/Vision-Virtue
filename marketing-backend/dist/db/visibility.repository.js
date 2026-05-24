@@ -4,7 +4,7 @@
    Tables: gl_accounts, financial_structure_state.
    ============================================================ */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cfReceivablesPriorCarryRepo = exports.cfReceivablesRowRepo = exports.cfReceivablesSectionRepo = exports.cfPayablesPriorCarryRepo = exports.cfPayablesRowRepo = exports.cfPayablesSectionRepo = exports.PAYMENT_TERMS = exports.cashFlowRepo = exports.salariesStateRepo = exports.salariesRowRepo = exports.budgetCellRepo = exports.budgetLineRepo = exports.budgetRepo = exports.BUDGET_CAP_PER_CUSTOMER = exports.SCALES = exports.CURRENCIES = exports.GRANULARITIES = exports.orgStructureRepo = exports.orgEntityRepo = exports.ORG_DIMENSIONS = exports.financialStructureRepo = exports.glAccountRepo = void 0;
+exports.cfInventoryPurchasesRepo = exports.cfInventorySectionRepo = exports.cfReceivablesPriorCarryRepo = exports.cfReceivablesRowRepo = exports.cfReceivablesSectionRepo = exports.cfPayablesPriorCarryRepo = exports.cfPayablesRowRepo = exports.cfPayablesSectionRepo = exports.PAYMENT_TERMS = exports.cashFlowRepo = exports.salariesStateRepo = exports.salariesRowRepo = exports.budgetCellRepo = exports.budgetLineRepo = exports.budgetRepo = exports.BUDGET_CAP_PER_CUSTOMER = exports.SCALES = exports.CURRENCIES = exports.GRANULARITIES = exports.orgStructureRepo = exports.orgEntityRepo = exports.ORG_DIMENSIONS = exports.financialStructureRepo = exports.glAccountRepo = void 0;
 exports.periodKeysFor = periodKeysFor;
 const uuid_1 = require("uuid");
 const database_1 = require("./database");
@@ -888,5 +888,42 @@ exports.cfReceivablesPriorCarryRepo = {
          VALUES (?, ?, ?)
          ON CONFLICT(cf_receivables_row_id, period_key) DO UPDATE SET amount = excluded.amount`)
             .run(rowId, periodKey, amount);
+    },
+};
+/* ============================================================
+   CF — Inventory sub-repos (spec §5). No per-row allocation;
+   just O.B + per-period purchases.
+   ============================================================ */
+exports.cfInventorySectionRepo = {
+    get(cashFlowId) {
+        const row = (0, database_1.getDb)()
+            .prepare(`SELECT opening_balance FROM cf_inventory_section WHERE cash_flow_id = ?`)
+            .get(cashFlowId);
+        return { openingBalance: row?.opening_balance ?? 0 };
+    },
+    upsert(cashFlowId, openingBalance) {
+        (0, database_1.getDb)()
+            .prepare(`INSERT INTO cf_inventory_section (cash_flow_id, opening_balance)
+         VALUES (?, ?)
+         ON CONFLICT(cash_flow_id) DO UPDATE SET opening_balance = excluded.opening_balance`)
+            .run(cashFlowId, openingBalance);
+    },
+};
+exports.cfInventoryPurchasesRepo = {
+    listByCf(cashFlowId) {
+        const rows = (0, database_1.getDb)()
+            .prepare(`SELECT period_key, amount FROM cf_inventory_purchases WHERE cash_flow_id = ?`)
+            .all(cashFlowId);
+        const out = {};
+        for (const r of rows)
+            out[r.period_key] = r.amount;
+        return out;
+    },
+    upsert(cashFlowId, periodKey, amount) {
+        (0, database_1.getDb)()
+            .prepare(`INSERT INTO cf_inventory_purchases (cash_flow_id, period_key, amount)
+         VALUES (?, ?, ?)
+         ON CONFLICT(cash_flow_id, period_key) DO UPDATE SET amount = excluded.amount`)
+            .run(cashFlowId, periodKey, amount);
     },
 };
