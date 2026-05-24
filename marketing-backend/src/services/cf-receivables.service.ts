@@ -49,6 +49,7 @@ export interface ReceivablesGridRow {
   rowId: string;
   companyId: string | null;
   plSection: string;
+  budgetCategory: string;
   paymentTerm: PaymentTerm | null;
   revenue: Record<string, number>;             // signed (budget sign; typically negative)
   payment: Record<string, number>;             // signed (typically positive cash-in)
@@ -99,9 +100,12 @@ export function computeReceivablesGrid(
   for (const g of glRows) glById.set(g.id, g);
 
   // ── Group lines per §4.2 ──────────────────────────────────
-  // Default-level grid groups by Company only.
+  // Default-level grid groups by Company × Budget Category — each
+  // revenue stream (License / Subscription / POC / etc.) typically
+  // has its own payment terms.
   type Group = {
     companyId: string | null;
+    budgetCategory: string;
     revenue: Record<string, number>;
   };
   const groups = new Map<string, Group>();
@@ -110,11 +114,19 @@ export function computeReceivablesGrid(
     if (!l.glAccountId) continue;
     const gl = glById.get(l.glAccountId);
     if (!gl || gl.plSection !== 'Revenues') continue;
+    if (!gl.budgetCategory) continue;
+    const catName = gl.budgetCategory === 'Your Budget Category'
+      ? (gl.budgetCategoryCustom || 'Your Budget Category')
+      : gl.budgetCategory;
 
-    const key = `${l.companyId ?? ''}`;
+    const key = `${l.companyId ?? ''}|${catName}`;
     let g = groups.get(key);
     if (!g) {
-      g = { companyId: l.companyId, revenue: emptyPeriodMap(periodKeys) };
+      g = {
+        companyId:      l.companyId,
+        budgetCategory: catName,
+        revenue:        emptyPeriodMap(periodKeys),
+      };
       groups.set(key, g);
     }
     const cells = budgetCellRepo.listByLine(l.id);
@@ -129,7 +141,7 @@ export function computeReceivablesGrid(
   let i = 0;
   for (const key of orderedKeys) {
     const g = groups.get(key)!;
-    const cfRow = cfReceivablesRowRepo.findOrCreateDefault(cashFlowId, g.companyId, i++);
+    const cfRow = cfReceivablesRowRepo.findOrCreateDefault(cashFlowId, g.companyId, g.budgetCategory, i++);
     const priorCarry = cfReceivablesPriorCarryRepo.listByRow(cfRow.id);
     const payment    = emptyPeriodMap(periodKeys);
     const needsCarry = emptyBoolMap(periodKeys);
@@ -161,6 +173,7 @@ export function computeReceivablesGrid(
       rowId:             cfRow.id,
       companyId:         g.companyId,
       plSection:         'Revenues',
+      budgetCategory:    g.budgetCategory,
       paymentTerm:       term,
       revenue:           g.revenue,
       payment,

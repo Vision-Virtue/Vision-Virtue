@@ -1100,6 +1100,7 @@ export interface CfReceivablesRow {
   cashFlowId: string;
   companyId: string | null;
   plSection: string | null;
+  budgetCategory: string | null;
   glAccountId: string | null;
   customerName: string | null;
   paymentTerm: PaymentTerm | null;
@@ -1111,6 +1112,7 @@ interface DbCfReceivablesRow {
   cash_flow_id: string;
   company_id: string | null;
   pl_section: string | null;
+  budget_category: string | null;
   gl_account_id: string | null;
   customer_name: string | null;
   payment_term: PaymentTerm | null;
@@ -1121,14 +1123,15 @@ interface DbCfReceivablesRow {
 
 function toReceivablesRowDomain(r: DbCfReceivablesRow): CfReceivablesRow {
   return {
-    id:           r.id,
-    cashFlowId:   r.cash_flow_id,
-    companyId:    r.company_id,
-    plSection:    r.pl_section,
-    glAccountId:  r.gl_account_id,
-    customerName: r.customer_name,
-    paymentTerm:  r.payment_term,
-    orderIndex:   r.order_index,
+    id:             r.id,
+    cashFlowId:     r.cash_flow_id,
+    companyId:      r.company_id,
+    plSection:      r.pl_section,
+    budgetCategory: r.budget_category,
+    glAccountId:    r.gl_account_id,
+    customerName:   r.customer_name,
+    paymentTerm:    r.payment_term,
+    orderIndex:     r.order_index,
   };
 }
 
@@ -1151,11 +1154,13 @@ export const cfReceivablesRowRepo = {
   },
 
   /** Find or create the default-level (no GL, no Customer) row for
-   *  (cf, company) — default Receivables level groups by Company only
-   *  (P&L is always 'Revenues' at this level). */
+   *  (cf, company, budget category) — Receivables groups by Company
+   *  × Budget Category at the default level (P&L is always
+   *  'Revenues'). */
   findOrCreateDefault(
     cashFlowId: string,
     companyId: string | null,
+    budgetCategory: string,
     orderIndex: number,
   ): CfReceivablesRow {
     const db = getDb();
@@ -1164,19 +1169,20 @@ export const cfReceivablesRowRepo = {
         `SELECT * FROM cf_receivables_rows
           WHERE cash_flow_id = ?
             AND (company_id IS ? OR company_id = ?)
+            AND budget_category = ?
             AND gl_account_id IS NULL
             AND customer_name IS NULL`,
       )
-      .get(cashFlowId, companyId, companyId) as DbCfReceivablesRow | undefined;
+      .get(cashFlowId, companyId, companyId, budgetCategory) as DbCfReceivablesRow | undefined;
     if (existing) return toReceivablesRowDomain(existing);
     const id = uuidv4();
     const now = new Date().toISOString();
     db.prepare(
       `INSERT INTO cf_receivables_rows
-         (id, cash_flow_id, company_id, pl_section, gl_account_id,
+         (id, cash_flow_id, company_id, pl_section, budget_category, gl_account_id,
           customer_name, payment_term, order_index, created_at, updated_at)
-       VALUES (?, ?, ?, 'Revenues', NULL, NULL, NULL, ?, ?, ?)`,
-    ).run(id, cashFlowId, companyId, orderIndex, now, now);
+       VALUES (?, ?, ?, 'Revenues', ?, NULL, NULL, NULL, ?, ?, ?)`,
+    ).run(id, cashFlowId, companyId, budgetCategory, orderIndex, now, now);
     return this.getById(id)!;
   },
 

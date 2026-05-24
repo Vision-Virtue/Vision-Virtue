@@ -312,6 +312,7 @@ function initializeSchema(database) {
       cash_flow_id    TEXT NOT NULL,
       company_id      TEXT,
       pl_section      TEXT,           -- always 'Revenues' but stored for symmetry
+      budget_category TEXT,           -- default-level grouping (License / Subscription / etc.)
       gl_account_id   TEXT,
       customer_name   TEXT,
       payment_term    TEXT,
@@ -388,6 +389,12 @@ function initializeSchema(database) {
     catch { /* already exists */ }
     try {
         database.exec(`ALTER TABLE linkedin_accounts ADD COLUMN person_urn TEXT NOT NULL DEFAULT ''`);
+    }
+    catch { /* already exists */ }
+    // CF Receivables: default-level grouping is now (Company, Budget
+    // Category). Older DBs only had the symmetry-only pl_section.
+    try {
+        database.exec(`ALTER TABLE cf_receivables_rows ADD COLUMN budget_category TEXT`);
     }
     catch { /* already exists */ }
     // Seed the VV-TEST123 customer key (idempotent)

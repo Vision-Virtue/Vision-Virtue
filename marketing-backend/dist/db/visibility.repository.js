@@ -820,6 +820,7 @@ function toReceivablesRowDomain(r) {
         cashFlowId: r.cash_flow_id,
         companyId: r.company_id,
         plSection: r.pl_section,
+        budgetCategory: r.budget_category,
         glAccountId: r.gl_account_id,
         customerName: r.customer_name,
         paymentTerm: r.payment_term,
@@ -841,25 +842,27 @@ exports.cfReceivablesRowRepo = {
         return row ? toReceivablesRowDomain(row) : null;
     },
     /** Find or create the default-level (no GL, no Customer) row for
-     *  (cf, company) — default Receivables level groups by Company only
-     *  (P&L is always 'Revenues' at this level). */
-    findOrCreateDefault(cashFlowId, companyId, orderIndex) {
+     *  (cf, company, budget category) — Receivables groups by Company
+     *  × Budget Category at the default level (P&L is always
+     *  'Revenues'). */
+    findOrCreateDefault(cashFlowId, companyId, budgetCategory, orderIndex) {
         const db = (0, database_1.getDb)();
         const existing = db
             .prepare(`SELECT * FROM cf_receivables_rows
           WHERE cash_flow_id = ?
             AND (company_id IS ? OR company_id = ?)
+            AND budget_category = ?
             AND gl_account_id IS NULL
             AND customer_name IS NULL`)
-            .get(cashFlowId, companyId, companyId);
+            .get(cashFlowId, companyId, companyId, budgetCategory);
         if (existing)
             return toReceivablesRowDomain(existing);
         const id = (0, uuid_1.v4)();
         const now = new Date().toISOString();
         db.prepare(`INSERT INTO cf_receivables_rows
-         (id, cash_flow_id, company_id, pl_section, gl_account_id,
+         (id, cash_flow_id, company_id, pl_section, budget_category, gl_account_id,
           customer_name, payment_term, order_index, created_at, updated_at)
-       VALUES (?, ?, ?, 'Revenues', NULL, NULL, NULL, ?, ?, ?)`).run(id, cashFlowId, companyId, orderIndex, now, now);
+       VALUES (?, ?, ?, 'Revenues', ?, NULL, NULL, NULL, ?, ?, ?)`).run(id, cashFlowId, companyId, budgetCategory, orderIndex, now, now);
         return this.getById(id);
     },
     updatePaymentTerm(id, term) {

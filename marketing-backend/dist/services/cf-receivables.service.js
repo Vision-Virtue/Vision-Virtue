@@ -62,10 +62,19 @@ function computeReceivablesGrid(budget, cashFlowId, customerKeyId) {
         const gl = glById.get(l.glAccountId);
         if (!gl || gl.plSection !== 'Revenues')
             continue;
-        const key = `${l.companyId ?? ''}`;
+        if (!gl.budgetCategory)
+            continue;
+        const catName = gl.budgetCategory === 'Your Budget Category'
+            ? (gl.budgetCategoryCustom || 'Your Budget Category')
+            : gl.budgetCategory;
+        const key = `${l.companyId ?? ''}|${catName}`;
         let g = groups.get(key);
         if (!g) {
-            g = { companyId: l.companyId, revenue: emptyPeriodMap(periodKeys) };
+            g = {
+                companyId: l.companyId,
+                budgetCategory: catName,
+                revenue: emptyPeriodMap(periodKeys),
+            };
             groups.set(key, g);
         }
         const cells = visibility_repository_1.budgetCellRepo.listByLine(l.id);
@@ -79,7 +88,7 @@ function computeReceivablesGrid(budget, cashFlowId, customerKeyId) {
     let i = 0;
     for (const key of orderedKeys) {
         const g = groups.get(key);
-        const cfRow = visibility_repository_1.cfReceivablesRowRepo.findOrCreateDefault(cashFlowId, g.companyId, i++);
+        const cfRow = visibility_repository_1.cfReceivablesRowRepo.findOrCreateDefault(cashFlowId, g.companyId, g.budgetCategory, i++);
         const priorCarry = visibility_repository_1.cfReceivablesPriorCarryRepo.listByRow(cfRow.id);
         const payment = emptyPeriodMap(periodKeys);
         const needsCarry = emptyBoolMap(periodKeys);
@@ -109,6 +118,7 @@ function computeReceivablesGrid(budget, cashFlowId, customerKeyId) {
             rowId: cfRow.id,
             companyId: g.companyId,
             plSection: 'Revenues',
+            budgetCategory: g.budgetCategory,
             paymentTerm: term,
             revenue: g.revenue,
             payment,
