@@ -3,7 +3,7 @@
    Visibility offering — Controller (Phase 1: Financial Structure)
    ============================================================ */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cfInventoryController = exports.cfReceivablesController = exports.cfPayablesController = exports.cashFlowController = exports.salariesController = exports.budgetsController = exports.visibilityController = exports.BUDGET_CATEGORIES_BY_SECTION = exports.PL_SECTIONS = void 0;
+exports.cfSalariesController = exports.cfInventoryController = exports.cfReceivablesController = exports.cfPayablesController = exports.cashFlowController = exports.salariesController = exports.budgetsController = exports.visibilityController = exports.BUDGET_CATEGORIES_BY_SECTION = exports.PL_SECTIONS = void 0;
 const zod_1 = require("zod");
 const partner_repository_1 = require("../db/partner.repository");
 const visibility_repository_1 = require("../db/visibility.repository");
@@ -14,6 +14,7 @@ const budget_export_service_1 = require("../services/budget-export.service");
 const cf_payables_service_1 = require("../services/cf-payables.service");
 const cf_receivables_service_1 = require("../services/cf-receivables.service");
 const cf_inventory_service_1 = require("../services/cf-inventory.service");
+const cf_salaries_service_1 = require("../services/cf-salaries.service");
 // ─── Constants from spec §2.3 (single source of truth, mirrored on FE) ─────
 exports.PL_SECTIONS = [
     'Revenues', 'COGS', 'R&D', 'S&M', 'G&A',
@@ -1346,5 +1347,41 @@ exports.cfInventoryController = {
         }
         const grid = (0, cf_inventory_service_1.computeInventoryGrid)(ctx.budget, ctx.cfId, ctx.customerKeyId);
         res.json({ inventory: grid });
+    },
+};
+/* ============================================================
+   CF — Salaries & Benefits controller (spec §6)
+   ============================================================ */
+exports.cfSalariesController = {
+    /** GET /api/visibility/budgets/:id/cf/salaries */
+    get(req, res) {
+        const ctx = requireFinalizedBudgetCf(req, res);
+        if (!ctx)
+            return;
+        const grid = (0, cf_salaries_service_1.computeSalariesGrid)(ctx.budget, ctx.cfId, ctx.customerKeyId);
+        res.json({ salaries: grid });
+    },
+    /** PATCH /api/visibility/budgets/:id/cf/salaries
+     *  Body: { openingBalance?: number (positive magnitude),
+     *          januaryPayment?: number (positive magnitude) } */
+    patch(req, res) {
+        const ctx = requireFinalizedBudgetCf(req, res);
+        if (!ctx)
+            return;
+        const Schema = zod_1.z.object({
+            openingBalance: zod_1.z.number().finite().min(0).optional(),
+            januaryPayment: zod_1.z.number().finite().min(0).optional(),
+        });
+        const parsed = Schema.safeParse(req.body);
+        if (!parsed.success) {
+            res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid salaries patch payload.' } });
+            return;
+        }
+        visibility_repository_1.cfSalariesSectionRepo.upsert(ctx.cfId, {
+            openingBalance: parsed.data.openingBalance,
+            januaryPayment: parsed.data.januaryPayment,
+        });
+        const grid = (0, cf_salaries_service_1.computeSalariesGrid)(ctx.budget, ctx.cfId, ctx.customerKeyId);
+        res.json({ salaries: grid });
     },
 };

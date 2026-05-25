@@ -4,7 +4,7 @@ import { linkedInController } from '../controllers/linkedin.controller';
 import { authController, verifyPin } from '../controllers/auth.controller';
 import { chatController } from '../controllers/chat.controller';
 import { partnerController } from '../controllers/partner.controller';
-import { visibilityController, budgetsController, salariesController, cashFlowController, cfPayablesController, cfReceivablesController, cfInventoryController } from '../controllers/visibility.controller';
+import { visibilityController, budgetsController, salariesController, cashFlowController, cfPayablesController, cfReceivablesController, cfInventoryController, cfSalariesController } from '../controllers/visibility.controller';
 import { requireRaphael, requireLinkedIn, requireAdminPin } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -277,6 +277,10 @@ router.patch( '/visibility/budgets/:id/cf/receivables/rows/:rowId',   (req, res)
 // CF — Inventory (spec §5)
 router.get(   '/visibility/budgets/:id/cf/inventory',                 (req, res) => cfInventoryController.get(req, res));
 router.patch( '/visibility/budgets/:id/cf/inventory',                 (req, res) => cfInventoryController.patch(req, res));
+
+// CF — Salaries & Benefits (spec §6)
+router.get(   '/visibility/budgets/:id/cf/salaries',                  (req, res) => cfSalariesController.get(req, res));
+router.patch( '/visibility/budgets/:id/cf/salaries',                  (req, res) => cfSalariesController.patch(req, res));
 
 // ─── Admin (Raphael) — Partner Submissions ──────────────────────────────────
 // All admin endpoints require X-Admin-Pin header OR ?pin= query (matching

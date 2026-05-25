@@ -129,6 +129,9 @@ router.patch('/visibility/budgets/:id/cf/receivables/rows/:rowId', (req, res) =>
 // CF — Inventory (spec §5)
 router.get('/visibility/budgets/:id/cf/inventory', (req, res) => visibility_controller_1.cfInventoryController.get(req, res));
 router.patch('/visibility/budgets/:id/cf/inventory', (req, res) => visibility_controller_1.cfInventoryController.patch(req, res));
+// CF — Salaries & Benefits (spec §6)
+router.get('/visibility/budgets/:id/cf/salaries', (req, res) => visibility_controller_1.cfSalariesController.get(req, res));
+router.patch('/visibility/budgets/:id/cf/salaries', (req, res) => visibility_controller_1.cfSalariesController.patch(req, res));
 // ─── Admin (Raphael) — Partner Submissions ──────────────────────────────────
 // All admin endpoints require X-Admin-Pin header OR ?pin= query (matching
 // ACCESS_CODE). Query-param form lets the frontend send simple CORS
