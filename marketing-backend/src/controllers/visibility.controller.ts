@@ -28,6 +28,18 @@ import {
   salariesRowRepo,
   salariesStateRepo,
   SalariesRow,
+  cashFlowRepo,
+  CashFlowRow,
+  cfPayablesSectionRepo,
+  cfPayablesRowRepo,
+  cfPayablesPriorCarryRepo,
+  cfReceivablesSectionRepo,
+  cfReceivablesRowRepo,
+  cfReceivablesPriorCarryRepo,
+  cfInventorySectionRepo,
+  cfInventoryPurchasesRepo,
+  PAYMENT_TERMS,
+  PaymentTerm,
 } from '../db/visibility.repository';
 import { parseGLBuffer, parseSBBuffer, ParseError } from '../services/gl-parser.service';
 import { validateAndPivotSalaries, pivotEntryToCells } from '../services/salaries.service';
@@ -40,6 +52,9 @@ import {
   PivotFilters,
 } from '../services/pivot.service';
 import { buildBudgetExport } from '../services/budget-export.service';
+import { computePayablesGrid } from '../services/cf-payables.service';
+import { computeReceivablesGrid } from '../services/cf-receivables.service';
+import { computeInventoryGrid } from '../services/cf-inventory.service';
 
 // ─── Constants from spec §2.3 (single source of truth, mirrored on FE) ─────
 
@@ -87,6 +102,7 @@ function serializeGL(row: GLAccountRow): Record<string, unknown> {
     plSection:            row.plSection,
     budgetCategory:       row.budgetCategory,
     budgetCategoryCustom: row.budgetCategoryCustom,
+    inventoryRelated:     row.inventoryRelated,
     orphan:               row.orphan,
   };
 }
@@ -187,6 +203,7 @@ export const visibilityController = {
       plSection:            z.string().nullable().optional(),
       budgetCategory:       z.string().nullable().optional(),
       budgetCategoryCustom: z.string().nullable().optional(),
+      inventoryRelated:     z.boolean().optional(),
     });
     const parsed = Schema.safeParse(req.body);
     if (!parsed.success) {
@@ -233,6 +250,7 @@ export const visibilityController = {
       ...(has('budgetCategoryCustom') || has('budgetCategory')
         ? { budgetCategoryCustom: finalCustom }
         : {}),
+      ...(has('inventoryRelated')     ? { inventoryRelated:     !!parsed.data.inventoryRelated } : {}),
     });
     if (!updated) {
       res.status(404).json({ error: { code: 'NOT_FOUND', message: 'GL row not found.' } });
@@ -1109,5 +1127,254 @@ export const salariesController = {
     const ctx = requireBudget(req, res); if (!ctx) return;
     salariesStateRepo.setStatus(ctx.budget.id, 'editing');
     res.json({ status: 'editing' });
+  },
+};
+
+/* ============================================================
+   CF (Cash Flow) controller — Phase 1: scaffolding.
+   Only get-or-create exposed; sections/forecast/dashboard come
+   in later phases.
+   ============================================================ */
+
+function serializeCashFlow(row: CashFlowRow): Record<string, unknown> {
+  return {
+    id:          row.id,
+    budgetId:    row.budgetId,
+    openingCash: row.openingCash,
+    status:      row.status,
+    createdAt:   row.createdAt,
+    updatedAt:   row.updatedAt,
+  };
+}
+
+export const cashFlowController = {
+  /**
+   * GET /api/visibility/budgets/:id/cf
+   * CF is read-only-linked to a finalized budget (spec §10).
+   * If the budget is still a draft, return 409 so the FE can
+   * show "Finalize the budget first" guidance.
+   */
+  getOrCreate(req: Request, res: Response): void {
+    const ctx = requireBudget(req, res); if (!ctx) return;
+    if (ctx.budget.status !== 'finalized') {
+      res.status(409).json({
+        error: {
+          code: 'BUDGET_NOT_FINALIZED',
+          message: 'Finalize the budget before opening Cash Flow.',
+        },
+      });
+      return;
+    }
+    const cf = cashFlowRepo.ensureForBudget(ctx.budget.id);
+    res.json({
+      cf:         serializeCashFlow(cf),
+      budget:     serializeBudget(ctx.budget),
+      periodKeys: periodKeysFor(ctx.budget.granularity),
+    });
+  },
+
+  /**
+   * PATCH /api/visibility/budgets/:id/cf
+   * Updates CF-level fields (openingCash, status). Section-level
+   * fields (Payables/Receivables/Inventory/Salaries/Manual) get
+   * their own endpoints in later phases.
+   */
+  patch(req: Request, res: Response): void {
+    const ctx = requireBudget(req, res); if (!ctx) return;
+    if (ctx.budget.status !== 'finalized') {
+      res.status(409).json({
+        error: { code: 'BUDGET_NOT_FINALIZED', message: 'Finalize the budget first.' },
+      });
+      return;
+    }
+    const Schema = z.object({
+      openingCash: z.number().finite().optional(),
+      status:      z.enum(['draft', 'finalized']).optional(),
+    });
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid CF patch payload.' } });
+      return;
+    }
+    const cf = cashFlowRepo.ensureForBudget(ctx.budget.id);
+    if (parsed.data.openingCash !== undefined) {
+      cashFlowRepo.updateOpeningCash(cf.id, parsed.data.openingCash);
+    }
+    if (parsed.data.status !== undefined) {
+      cashFlowRepo.setStatus(cf.id, parsed.data.status);
+    }
+    const updated = cashFlowRepo.getByBudget(ctx.budget.id);
+    res.json({ cf: updated ? serializeCashFlow(updated) : null });
+  },
+};
+
+/* ============================================================
+   CF — Payables controller (spec §3)
+   ============================================================ */
+
+function requireFinalizedBudgetCf(req: Request, res: Response):
+  | { customerKeyId: string; budget: BudgetRow; cfId: string }
+  | null {
+  const ctx = requireBudget(req, res); if (!ctx) return null;
+  if (ctx.budget.status !== 'finalized') {
+    res.status(409).json({
+      error: { code: 'BUDGET_NOT_FINALIZED', message: 'Finalize the budget first.' },
+    });
+    return null;
+  }
+  const cf = cashFlowRepo.ensureForBudget(ctx.budget.id);
+  return { customerKeyId: ctx.customerKeyId, budget: ctx.budget, cfId: cf.id };
+}
+
+export const cfPayablesController = {
+  /** GET /api/visibility/budgets/:id/cf/payables */
+  get(req: Request, res: Response): void {
+    const ctx = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const grid = computePayablesGrid(ctx.budget, ctx.cfId, ctx.customerKeyId);
+    res.json({ payables: grid, paymentTerms: PAYMENT_TERMS });
+  },
+
+  /** PATCH /api/visibility/budgets/:id/cf/payables — section-level (openingBalance). */
+  patchSection(req: Request, res: Response): void {
+    const ctx = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    // openingBalance is signed: positive = debit balance (e.g. supplier
+    // prepayments), negative = credit balance (typical A/P).
+    const Schema = z.object({ openingBalance: z.number().finite() });
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'openingBalance must be a finite number.' } });
+      return;
+    }
+    cfPayablesSectionRepo.upsert(ctx.cfId, parsed.data.openingBalance);
+    res.json({ section: cfPayablesSectionRepo.get(ctx.cfId) });
+  },
+
+  /**
+   * PATCH /api/visibility/budgets/:id/cf/payables/rows/:rowId
+   * Body: { paymentTerm?, priorCarry?: { periodKey: amount } }
+   */
+  patchRow(req: Request, res: Response): void {
+    const ctx = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const row = cfPayablesRowRepo.getById(req.params.rowId);
+    if (!row || row.cashFlowId !== ctx.cfId) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Payables row not found.' } });
+      return;
+    }
+    const Schema = z.object({
+      paymentTerm: z.union([z.enum(PAYMENT_TERMS), z.null()]).optional(),
+      priorCarry:  z.record(z.string(), z.number().finite()).optional(),
+    });
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid row patch payload.' } });
+      return;
+    }
+    if (parsed.data.paymentTerm !== undefined) {
+      cfPayablesRowRepo.updatePaymentTerm(row.id, parsed.data.paymentTerm as PaymentTerm | null);
+    }
+    if (parsed.data.priorCarry) {
+      for (const [periodKey, amount] of Object.entries(parsed.data.priorCarry)) {
+        cfPayablesPriorCarryRepo.upsert(row.id, periodKey, amount);
+      }
+    }
+    // Re-compute the full grid so the FE gets fresh Payment values.
+    const grid = computePayablesGrid(ctx.budget, ctx.cfId, ctx.customerKeyId);
+    res.json({ payables: grid });
+  },
+};
+
+/* ============================================================
+   CF — Receivables controller (spec §4) — mirror of Payables.
+   ============================================================ */
+
+export const cfReceivablesController = {
+  /** GET /api/visibility/budgets/:id/cf/receivables */
+  get(req: Request, res: Response): void {
+    const ctx = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const grid = computeReceivablesGrid(ctx.budget, ctx.cfId, ctx.customerKeyId);
+    res.json({ receivables: grid, paymentTerms: PAYMENT_TERMS });
+  },
+
+  /** PATCH /api/visibility/budgets/:id/cf/receivables — section-level (openingBalance, signed). */
+  patchSection(req: Request, res: Response): void {
+    const ctx = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const Schema = z.object({ openingBalance: z.number().finite() });
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'openingBalance must be a finite number.' } });
+      return;
+    }
+    cfReceivablesSectionRepo.upsert(ctx.cfId, parsed.data.openingBalance);
+    res.json({ section: cfReceivablesSectionRepo.get(ctx.cfId) });
+  },
+
+  /**
+   * PATCH /api/visibility/budgets/:id/cf/receivables/rows/:rowId
+   * Body: { paymentTerm?, priorCarry?: { periodKey: amount } }
+   */
+  patchRow(req: Request, res: Response): void {
+    const ctx = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const row = cfReceivablesRowRepo.getById(req.params.rowId);
+    if (!row || row.cashFlowId !== ctx.cfId) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Receivables row not found.' } });
+      return;
+    }
+    const Schema = z.object({
+      paymentTerm: z.union([z.enum(PAYMENT_TERMS), z.null()]).optional(),
+      priorCarry:  z.record(z.string(), z.number().finite()).optional(),
+    });
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid row patch payload.' } });
+      return;
+    }
+    if (parsed.data.paymentTerm !== undefined) {
+      cfReceivablesRowRepo.updatePaymentTerm(row.id, parsed.data.paymentTerm as PaymentTerm | null);
+    }
+    if (parsed.data.priorCarry) {
+      for (const [periodKey, amount] of Object.entries(parsed.data.priorCarry)) {
+        cfReceivablesPriorCarryRepo.upsert(row.id, periodKey, amount);
+      }
+    }
+    const grid = computeReceivablesGrid(ctx.budget, ctx.cfId, ctx.customerKeyId);
+    res.json({ receivables: grid });
+  },
+};
+
+/* ============================================================
+   CF — Inventory controller (spec §5)
+   ============================================================ */
+
+export const cfInventoryController = {
+  /** GET /api/visibility/budgets/:id/cf/inventory */
+  get(req: Request, res: Response): void {
+    const ctx = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const grid = computeInventoryGrid(ctx.budget, ctx.cfId, ctx.customerKeyId);
+    res.json({ inventory: grid });
+  },
+
+  /** PATCH /api/visibility/budgets/:id/cf/inventory — { openingBalance? (signed),
+   *  purchases? : { periodKey: amount, ... } (positive magnitudes) }. */
+  patch(req: Request, res: Response): void {
+    const ctx = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const Schema = z.object({
+      openingBalance: z.number().finite().optional(),
+      purchases:      z.record(z.string(), z.number().finite().min(0)).optional(),
+    });
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid inventory patch payload.' } });
+      return;
+    }
+    if (parsed.data.openingBalance !== undefined) {
+      cfInventorySectionRepo.upsert(ctx.cfId, parsed.data.openingBalance);
+    }
+    if (parsed.data.purchases) {
+      for (const [periodKey, amount] of Object.entries(parsed.data.purchases)) {
+        cfInventoryPurchasesRepo.upsert(ctx.cfId, periodKey, amount);
+      }
+    }
+    const grid = computeInventoryGrid(ctx.budget, ctx.cfId, ctx.customerKeyId);
+    res.json({ inventory: grid });
   },
 };

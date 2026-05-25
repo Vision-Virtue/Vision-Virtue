@@ -115,6 +115,7 @@ function initializeSchema(database: Database.Database): void {
       pl_section               TEXT,
       budget_category          TEXT,
       budget_category_custom   TEXT,
+      inventory_related        INTEGER NOT NULL DEFAULT 0,
       order_index              INTEGER NOT NULL DEFAULT 0,
       orphan                   INTEGER NOT NULL DEFAULT 0,
       created_at               TEXT NOT NULL,
@@ -249,6 +250,139 @@ function initializeSchema(database: Database.Database): void {
       updated_at  TEXT NOT NULL,
       FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE
     );
+
+    -- ─── CF (Cash Flow) module — per spec §15 ──────────────────────────────
+    -- One CashFlow per finalized budget. Parent record; subordinate
+    -- sections (payables, receivables, inventory, salaries, manual)
+    -- reference cash_flow_id.
+    CREATE TABLE IF NOT EXISTS cash_flows (
+      id            TEXT PRIMARY KEY,
+      budget_id     TEXT NOT NULL UNIQUE,
+      opening_cash  REAL NOT NULL DEFAULT 0,
+      status        TEXT NOT NULL DEFAULT 'draft',  -- 'draft' | 'finalized'
+      created_at    TEXT NOT NULL,
+      updated_at    TEXT NOT NULL,
+      FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE
+    );
+
+    -- WC → Payables (§3). One row per (Company, P&L Section, Budget
+    -- Category, GL?, Service Provider?). payment_term is the §3.6
+    -- enum value.
+    CREATE TABLE IF NOT EXISTS cf_payables_section (
+      cash_flow_id    TEXT PRIMARY KEY,
+      opening_balance REAL NOT NULL DEFAULT 0,
+      FOREIGN KEY (cash_flow_id) REFERENCES cash_flows(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS cf_payables_rows (
+      id                    TEXT PRIMARY KEY,
+      cash_flow_id          TEXT NOT NULL,
+      company_id            TEXT,
+      pl_section            TEXT,
+      budget_category       TEXT,
+      gl_account_id         TEXT,
+      service_provider_name TEXT,
+      payment_term          TEXT,
+      order_index           INTEGER NOT NULL DEFAULT 0,
+      created_at            TEXT NOT NULL,
+      updated_at            TEXT NOT NULL,
+      FOREIGN KEY (cash_flow_id) REFERENCES cash_flows(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_cf_payables_rows_cf
+      ON cf_payables_rows(cash_flow_id);
+
+    -- "Enter Free amount" prior-period carry-in inputs per row + period.
+    CREATE TABLE IF NOT EXISTS cf_payables_prior_carry (
+      cf_payables_row_id TEXT NOT NULL,
+      period_key         TEXT NOT NULL,
+      amount             REAL NOT NULL DEFAULT 0,
+      PRIMARY KEY (cf_payables_row_id, period_key),
+      FOREIGN KEY (cf_payables_row_id) REFERENCES cf_payables_rows(id) ON DELETE CASCADE
+    );
+
+    -- WC → Receivables (§4). Same shape as Payables with customer_name
+    -- instead of service_provider_name.
+    CREATE TABLE IF NOT EXISTS cf_receivables_section (
+      cash_flow_id    TEXT PRIMARY KEY,
+      opening_balance REAL NOT NULL DEFAULT 0,
+      FOREIGN KEY (cash_flow_id) REFERENCES cash_flows(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS cf_receivables_rows (
+      id              TEXT PRIMARY KEY,
+      cash_flow_id    TEXT NOT NULL,
+      company_id      TEXT,
+      pl_section      TEXT,           -- always 'Revenues' but stored for symmetry
+      budget_category TEXT,           -- default-level grouping (License / Subscription / etc.)
+      gl_account_id   TEXT,
+      customer_name   TEXT,
+      payment_term    TEXT,
+      order_index     INTEGER NOT NULL DEFAULT 0,
+      created_at      TEXT NOT NULL,
+      updated_at      TEXT NOT NULL,
+      FOREIGN KEY (cash_flow_id) REFERENCES cash_flows(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_cf_receivables_rows_cf
+      ON cf_receivables_rows(cash_flow_id);
+
+    CREATE TABLE IF NOT EXISTS cf_receivables_prior_carry (
+      cf_receivables_row_id TEXT NOT NULL,
+      period_key            TEXT NOT NULL,
+      amount                REAL NOT NULL DEFAULT 0,
+      PRIMARY KEY (cf_receivables_row_id, period_key),
+      FOREIGN KEY (cf_receivables_row_id) REFERENCES cf_receivables_rows(id) ON DELETE CASCADE
+    );
+
+    -- WC → Inventory (§5). No allocation grid — just O.B + per-period
+    -- Purchases inputs.
+    CREATE TABLE IF NOT EXISTS cf_inventory_section (
+      cash_flow_id    TEXT PRIMARY KEY,
+      opening_balance REAL NOT NULL DEFAULT 0,
+      FOREIGN KEY (cash_flow_id) REFERENCES cash_flows(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS cf_inventory_purchases (
+      cash_flow_id TEXT NOT NULL,
+      period_key   TEXT NOT NULL,
+      amount       REAL NOT NULL DEFAULT 0,
+      PRIMARY KEY (cash_flow_id, period_key),
+      FOREIGN KEY (cash_flow_id) REFERENCES cash_flows(id) ON DELETE CASCADE
+    );
+
+    -- Salaries & Benefits CF section (§6). O.B + January payment;
+    -- Feb–Dec auto from the budget's S&B expense per row formula.
+    CREATE TABLE IF NOT EXISTS cf_salaries_section (
+      cash_flow_id    TEXT PRIMARY KEY,
+      opening_balance REAL NOT NULL DEFAULT 0,
+      january_payment REAL NOT NULL DEFAULT 0,
+      FOREIGN KEY (cash_flow_id) REFERENCES cash_flows(id) ON DELETE CASCADE
+    );
+
+    -- Manual sections: Other Adjustments / Financing / Capex (§7, §8, §9).
+    -- Rows are free-form (description + per-period amounts).
+    CREATE TABLE IF NOT EXISTS cf_manual_rows (
+      id            TEXT PRIMARY KEY,
+      cash_flow_id  TEXT NOT NULL,
+      kind          TEXT NOT NULL,   -- 'other_adj' | 'financing' | 'capex'
+      description   TEXT NOT NULL DEFAULT '',
+      order_index   INTEGER NOT NULL DEFAULT 0,
+      created_at    TEXT NOT NULL,
+      updated_at    TEXT NOT NULL,
+      FOREIGN KEY (cash_flow_id) REFERENCES cash_flows(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_cf_manual_rows_cf_kind
+      ON cf_manual_rows(cash_flow_id, kind);
+
+    CREATE TABLE IF NOT EXISTS cf_manual_row_amounts (
+      cf_manual_row_id TEXT NOT NULL,
+      period_key       TEXT NOT NULL,
+      amount           REAL NOT NULL DEFAULT 0,
+      PRIMARY KEY (cf_manual_row_id, period_key),
+      FOREIGN KEY (cf_manual_row_id) REFERENCES cf_manual_rows(id) ON DELETE CASCADE
+    );
   `);
 
   // Migrations — add new columns to existing tables
@@ -257,6 +391,17 @@ function initializeSchema(database: Database.Database): void {
   } catch { /* already exists */ }
   try {
     database.exec(`ALTER TABLE linkedin_accounts ADD COLUMN person_urn TEXT NOT NULL DEFAULT ''`);
+  } catch { /* already exists */ }
+  // CF Receivables: default-level grouping is now (Company, Budget
+  // Category). Older DBs only had the symmetry-only pl_section.
+  try {
+    database.exec(`ALTER TABLE cf_receivables_rows ADD COLUMN budget_category TEXT`);
+  } catch { /* already exists */ }
+  // GL accounts: inventory_related flag. Lines whose GL is flagged
+  // feed the Inventory cycle (Inventory.COGS auto-row, Payables
+  // synthetic "Inventory Purchases" row) instead of regular Payables.
+  try {
+    database.exec(`ALTER TABLE gl_accounts ADD COLUMN inventory_related INTEGER NOT NULL DEFAULT 0`);
   } catch { /* already exists */ }
 
   // Seed the VV-TEST123 customer key (idempotent)

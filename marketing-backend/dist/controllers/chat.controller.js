@@ -8,9 +8,8 @@ const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
 const ai_service_1 = require("../services/ai.service");
 const types_1 = require("../types");
 const VALID_AGENTS = ['economist', 'sofia', 'daniel', 'raphael', 'cfo', 'dof', 'controller', 'asst_controller', 'vc_expert'];
-function getAIService(req) {
-    const apiKey = process.env.ANTHROPIC_API_KEY
-        || req.headers?.['x-api-key'];
+function getAIService(_req) {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
         throw new types_1.ApiError(500, 'ANTHROPIC_API_KEY is not configured on the server', 'MISSING_CONFIG');
     }
@@ -33,13 +32,19 @@ class ChatController {
             });
             return;
         }
+        if (message.trim().length > 4000) {
+            res.status(400).json({
+                error: { code: 'VALIDATION_ERROR', message: 'message must be 4000 characters or fewer' },
+            });
+            return;
+        }
         if (!Array.isArray(history)) {
             res.status(400).json({
                 error: { code: 'VALIDATION_ERROR', message: 'history must be an array' },
             });
             return;
         }
-        const aiService = getAIService(req);
+        const aiService = getAIService();
         const reply = await aiService.directAgentChat(agent, message.trim(), history);
         res.json({ success: true, data: { reply, agent } });
     }

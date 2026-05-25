@@ -75,7 +75,7 @@ const DEFAULT_DROPDOWNS = {
   },
 };
 let dropdowns = DEFAULT_DROPDOWNS;
-let glRows    = []; // [{id, glNumber, glName, plSection, budgetCategory, budgetCategoryCustom, orphan}]
+let glRows    = []; // [{id, glNumber, glName, plSection, budgetCategory, budgetCategoryCustom, inventoryRelated, orphan}]
 let fsStatus  = 'editing';
 
 // ── DOM refs ─────────────────────────────────────────────────
@@ -140,6 +140,11 @@ function renderRow(r, index) {
     <td class="vis-col-num">${index + 1}</td>
     <td class="vis-col-glnum">${htmlEsc(r.glNumber)}</td>
     <td class="vis-col-glname">${htmlEsc(r.glName)}</td>
+    <td class="vis-col-inv">
+      <input type="checkbox" data-field="inventoryRelated"
+             ${r.inventoryRelated ? 'checked' : ''}
+             aria-label="Inventory related" />
+    </td>
     <td class="vis-col-pl">
       <select data-field="plSection">${buildPLOptions(r.plSection)}</select>
     </td>
@@ -273,6 +278,13 @@ fsTableBody.addEventListener('change', async (ev) => {
     });
     if (updated) { Object.assign(row, normalize(updated)); render(); }
     else        { Object.assign(row, snapshot); render(); }
+  } else if (field === 'inventoryRelated') {
+    const checked = target.checked;
+    row.inventoryRelated = checked;
+    render();
+    const updated = await patchRow(id, { inventoryRelated: checked });
+    if (updated) { Object.assign(row, normalize(updated)); render(); }
+    else        { Object.assign(row, snapshot); render(); }
   } else if (field === 'budgetCategory') {
     const value  = target.value || '';
     const isYour = value === dropdowns.yourBudgetCategoryToken;
@@ -298,6 +310,7 @@ function normalize(r) {
     plSection:            r.plSection || '',
     budgetCategory:       r.budgetCategory || '',
     budgetCategoryCustom: r.budgetCategoryCustom || '',
+    inventoryRelated:     !!r.inventoryRelated,
     orphan:               !!r.orphan,
   };
 }
@@ -482,6 +495,7 @@ function toClientRow(r) {
     plSection: r.plSection || '',
     budgetCategory: r.budgetCategory || '',
     budgetCategoryCustom: r.budgetCategoryCustom || '',
+    inventoryRelated: !!r.inventoryRelated,
     orphan: !!r.orphan,
   };
 }

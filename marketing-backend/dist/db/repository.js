@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.contentRepository = exports.ContentRepository = void 0;
 const uuid_1 = require("uuid");
 const database_1 = require("./database");
+const crypto_1 = require("../utils/crypto");
 // ─── Deserializer ─────────────────────────────────────────────────────────────
 function deserializeContentItem(row) {
     return {
@@ -144,7 +145,7 @@ class ContentRepository {
         db.prepare(`
       INSERT INTO linkedin_accounts (id, access_token, refresh_token, expires_at, organization_id, person_urn, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(token.id, token.access_token, token.refresh_token, token.expires_at, token.organization_id, token.person_urn, token.created_at);
+    `).run(token.id, (0, crypto_1.encryptToken)(token.access_token), token.refresh_token ? (0, crypto_1.encryptToken)(token.refresh_token) : '', token.expires_at, token.organization_id, token.person_urn, token.created_at);
     }
     getLinkedInToken() {
         const db = (0, database_1.getDb)();
@@ -155,8 +156,8 @@ class ContentRepository {
             return null;
         return {
             id: row.id,
-            access_token: row.access_token,
-            refresh_token: row.refresh_token,
+            access_token: (0, crypto_1.decryptToken)(row.access_token),
+            refresh_token: row.refresh_token ? (0, crypto_1.decryptToken)(row.refresh_token) : row.refresh_token,
             expires_at: row.expires_at,
             organization_id: row.organization_id,
             person_urn: row.person_urn,

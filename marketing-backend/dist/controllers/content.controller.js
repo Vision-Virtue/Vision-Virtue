@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -9,15 +42,19 @@ const repository_1 = require("../db/repository");
 const workflow_1 = require("../state-machine/workflow");
 const ai_service_1 = require("../services/ai.service");
 const linkedin_service_1 = require("../services/linkedin.service");
+const search_service_1 = require("../services/search.service");
 const types_1 = require("../types");
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-function getAIService(req) {
-    const apiKey = process.env.ANTHROPIC_API_KEY
-        || req?.headers?.['x-api-key'];
+function getAIService() {
+    const apiKey = process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
         throw new types_1.ApiError(500, 'ANTHROPIC_API_KEY is not configured on the server', 'MISSING_CONFIG');
     }
     return new ai_service_1.AIService(new sdk_1.default({ apiKey }));
+}
+function getSearchService() {
+    const key = process.env.BRAVE_SEARCH_API_KEY;
+    return key ? new search_service_1.BraveSearchService(key) : undefined;
 }
 function getLinkedInService() {
     return new linkedin_service_1.LinkedInService(process.env.LINKEDIN_CLIENT_ID || '', process.env.LINKEDIN_CLIENT_SECRET || '', process.env.LINKEDIN_REDIRECT_URI || '', process.env.LINKEDIN_ORGANIZATION_ID || '');
@@ -30,6 +67,12 @@ class ContentController {
         if (!topic || typeof topic !== 'string' || topic.trim().length === 0) {
             res.status(400).json({
                 error: { code: 'VALIDATION_ERROR', message: 'topic is required and must be a non-empty string' },
+            });
+            return;
+        }
+        if (topic.trim().length > 2000) {
+            res.status(400).json({
+                error: { code: 'VALIDATION_ERROR', message: 'topic must be 2000 characters or fewer' },
             });
             return;
         }
@@ -61,8 +104,8 @@ class ContentController {
             });
             return;
         }
-        const aiService = getAIService(req);
-        const aiResponse = await aiService.runChiefEconomist(item.topic);
+        const aiService = getAIService();
+        const aiResponse = await aiService.runChiefEconomist(item.topic, getSearchService());
         if (!aiResponse.economist_brief) {
             res.status(500).json({ error: { code: 'AI_ERROR', message: 'No economist brief in AI response' } });
             return;
@@ -114,7 +157,7 @@ class ContentController {
             });
             return;
         }
-        const aiService = getAIService(req);
+        const aiService = getAIService();
         const aiResponse = await aiService.runMarketingManager(item.topic, item.economist_brief);
         if (!aiResponse.marketing_draft) {
             res.status(500).json({ error: { code: 'AI_ERROR', message: 'No marketing draft in AI response' } });
@@ -170,7 +213,7 @@ class ContentController {
             });
             return;
         }
-        const aiService = getAIService(req);
+        const aiService = getAIService();
         const aiResponse = await aiService.runVpMarketing(item.topic, item.economist_brief, item.marketing_draft);
         if (!aiResponse.vp_review) {
             res.status(500).json({ error: { code: 'AI_ERROR', message: 'No VP review in AI response' } });
@@ -243,7 +286,7 @@ class ContentController {
             english: item.vp_review.edits?.english,
             general: item.vp_review.edits?.general,
         };
-        const aiService = getAIService(req);
+        const aiService = getAIService();
         const aiResponse = await aiService.runVpSelfEdit(item.topic, item.marketing_draft, editNotes);
         if (!aiResponse.marketing_draft) {
             res.status(500).json({ error: { code: 'AI_ERROR', message: 'No marketing draft in VP self-edit response' } });
@@ -391,6 +434,19 @@ class ContentController {
             return;
         }
         const linkedInService = getLinkedInService();
+        // Log token introspection to verify scopes and sub
+        try {
+            const intro = await (await Promise.resolve().then(() => __importStar(require('axios')))).default.post('https://www.linkedin.com/oauth/v2/introspectToken', new URLSearchParams({
+                token: token.access_token,
+                client_id: process.env.LINKEDIN_CLIENT_ID || '',
+                client_secret: process.env.LINKEDIN_CLIENT_SECRET || '',
+            }).toString(), { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+            const d = intro.data;
+            console.log(`[TOKEN] active=${d['active']} scope="${d['scope']}" sub="${d['sub']}" client_id="${d['client_id']}"`);
+        }
+        catch (e) {
+            console.warn('[TOKEN] introspection failed:', e.message);
+        }
         // Use personal posting (Share on LinkedIn — available now) until LinkedIn
         // approves the Community Management API. Then switch to:
         //   urn:li:organization:${token.organization_id || process.env.LINKEDIN_ORGANIZATION_ID}
@@ -409,18 +465,23 @@ class ContentController {
         const hebrewText = `${hebrewDraft.text}\n\n${hebrewDraft.hashtags.join(' ')}`;
         const englishDraft = item.marketing_draft.english;
         const englishText = `${englishDraft.text}\n\n${englishDraft.hashtags.join(' ')}`;
+        console.log(`[PUBLISH] authorUrn: ${authorUrn}`);
         try {
             const result = await linkedInService.createTextPost(token.access_token, hebrewText, authorUrn);
             hebrewPostId = result.postId;
+            console.log(`[PUBLISH] Hebrew post ID: ${hebrewPostId}`);
         }
         catch (err) {
+            console.error(`[PUBLISH ERROR] Hebrew post failed:`, err);
             errors.push(`Hebrew post failed: ${err.message}`);
         }
         try {
             const result = await linkedInService.createTextPost(token.access_token, englishText, authorUrn);
             englishPostId = result.postId;
+            console.log(`[PUBLISH] English post ID: ${englishPostId}`);
         }
         catch (err) {
+            console.error(`[PUBLISH ERROR] English post failed:`, err);
             errors.push(`English post failed: ${err.message}`);
         }
         const publishResult = {
@@ -431,6 +492,11 @@ class ContentController {
             organization_id: authorUrn,
             errors: errors.length > 0 ? errors : undefined,
         };
+        console.log(`[PUBLISH RESULT] hebrew=${hebrewPostId ?? 'FAILED'} english=${englishPostId ?? 'FAILED'} errors=${JSON.stringify(errors)}`);
+        if (hebrewPostId)
+            console.log(`[PUBLISH LINK] https://www.linkedin.com/feed/update/${encodeURIComponent(hebrewPostId)}/`);
+        if (englishPostId)
+            console.log(`[PUBLISH LINK] https://www.linkedin.com/feed/update/${encodeURIComponent(englishPostId)}/`);
         let updatedItem = repository_1.contentRepository.update(id, { publish_result: publishResult });
         updatedItem = workflow_1.workflowStateMachine.transition(updatedItem, 'PUBLISHED', 'system', { publish_result: publishResult });
         repository_1.contentRepository.addAuditEntry({
@@ -441,6 +507,22 @@ class ContentController {
             new_state: 'PUBLISHED',
             details: { publish_result: publishResult },
         });
+        res.json({ success: true, data: updatedItem });
+    }
+    // POST /api/content/:id/reset-for-publish — resets PUBLISHED→APPROVED_FOR_PUBLISHING so user can retry
+    async resetForPublish(req, res) {
+        const { id } = req.params;
+        const item = repository_1.contentRepository.findById(id);
+        if (!item) {
+            res.status(404).json({ error: { code: 'NOT_FOUND', message: `Content item ${id} not found` } });
+            return;
+        }
+        if (item.state !== 'PUBLISHED') {
+            res.status(400).json({ error: { code: 'INVALID_STATE', message: `Item is not in PUBLISHED state` } });
+            return;
+        }
+        // Bypass state machine — directly reset state so user can retry publish
+        const updatedItem = repository_1.contentRepository.update(id, { state: 'APPROVED_FOR_PUBLISHING' });
         res.json({ success: true, data: updatedItem });
     }
     // GET /api/content/:id
@@ -489,7 +571,7 @@ class ContentController {
             });
             return;
         }
-        const aiService = getAIService(req);
+        const aiService = getAIService();
         const answer = await aiService.askEconomist(item.topic, item.economist_brief, item.marketing_draft, item.qa_history, question.trim());
         const entry = {
             question: question.trim(),
@@ -567,7 +649,7 @@ class ContentController {
             });
             return;
         }
-        const aiService = getAIService(req);
+        const aiService = getAIService();
         const aiResponse = await aiService.runVpCorrectAnnotations(item.topic, item.marketing_draft, annotations);
         if (!aiResponse.marketing_draft) {
             res.status(500).json({ error: { code: 'AI_ERROR', message: 'No marketing draft in VP correction response' } });
