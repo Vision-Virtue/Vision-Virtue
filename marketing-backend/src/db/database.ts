@@ -115,6 +115,7 @@ function initializeSchema(database: Database.Database): void {
       pl_section               TEXT,
       budget_category          TEXT,
       budget_category_custom   TEXT,
+      inventory_related        INTEGER NOT NULL DEFAULT 0,
       order_index              INTEGER NOT NULL DEFAULT 0,
       orphan                   INTEGER NOT NULL DEFAULT 0,
       created_at               TEXT NOT NULL,
@@ -395,6 +396,12 @@ function initializeSchema(database: Database.Database): void {
   // Category). Older DBs only had the symmetry-only pl_section.
   try {
     database.exec(`ALTER TABLE cf_receivables_rows ADD COLUMN budget_category TEXT`);
+  } catch { /* already exists */ }
+  // GL accounts: inventory_related flag. Lines whose GL is flagged
+  // feed the Inventory cycle (Inventory.COGS auto-row, Payables
+  // synthetic "Inventory Purchases" row) instead of regular Payables.
+  try {
+    database.exec(`ALTER TABLE gl_accounts ADD COLUMN inventory_related INTEGER NOT NULL DEFAULT 0`);
   } catch { /* already exists */ }
 
   // Seed the VV-TEST123 customer key (idempotent)
