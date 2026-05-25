@@ -495,6 +495,7 @@ function toClientRow(r) {
     plSection: r.plSection || '',
     budgetCategory: r.budgetCategory || '',
     budgetCategoryCustom: r.budgetCategoryCustom || '',
+    inventoryRelated: !!r.inventoryRelated,
     orphan: !!r.orphan,
   };
 }
