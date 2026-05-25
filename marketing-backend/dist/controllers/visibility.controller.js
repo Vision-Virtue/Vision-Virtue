@@ -53,6 +53,7 @@ function serializeGL(row) {
         plSection: row.plSection,
         budgetCategory: row.budgetCategory,
         budgetCategoryCustom: row.budgetCategoryCustom,
+        inventoryRelated: row.inventoryRelated,
         orphan: row.orphan,
     };
 }
@@ -154,6 +155,7 @@ exports.visibilityController = {
             plSection: zod_1.z.string().nullable().optional(),
             budgetCategory: zod_1.z.string().nullable().optional(),
             budgetCategoryCustom: zod_1.z.string().nullable().optional(),
+            inventoryRelated: zod_1.z.boolean().optional(),
         });
         const parsed = Schema.safeParse(req.body);
         if (!parsed.success) {
@@ -197,6 +199,7 @@ exports.visibilityController = {
             ...(has('budgetCategoryCustom') || has('budgetCategory')
                 ? { budgetCategoryCustom: finalCustom }
                 : {}),
+            ...(has('inventoryRelated') ? { inventoryRelated: !!parsed.data.inventoryRelated } : {}),
         });
         if (!updated) {
             res.status(404).json({ error: { code: 'NOT_FOUND', message: 'GL row not found.' } });

@@ -102,6 +102,7 @@ function serializeGL(row: GLAccountRow): Record<string, unknown> {
     plSection:            row.plSection,
     budgetCategory:       row.budgetCategory,
     budgetCategoryCustom: row.budgetCategoryCustom,
+    inventoryRelated:     row.inventoryRelated,
     orphan:               row.orphan,
   };
 }
@@ -202,6 +203,7 @@ export const visibilityController = {
       plSection:            z.string().nullable().optional(),
       budgetCategory:       z.string().nullable().optional(),
       budgetCategoryCustom: z.string().nullable().optional(),
+      inventoryRelated:     z.boolean().optional(),
     });
     const parsed = Schema.safeParse(req.body);
     if (!parsed.success) {
@@ -248,6 +250,7 @@ export const visibilityController = {
       ...(has('budgetCategoryCustom') || has('budgetCategory')
         ? { budgetCategoryCustom: finalCustom }
         : {}),
+      ...(has('inventoryRelated')     ? { inventoryRelated:     !!parsed.data.inventoryRelated } : {}),
     });
     if (!updated) {
       res.status(404).json({ error: { code: 'NOT_FOUND', message: 'GL row not found.' } });

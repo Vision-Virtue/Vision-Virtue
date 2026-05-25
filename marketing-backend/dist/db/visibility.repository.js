@@ -17,6 +17,7 @@ function toDomain(r) {
         plSection: r.pl_section,
         budgetCategory: r.budget_category,
         budgetCategoryCustom: r.budget_category_custom,
+        inventoryRelated: r.inventory_related === 1,
         orderIndex: r.order_index,
         orphan: r.orphan === 1,
         createdAt: r.created_at,
@@ -110,6 +111,10 @@ exports.glAccountRepo = {
         if (fields.budgetCategoryCustom !== undefined) {
             sets.push('budget_category_custom = ?');
             vals.push(fields.budgetCategoryCustom);
+        }
+        if (fields.inventoryRelated !== undefined) {
+            sets.push('inventory_related = ?');
+            vals.push(fields.inventoryRelated ? 1 : 0);
         }
         if (sets.length === 0)
             return this.getById(id);
@@ -774,6 +779,32 @@ exports.cfPayablesRowRepo = {
         (0, database_1.getDb)()
             .prepare(`UPDATE cf_payables_rows SET payment_term = ?, updated_at = ? WHERE id = ?`)
             .run(term, now, id);
+    },
+    /**
+     * Inventory-Purchases synthetic row. Reuses cf_payables_rows + the
+     * existing prior-carry table by parking under sentinel keys so that
+     * the regular (Company, P&L, Budget Category) lookup never collides.
+     */
+    findOrCreateInventoryPurchases(cashFlowId, orderIndex) {
+        const db = (0, database_1.getDb)();
+        const existing = db
+            .prepare(`SELECT * FROM cf_payables_rows
+          WHERE cash_flow_id = ?
+            AND pl_section = '__INVENTORY__'
+            AND company_id IS NULL
+            AND gl_account_id IS NULL
+            AND service_provider_name IS NULL`)
+            .get(cashFlowId);
+        if (existing)
+            return toPayablesRowDomain(existing);
+        const id = (0, uuid_1.v4)();
+        const now = new Date().toISOString();
+        db.prepare(`INSERT INTO cf_payables_rows
+         (id, cash_flow_id, company_id, pl_section, budget_category,
+          gl_account_id, service_provider_name, payment_term,
+          order_index, created_at, updated_at)
+       VALUES (?, ?, NULL, '__INVENTORY__', '__PURCHASES__', NULL, NULL, NULL, ?, ?, ?)`).run(id, cashFlowId, orderIndex, now, now);
+        return this.getById(id);
     },
 };
 exports.cfPayablesPriorCarryRepo = {

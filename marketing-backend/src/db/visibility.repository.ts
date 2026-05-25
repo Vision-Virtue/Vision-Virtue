@@ -14,6 +14,7 @@ export interface GLAccountRow {
   plSection: string | null;
   budgetCategory: string | null;
   budgetCategoryCustom: string | null;
+  inventoryRelated: boolean;
   orderIndex: number;
   orphan: boolean;
   createdAt: string;
@@ -28,6 +29,7 @@ interface DbGLAccountRow {
   pl_section: string | null;
   budget_category: string | null;
   budget_category_custom: string | null;
+  inventory_related: number;
   order_index: number;
   orphan: number;
   created_at: string;
@@ -43,6 +45,7 @@ function toDomain(r: DbGLAccountRow): GLAccountRow {
     plSection:            r.pl_section,
     budgetCategory:       r.budget_category,
     budgetCategoryCustom: r.budget_category_custom,
+    inventoryRelated:     r.inventory_related === 1,
     orderIndex:           r.order_index,
     orphan:               r.orphan === 1,
     createdAt:            r.created_at,
@@ -140,13 +143,19 @@ export const glAccountRepo = {
 
   updateMapping(
     id: string,
-    fields: { plSection?: string | null; budgetCategory?: string | null; budgetCategoryCustom?: string | null },
+    fields: {
+      plSection?: string | null;
+      budgetCategory?: string | null;
+      budgetCategoryCustom?: string | null;
+      inventoryRelated?: boolean;
+    },
   ): GLAccountRow | null {
     const sets: string[] = [];
-    const vals: Array<string | null> = [];
+    const vals: Array<string | number | null> = [];
     if (fields.plSection !== undefined)            { sets.push('pl_section = ?');             vals.push(fields.plSection); }
     if (fields.budgetCategory !== undefined)       { sets.push('budget_category = ?');        vals.push(fields.budgetCategory); }
     if (fields.budgetCategoryCustom !== undefined) { sets.push('budget_category_custom = ?'); vals.push(fields.budgetCategoryCustom); }
+    if (fields.inventoryRelated !== undefined)     { sets.push('inventory_related = ?');      vals.push(fields.inventoryRelated ? 1 : 0); }
     if (sets.length === 0) return this.getById(id);
     sets.push('updated_at = ?');
     vals.push(new Date().toISOString());
@@ -1048,6 +1057,36 @@ export const cfPayablesRowRepo = {
     getDb()
       .prepare(`UPDATE cf_payables_rows SET payment_term = ?, updated_at = ? WHERE id = ?`)
       .run(term, now, id);
+  },
+
+  /**
+   * Inventory-Purchases synthetic row. Reuses cf_payables_rows + the
+   * existing prior-carry table by parking under sentinel keys so that
+   * the regular (Company, P&L, Budget Category) lookup never collides.
+   */
+  findOrCreateInventoryPurchases(cashFlowId: string, orderIndex: number): CfPayablesRow {
+    const db = getDb();
+    const existing = db
+      .prepare(
+        `SELECT * FROM cf_payables_rows
+          WHERE cash_flow_id = ?
+            AND pl_section = '__INVENTORY__'
+            AND company_id IS NULL
+            AND gl_account_id IS NULL
+            AND service_provider_name IS NULL`,
+      )
+      .get(cashFlowId) as DbCfPayablesRow | undefined;
+    if (existing) return toPayablesRowDomain(existing);
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO cf_payables_rows
+         (id, cash_flow_id, company_id, pl_section, budget_category,
+          gl_account_id, service_provider_name, payment_term,
+          order_index, created_at, updated_at)
+       VALUES (?, ?, NULL, '__INVENTORY__', '__PURCHASES__', NULL, NULL, NULL, ?, ?, ?)`,
+    ).run(id, cashFlowId, orderIndex, now, now);
+    return this.getById(id)!;
   },
 };
 

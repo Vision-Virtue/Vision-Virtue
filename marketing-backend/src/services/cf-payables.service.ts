@@ -28,8 +28,13 @@ import {
   cfPayablesRowRepo,
   cfPayablesPriorCarryRepo,
   cfPayablesSectionRepo,
+  cfInventoryPurchasesRepo,
   periodKeysFor,
 } from '../db/visibility.repository';
+
+/** Sentinel labels for the synthetic Inventory-Purchases row. */
+export const INVENTORY_PURCHASES_PL       = 'Inventory';
+export const INVENTORY_PURCHASES_CATEGORY = 'Purchases';
 
 const PL_INCLUDED = new Set(['COGS', 'R&D', 'S&M', 'G&A']);
 const EXCLUDE_CATEGORY = 'Salaries and benefits';
@@ -127,6 +132,10 @@ export function computePayablesGrid(
     if (!gl || !gl.plSection || !gl.budgetCategory) continue;
     if (!PL_INCLUDED.has(gl.plSection)) continue;
     if (gl.budgetCategory === EXCLUDE_CATEGORY) continue;
+    // Inventory-related GLs are paid via the synthetic Inventory
+    // Purchases row appended below — their budget expense feeds the
+    // Inventory COGS auto-row, not Payables.
+    if (gl.inventoryRelated) continue;
     const catName = categoryDisplayName(gl);
     if (!catName) continue;
 
@@ -196,6 +205,65 @@ export function computePayablesGrid(
       budgetCategory:    g.budgetCategory,
       paymentTerm:       term,
       expense:           g.expense,
+      payment,
+      paymentNeedsCarry: needsCarry,
+      priorCarry,
+      fyExpense,
+      fyPayment,
+    });
+  }
+
+  // ── Synthetic Inventory Purchases row ─────────────────────
+  // For inventory-related GLs we don't pay the budgeted expense
+  // directly; instead the user enters Purchases per period in the
+  // Inventory section, and Payables pays *those* values on the
+  // configured payment term. Single row covers all inventory-related
+  // activity (Purchases is a single per-period stream in §5).
+  {
+    const purchasesByPeriod = cfInventoryPurchasesRepo.listByCf(cashFlowId);
+    const expense = emptyPeriodMap(periodKeys);
+    let hasAny = false;
+    for (const p of periodKeys) {
+      const v = Number(purchasesByPeriod[p]) || 0;
+      expense[p] = v;
+      if (v) hasAny = true;
+    }
+
+    const cfRow = cfPayablesRowRepo.findOrCreateInventoryPurchases(cashFlowId, i++);
+    const priorCarry = cfPayablesPriorCarryRepo.listByRow(cfRow.id);
+    const payment    = emptyPeriodMap(periodKeys);
+    const needsCarry = emptyBoolMap(periodKeys);
+    const term       = cfRow.paymentTerm;
+
+    if (term && monthlySupported) {
+      const lag = LAG_MONTHS[term];
+      for (let idx = 0; idx < periodKeys.length; idx++) {
+        const p = periodKeys[idx];
+        const srcIdx = idx - lag;
+        if (srcIdx >= 0) {
+          const srcKey = periodKeys[srcIdx];
+          payment[p] = -(expense[srcKey] || 0);
+        } else if (lag > 0) {
+          needsCarry[p] = true;
+          payment[p] = priorCarry[p] || 0;
+        }
+      }
+    }
+
+    const fyExpense = periodKeys.reduce((s, p) => s + (expense[p] || 0), 0);
+    const fyPayment = periodKeys.reduce((s, p) => s + (payment[p] || 0), 0);
+
+    // Always show the row so the user can set a payment term even
+    // before entering any Purchases — mirrors how regular rows show
+    // up the moment a matching GL exists in the budget.
+    void hasAny;
+    outRows.push({
+      rowId:             cfRow.id,
+      companyId:         null,
+      plSection:         INVENTORY_PURCHASES_PL,
+      budgetCategory:    INVENTORY_PURCHASES_CATEGORY,
+      paymentTerm:       term,
+      expense,
       payment,
       paymentNeedsCarry: needsCarry,
       priorCarry,

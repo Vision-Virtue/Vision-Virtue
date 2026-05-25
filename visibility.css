@@ -300,6 +300,8 @@
 .vis-col-num    { width: 36px; color: rgba(255, 255, 255, 0.4); font-variant-numeric: tabular-nums; }
 .vis-col-glnum  { width: 130px; font-weight: 600; color: #ffffff; font-variant-numeric: tabular-nums; }
 .vis-col-glname { color: rgba(255, 255, 255, 0.85); }
+.vis-col-inv    { width: 130px; text-align: center; }
+.vis-col-inv input[type="checkbox"] { cursor: pointer; }
 .vis-col-pl     { width: 200px; }
 .vis-col-bc     { width: 280px; }
 .vis-col-row-actions { width: 38px; text-align: right; }

@@ -9,10 +9,10 @@
      in Payables (§3.5) — that wire-up will land when we also
      surface the Finished-goods exception in the Payables grid.
    - COGS is auto-pulled from the budget: lines whose GL has
-     `P&L Section = COGS` and `Budget Category = Finished goods`
-     (literal value or "Your Budget Category" with that custom
-     name). Stored positive in the budget; rendered as a credit
-     movement (parens) in the summary.
+     the `Inventory related` flag set in Financial Structure.
+     Stored positive in the budget; rendered as a credit
+     movement (parens) in the summary — the inventory cycle
+     subtracts this from C.B since the goods are consumed.
    - C.B = O.B + Purchases - COGS  (asset roll-forward).
 
    Spec §5.3 warning: if C.B would go below 0 in any month, the
@@ -21,20 +21,11 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.computeInventoryGrid = computeInventoryGrid;
 const visibility_repository_1 = require("../db/visibility.repository");
-const FINISHED_GOODS = 'Finished goods';
 function emptyPeriodMap(periodKeys) {
     const out = {};
     for (const p of periodKeys)
         out[p] = 0;
     return out;
-}
-function isFinishedGoods(gl) {
-    if (gl.budgetCategory === FINISHED_GOODS)
-        return true;
-    if (gl.budgetCategory === 'Your Budget Category' && gl.budgetCategoryCustom === FINISHED_GOODS) {
-        return true;
-    }
-    return false;
 }
 function computeInventoryGrid(budget, cashFlowId, customerKeyId) {
     const periodKeys = (0, visibility_repository_1.periodKeysFor)(budget.granularity);
@@ -49,7 +40,7 @@ function computeInventoryGrid(budget, cashFlowId, customerKeyId) {
         if (!l.glAccountId)
             continue;
         const gl = glById.get(l.glAccountId);
-        if (!gl || gl.plSection !== 'COGS' || !isFinishedGoods(gl))
+        if (!gl || !gl.inventoryRelated)
             continue;
         const cells = visibility_repository_1.budgetCellRepo.listByLine(l.id);
         for (const p of periodKeys) {
