@@ -3349,7 +3349,7 @@ function renderPayables() {
 }
 
 /** Update the Payables section badge: Filled iff O.B set AND every
- *  row has a term AND every needed prior-carry cell has a value. */
+ *  row has a term. Prior-carry cells are optional — empty means 0. */
 function refreshPayablesStatus() {
   const badge = document.querySelector('[data-cf-status="payables"]');
   if (!badge) return;
@@ -3362,19 +3362,12 @@ function refreshPayablesStatus() {
   const g = currentPayables.payables;
   const obOk = (g.openingBalance || 0) !== 0;
   const rowsWithoutTerm = g.rows.filter(r => !r.paymentTerm).length;
-  let missingCarryCells = 0;
-  for (const r of g.rows) {
-    for (const [p, needs] of Object.entries(r.paymentNeedsCarry)) {
-      if (needs && (r.priorCarry[p] || 0) === 0) missingCarryCells++;
-    }
-  }
-  const filled = obOk && rowsWithoutTerm === 0 && missingCarryCells === 0 && g.rows.length > 0;
+  const filled = obOk && rowsWithoutTerm === 0 && g.rows.length > 0;
 
   const reasons = [];
-  if (!obOk)                  reasons.push('O.B missing');
-  if (rowsWithoutTerm > 0)    reasons.push(`${rowsWithoutTerm} row${rowsWithoutTerm === 1 ? '' : 's'} missing terms`);
-  if (missingCarryCells > 0)  reasons.push(`${missingCarryCells} carry cell${missingCarryCells === 1 ? '' : 's'}`);
-  if (g.rows.length === 0)    reasons.push('no rows');
+  if (!obOk)                reasons.push('O.B missing');
+  if (rowsWithoutTerm > 0)  reasons.push(`${rowsWithoutTerm} row${rowsWithoutTerm === 1 ? '' : 's'} missing terms`);
+  if (g.rows.length === 0)  reasons.push('no rows');
 
   badge.textContent = filled ? 'Filled' : (reasons.length ? `Required — ${reasons[0]}` : 'Required');
   badge.title = filled ? '' : `Still needed: ${reasons.join(', ')}`;
@@ -3708,19 +3701,13 @@ function refreshReceivablesStatus() {
   const g = currentReceivables.receivables;
   const obOk = (g.openingBalance || 0) !== 0;
   const rowsWithoutTerm = g.rows.filter(r => !r.paymentTerm).length;
-  let missingCarryCells = 0;
-  for (const r of g.rows) {
-    for (const [p, needs] of Object.entries(r.paymentNeedsCarry)) {
-      if (needs && (r.priorCarry[p] || 0) === 0) missingCarryCells++;
-    }
-  }
-  const filled = obOk && rowsWithoutTerm === 0 && missingCarryCells === 0 && g.rows.length > 0;
+  // Prior-carry cells are optional — empty means 0.
+  const filled = obOk && rowsWithoutTerm === 0 && g.rows.length > 0;
 
   const reasons = [];
-  if (!obOk)                  reasons.push('O.B missing');
-  if (rowsWithoutTerm > 0)    reasons.push(`${rowsWithoutTerm} row${rowsWithoutTerm === 1 ? '' : 's'} missing terms`);
-  if (missingCarryCells > 0)  reasons.push(`${missingCarryCells} carry cell${missingCarryCells === 1 ? '' : 's'}`);
-  if (g.rows.length === 0)    reasons.push('no rows');
+  if (!obOk)                reasons.push('O.B missing');
+  if (rowsWithoutTerm > 0)  reasons.push(`${rowsWithoutTerm} row${rowsWithoutTerm === 1 ? '' : 's'} missing terms`);
+  if (g.rows.length === 0)  reasons.push('no rows');
 
   badge.textContent = filled ? 'Filled' : (reasons.length ? `Required — ${reasons[0]}` : 'Required');
   badge.title = filled ? '' : `Still needed: ${reasons.join(', ')}`;
