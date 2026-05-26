@@ -25,15 +25,24 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.computeReceivablesGrid = computeReceivablesGrid;
 const visibility_repository_1 = require("../db/visibility.repository");
-const LAG_MONTHS = {
+/** Spec §14 — see cf-payables.service for the rationale. */
+const LAG_DAYS = {
     'Cash': 0,
     'Current': 0,
-    '30+': 1,
-    '60+': 2,
-    '90+': 3,
-    '120+': 4,
-    '180+': 5,
+    '30+': 30,
+    '60+': 60,
+    '90+': 90,
+    '120+': 120,
+    '180+': 180,
 };
+const DAYS_PER_PERIOD = {
+    monthly: 30,
+    quarterly: 90,
+    yearly: 360,
+};
+function lagPeriods(granularity, term) {
+    return Math.round(LAG_DAYS[term] / DAYS_PER_PERIOD[granularity]);
+}
 function emptyPeriodMap(periodKeys) {
     const out = {};
     for (const p of periodKeys)
@@ -48,7 +57,8 @@ function emptyBoolMap(periodKeys) {
 }
 function computeReceivablesGrid(budget, cashFlowId, customerKeyId) {
     const periodKeys = (0, visibility_repository_1.periodKeysFor)(budget.granularity);
-    const monthlySupported = budget.granularity === 'monthly';
+    // Spec §14 — all granularities now compute payment lag (in days).
+    const monthlySupported = true;
     // ── Load budget data + GL mappings ────────────────────────
     const lines = visibility_repository_1.budgetLineRepo.listByBudget(budget.id);
     const glRows = visibility_repository_1.glAccountRepo.listByCustomer(customerKeyId);
@@ -93,8 +103,8 @@ function computeReceivablesGrid(budget, cashFlowId, customerKeyId) {
         const payment = emptyPeriodMap(periodKeys);
         const needsCarry = emptyBoolMap(periodKeys);
         const term = cfRow.paymentTerm;
-        if (term && monthlySupported) {
-            const lag = LAG_MONTHS[term];
+        if (term) {
+            const lag = lagPeriods(budget.granularity, term);
             for (let idx = 0; idx < periodKeys.length; idx++) {
                 const p = periodKeys[idx];
                 const srcIdx = idx - lag;
@@ -148,12 +158,30 @@ function computeReceivablesGrid(budget, cashFlowId, customerKeyId) {
         cb[p] = prevCb + revenues[p] - payment[p];
         prevCb = cb[p];
     }
+    // ── Orphan detection (§16) ────────────────────────────────
+    const liveKeys = new Set(orderedKeys);
+    const allStoredRows = visibility_repository_1.cfReceivablesRowRepo.listByCf(cashFlowId);
+    const orphans = [];
+    for (const r of allStoredRows) {
+        if (!r.plSection || !r.budgetCategory)
+            continue;
+        const key = `${r.companyId ?? ''}|${r.plSection}|${r.budgetCategory}`;
+        if (!liveKeys.has(key)) {
+            orphans.push({
+                rowId: r.id,
+                companyId: r.companyId,
+                plSection: r.plSection,
+                budgetCategory: r.budgetCategory,
+            });
+        }
+    }
     return {
         granularity: budget.granularity,
         periodKeys,
         monthlySupported,
         openingBalance,
         rows: outRows,
+        orphans,
         summary: { ob, revenues, payment, cb },
     };
 }

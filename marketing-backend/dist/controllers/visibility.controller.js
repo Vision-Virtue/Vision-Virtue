@@ -1251,6 +1251,22 @@ exports.cfPayablesController = {
         const grid = (0, cf_payables_service_1.computePayablesGrid)(ctx.budget, ctx.cfId, ctx.customerKeyId);
         res.json({ payables: grid });
     },
+    /** DELETE /api/visibility/budgets/:id/cf/payables/rows/:rowId
+     *  Used by the orphan-rows banner (§16). Refuses to delete rows
+     *  for live budget combos — they auto-reappear on the next compute. */
+    deleteRow(req, res) {
+        const ctx = requireFinalizedBudgetCf(req, res);
+        if (!ctx)
+            return;
+        const row = visibility_repository_1.cfPayablesRowRepo.getById(req.params.rowId);
+        if (!row || row.cashFlowId !== ctx.cfId) {
+            res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Payables row not found.' } });
+            return;
+        }
+        visibility_repository_1.cfPayablesRowRepo.deleteById(row.id);
+        const grid = (0, cf_payables_service_1.computePayablesGrid)(ctx.budget, ctx.cfId, ctx.customerKeyId);
+        res.json({ payables: grid });
+    },
 };
 /* ============================================================
    CF — Receivables controller (spec §4) — mirror of Payables.
@@ -1308,6 +1324,21 @@ exports.cfReceivablesController = {
                 visibility_repository_1.cfReceivablesPriorCarryRepo.upsert(row.id, periodKey, amount);
             }
         }
+        const grid = (0, cf_receivables_service_1.computeReceivablesGrid)(ctx.budget, ctx.cfId, ctx.customerKeyId);
+        res.json({ receivables: grid });
+    },
+    /** DELETE /api/visibility/budgets/:id/cf/receivables/rows/:rowId
+     *  Used by the orphan-rows banner (§16). */
+    deleteRow(req, res) {
+        const ctx = requireFinalizedBudgetCf(req, res);
+        if (!ctx)
+            return;
+        const row = visibility_repository_1.cfReceivablesRowRepo.getById(req.params.rowId);
+        if (!row || row.cashFlowId !== ctx.cfId) {
+            res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Receivables row not found.' } });
+            return;
+        }
+        visibility_repository_1.cfReceivablesRowRepo.deleteById(row.id);
         const grid = (0, cf_receivables_service_1.computeReceivablesGrid)(ctx.budget, ctx.cfId, ctx.customerKeyId);
         res.json({ receivables: grid });
     },

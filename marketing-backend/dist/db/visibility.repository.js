@@ -780,6 +780,9 @@ exports.cfPayablesRowRepo = {
             .prepare(`UPDATE cf_payables_rows SET payment_term = ?, updated_at = ? WHERE id = ?`)
             .run(term, now, id);
     },
+    deleteById(id) {
+        (0, database_1.getDb)().prepare(`DELETE FROM cf_payables_rows WHERE id = ?`).run(id);
+    },
     /**
      * Inventory-Purchases synthetic row. Reuses cf_payables_rows + the
      * existing prior-carry table by parking under sentinel keys so that
@@ -901,6 +904,9 @@ exports.cfReceivablesRowRepo = {
         (0, database_1.getDb)()
             .prepare(`UPDATE cf_receivables_rows SET payment_term = ?, updated_at = ? WHERE id = ?`)
             .run(term, now, id);
+    },
+    deleteById(id) {
+        (0, database_1.getDb)().prepare(`DELETE FROM cf_receivables_rows WHERE id = ?`).run(id);
     },
 };
 exports.cfReceivablesPriorCarryRepo = {

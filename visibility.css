@@ -1567,6 +1567,77 @@
   padding: 1rem 0.5rem;
   font-size: 0.85rem;
 }
+/* CF orphan-rows banner (§16) */
+.vis-cf-orphan-head {
+  margin-bottom: 0.5rem;
+  font-size: 0.85rem;
+}
+.vis-cf-orphan-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+.vis-cf-orphan-list li {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 200, 100, 0.3);
+  border-radius: 4px;
+  padding: 0.2rem 0.4rem 0.2rem 0.55rem;
+  font-size: 0.78rem;
+}
+.vis-cf-orphan-label {
+  color: rgba(255, 255, 255, 0.85);
+  font-variant-numeric: tabular-nums;
+}
+
+/* CF help overlay (§17) */
+.vis-cf-help {
+  margin: 1rem 0;
+  padding: 1rem 1.25rem;
+  background: rgba(99, 156, 217, 0.08);
+  border: 1px solid rgba(99, 156, 217, 0.28);
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.85);
+}
+.vis-cf-help-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  margin-bottom: 0.5rem;
+  color: #ffffff;
+}
+.vis-cf-help-close {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.7);
+  border-radius: 4px;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.95rem;
+  cursor: pointer;
+  line-height: 1;
+}
+.vis-cf-help-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #ffffff;
+}
+.vis-cf-help-body p {
+  margin: 0.5rem 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.vis-cf-help-body code {
+  background: rgba(255, 255, 255, 0.08);
+  padding: 0.05rem 0.3rem;
+  border-radius: 3px;
+  font-size: 0.85em;
+}
+
 /* CF Dashboard tiles (§13) */
 .vis-cf-dash-body {
   display: flex;

@@ -39,15 +39,27 @@ export const INVENTORY_PURCHASES_CATEGORY = 'Purchases';
 const PL_INCLUDED = new Set(['COGS', 'R&D', 'S&M', 'G&A']);
 const EXCLUDE_CATEGORY = 'Salaries and benefits';
 
-const LAG_MONTHS: Record<PaymentTerm, number> = {
+/** Spec §14: payment terms are identical across granularities and
+ *  calculated as `expense period + lag-in-days`. We convert lag-days
+ *  to lag-periods based on the budget granularity. Cash / Current
+ *  never lag. */
+const LAG_DAYS: Record<PaymentTerm, number> = {
   'Cash':    0,
   'Current': 0,
-  '30+':     1,
-  '60+':     2,
-  '90+':     3,
-  '120+':    4,
-  '180+':    5,
+  '30+':     30,
+  '60+':     60,
+  '90+':     90,
+  '120+':    120,
+  '180+':    180,
 };
+const DAYS_PER_PERIOD: Record<BudgetRow['granularity'], number> = {
+  monthly:   30,
+  quarterly: 90,
+  yearly:    360,
+};
+function lagPeriods(granularity: BudgetRow['granularity'], term: PaymentTerm): number {
+  return Math.round(LAG_DAYS[term] / DAYS_PER_PERIOD[granularity]);
+}
 
 export interface PayablesGridRow {
   rowId: string;
@@ -69,6 +81,14 @@ export interface PayablesGrid {
   monthlySupported: boolean;
   openingBalance: number;                      // positive magnitude
   rows: PayablesGridRow[];
+  /** Rows persisted for combos that no longer exist in the current
+   *  budget. UI offers a banner + per-row delete. */
+  orphans: Array<{
+    rowId: string;
+    companyId: string | null;
+    plSection: string;
+    budgetCategory: string;
+  }>;
   summary: {
     ob:       Record<string, number>;          // positive magnitudes; UI shows as ($X,XXX)
     expenses: Record<string, number>;          // positive magnitudes; UI shows as ($X,XXX)
@@ -108,7 +128,8 @@ export function computePayablesGrid(
   customerKeyId: string,
 ): PayablesGrid {
   const periodKeys = periodKeysFor(budget.granularity);
-  const monthlySupported = budget.granularity === 'monthly';
+  // Spec §14 — all granularities now compute payment lag (in days).
+  const monthlySupported = true;
 
   // ── Load budget data + GL mappings ────────────────────────
   const lines = budgetLineRepo.listByBudget(budget.id);
@@ -176,8 +197,8 @@ export function computePayablesGrid(
     const needsCarry = emptyBoolMap(periodKeys);
     const term       = cfRow.paymentTerm;
 
-    if (term && monthlySupported) {
-      const lag = LAG_MONTHS[term];
+    if (term) {
+      const lag = lagPeriods(budget.granularity, term);
       for (let idx = 0; idx < periodKeys.length; idx++) {
         const p = periodKeys[idx];
         const srcIdx = idx - lag;
@@ -235,8 +256,8 @@ export function computePayablesGrid(
     const needsCarry = emptyBoolMap(periodKeys);
     const term       = cfRow.paymentTerm;
 
-    if (term && monthlySupported) {
-      const lag = LAG_MONTHS[term];
+    if (term) {
+      const lag = lagPeriods(budget.granularity, term);
       for (let idx = 0; idx < periodKeys.length; idx++) {
         const p = periodKeys[idx];
         const srcIdx = idx - lag;
@@ -300,12 +321,34 @@ export function computePayablesGrid(
     prevCb = cb[p];
   }
 
+  // ── Orphan detection (§16) ────────────────────────────────
+  // Any cf_payables_rows persisted for combos that no longer exist in
+  // the current budget. Skip the synthetic Inventory-Purchases row
+  // (its sentinel pl_section never appears in budget groups).
+  const liveKeys = new Set(orderedKeys);
+  const allStoredRows = cfPayablesRowRepo.listByCf(cashFlowId);
+  const orphans: Array<{ rowId: string; companyId: string | null; plSection: string; budgetCategory: string }> = [];
+  for (const r of allStoredRows) {
+    if (r.plSection === '__INVENTORY__') continue;
+    if (!r.plSection || !r.budgetCategory) continue;
+    const key = `${r.companyId ?? ''}|${r.plSection}|${r.budgetCategory}`;
+    if (!liveKeys.has(key)) {
+      orphans.push({
+        rowId:          r.id,
+        companyId:      r.companyId,
+        plSection:      r.plSection,
+        budgetCategory: r.budgetCategory,
+      });
+    }
+  }
+
   return {
     granularity:      budget.granularity,
     periodKeys,
     monthlySupported,
     openingBalance,
     rows: outRows,
+    orphans,
     summary: { ob, expenses, payment, cb },
   };
 }
