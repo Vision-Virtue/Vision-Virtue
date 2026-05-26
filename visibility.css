@@ -1567,6 +1567,70 @@
   padding: 1rem 0.5rem;
   font-size: 0.85rem;
 }
+/* Forecast view */
+.vis-cf-forecast-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+.vis-cf-forecast-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem 1.25rem;
+  padding: 0.75rem 1rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+}
+.vis-cf-forecast-control {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.65);
+}
+.vis-cf-forecast-control select {
+  background: #0f1a33;
+  color: #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 4px;
+  padding: 0.35rem 0.55rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+  min-width: 9rem;
+}
+.vis-cf-forecast-control select option {
+  background: #0f1a33;
+  color: #ffffff;
+}
+.vis-cf-forecast-title {
+  margin: 1rem 0 0.25rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.92);
+}
+.vis-cf-forecast-table tbody tr.is-cf-derived th {
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 500;
+}
+.vis-cf-forecast-table tbody tr.is-cf-anchor th,
+.vis-cf-forecast-table tbody tr.is-cf-total th {
+  color: #f0c763;
+  font-weight: 700;
+}
+.vis-cf-forecast-table tbody tr.is-cf-total {
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.025);
+}
+.vis-cf-forecast-table tbody tr.is-cf-anchor td,
+.vis-cf-forecast-table tbody tr.is-cf-total td {
+  font-weight: 700;
+}
+.vis-cf-forecast-table .vis-cf-num-neg {
+  color: rgba(255, 140, 140, 0.92);
+}
+
 .vis-cf-summary-table tfoot th,
 .vis-cf-summary-table tfoot td {
   border-top: 1px solid rgba(255, 255, 255, 0.12);

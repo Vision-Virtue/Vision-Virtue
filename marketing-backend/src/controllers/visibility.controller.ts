@@ -61,6 +61,7 @@ import { computeReceivablesGrid } from '../services/cf-receivables.service';
 import { computeInventoryGrid } from '../services/cf-inventory.service';
 import { computeSalariesGrid } from '../services/cf-salaries.service';
 import { computeManualGrid } from '../services/cf-manual.service';
+import { computeForecast } from '../services/cf-forecast.service';
 
 // ─── Constants from spec §2.3 (single source of truth, mirrored on FE) ─────
 
@@ -1517,5 +1518,18 @@ export const cfManualController = {
     cfManualRowRepo.delete(rowId);
     const grid = computeManualGrid(ctx.budget, ctx.cfId, kind);
     res.json({ manual: grid });
+  },
+};
+
+/* ============================================================
+   CF — Forecast controller (spec §11 + §12).
+   ============================================================ */
+
+export const cfForecastController = {
+  /** GET /api/visibility/budgets/:id/cf/forecast */
+  get(req: Request, res: Response): void {
+    const ctx = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const grid = computeForecast(ctx.budget, ctx.cfId, ctx.customerKeyId);
+    res.json({ forecast: grid });
   },
 };

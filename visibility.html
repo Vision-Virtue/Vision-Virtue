@@ -823,7 +823,58 @@
         </div>
 
         <div class="vis-banner vis-banner-info" id="cfForecastInfoBanner" hidden></div>
-        <div class="vis-empty" id="cfForecastEmpty">Select a finalized budget to view the Cash Flow forecast.</div>
+        <div class="vis-banner vis-banner-warn" id="cfForecastErrorBanner" hidden></div>
+        <div class="vis-empty" id="cfForecastEmpty" hidden>Select a finalized budget to view the Cash Flow forecast.</div>
+
+        <div class="vis-cf-forecast-body" id="cfForecastBody" hidden>
+
+          <!-- View controls -->
+          <div class="vis-cf-forecast-controls">
+            <label class="vis-cf-forecast-control">
+              <span>Period</span>
+              <select id="cfForecastPeriod">
+                <option value="monthly" selected>Monthly</option>
+                <option value="quarterly">Quarterly</option>
+                <option value="fy">FY</option>
+              </select>
+            </label>
+            <label class="vis-cf-forecast-control">
+              <span>Scale</span>
+              <select id="cfForecastScale">
+                <option value="standard" selected>Standard</option>
+                <option value="thousands">Thousands</option>
+              </select>
+            </label>
+            <label class="vis-cf-forecast-control">
+              <span>Burn detail</span>
+              <select id="cfForecastBurnDetail">
+                <option value="expanded" selected>Expanded</option>
+                <option value="collapsed">Collapsed</option>
+              </select>
+            </label>
+          </div>
+
+          <!-- Main forecast table -->
+          <h3 class="vis-cf-forecast-title">Cash Flow Forecast</h3>
+          <div class="vis-cf-grid-wrap">
+            <table class="vis-cf-grid vis-cf-summary-table vis-cf-forecast-table" id="cfForecastTable">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <!-- WC breakdown -->
+          <h3 class="vis-cf-forecast-title">Working Capital breakdown</h3>
+          <div class="vis-cf-grid-wrap">
+            <table class="vis-cf-grid vis-cf-summary-table vis-cf-forecast-table" id="cfForecastWcTable">
+              <thead></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <p class="vis-cf-field-hint">All amounts shown in the budget's currency. Negative values appear in (parens). The WC breakdown's Total reconciles to the WC row above; salaries are tracked separately per §11.</p>
+
+        </div>
 
       </div>
 

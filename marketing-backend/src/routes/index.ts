@@ -4,7 +4,7 @@ import { linkedInController } from '../controllers/linkedin.controller';
 import { authController, verifyPin } from '../controllers/auth.controller';
 import { chatController } from '../controllers/chat.controller';
 import { partnerController } from '../controllers/partner.controller';
-import { visibilityController, budgetsController, salariesController, cashFlowController, cfPayablesController, cfReceivablesController, cfInventoryController, cfSalariesController, cfManualController } from '../controllers/visibility.controller';
+import { visibilityController, budgetsController, salariesController, cashFlowController, cfPayablesController, cfReceivablesController, cfInventoryController, cfSalariesController, cfManualController, cfForecastController } from '../controllers/visibility.controller';
 import { requireRaphael, requireLinkedIn, requireAdminPin } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -287,6 +287,9 @@ router.get(    '/visibility/budgets/:id/cf/manual/:kind',                  (req,
 router.post(   '/visibility/budgets/:id/cf/manual/:kind',                  (req, res) => cfManualController.create(req, res));
 router.patch(  '/visibility/budgets/:id/cf/manual/:kind/rows/:rowId',      (req, res) => cfManualController.patchRow(req, res));
 router.delete( '/visibility/budgets/:id/cf/manual/:kind/rows/:rowId',      (req, res) => cfManualController.deleteRow(req, res));
+
+// CF — Forecast (spec §11 + §12)
+router.get( '/visibility/budgets/:id/cf/forecast',                         (req, res) => cfForecastController.get(req, res));
 
 // ─── Admin (Raphael) — Partner Submissions ──────────────────────────────────
 // All admin endpoints require X-Admin-Pin header OR ?pin= query (matching

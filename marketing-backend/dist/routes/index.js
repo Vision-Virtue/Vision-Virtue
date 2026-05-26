@@ -137,6 +137,8 @@ router.get('/visibility/budgets/:id/cf/manual/:kind', (req, res) => visibility_c
 router.post('/visibility/budgets/:id/cf/manual/:kind', (req, res) => visibility_controller_1.cfManualController.create(req, res));
 router.patch('/visibility/budgets/:id/cf/manual/:kind/rows/:rowId', (req, res) => visibility_controller_1.cfManualController.patchRow(req, res));
 router.delete('/visibility/budgets/:id/cf/manual/:kind/rows/:rowId', (req, res) => visibility_controller_1.cfManualController.deleteRow(req, res));
+// CF — Forecast (spec §11 + §12)
+router.get('/visibility/budgets/:id/cf/forecast', (req, res) => visibility_controller_1.cfForecastController.get(req, res));
 // ─── Admin (Raphael) — Partner Submissions ──────────────────────────────────
 // All admin endpoints require X-Admin-Pin header OR ?pin= query (matching
 // ACCESS_CODE). Query-param form lets the frontend send simple CORS

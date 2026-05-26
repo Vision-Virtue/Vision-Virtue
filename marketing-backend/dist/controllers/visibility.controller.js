@@ -3,7 +3,7 @@
    Visibility offering — Controller (Phase 1: Financial Structure)
    ============================================================ */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cfManualController = exports.cfSalariesController = exports.cfInventoryController = exports.cfReceivablesController = exports.cfPayablesController = exports.cashFlowController = exports.salariesController = exports.budgetsController = exports.visibilityController = exports.BUDGET_CATEGORIES_BY_SECTION = exports.PL_SECTIONS = void 0;
+exports.cfForecastController = exports.cfManualController = exports.cfSalariesController = exports.cfInventoryController = exports.cfReceivablesController = exports.cfPayablesController = exports.cashFlowController = exports.salariesController = exports.budgetsController = exports.visibilityController = exports.BUDGET_CATEGORIES_BY_SECTION = exports.PL_SECTIONS = void 0;
 const zod_1 = require("zod");
 const partner_repository_1 = require("../db/partner.repository");
 const visibility_repository_1 = require("../db/visibility.repository");
@@ -16,6 +16,7 @@ const cf_receivables_service_1 = require("../services/cf-receivables.service");
 const cf_inventory_service_1 = require("../services/cf-inventory.service");
 const cf_salaries_service_1 = require("../services/cf-salaries.service");
 const cf_manual_service_1 = require("../services/cf-manual.service");
+const cf_forecast_service_1 = require("../services/cf-forecast.service");
 // ─── Constants from spec §2.3 (single source of truth, mirrored on FE) ─────
 exports.PL_SECTIONS = [
     'Revenues', 'COGS', 'R&D', 'S&M', 'G&A',
@@ -1494,5 +1495,18 @@ exports.cfManualController = {
         visibility_repository_1.cfManualRowRepo.delete(rowId);
         const grid = (0, cf_manual_service_1.computeManualGrid)(ctx.budget, ctx.cfId, kind);
         res.json({ manual: grid });
+    },
+};
+/* ============================================================
+   CF — Forecast controller (spec §11 + §12).
+   ============================================================ */
+exports.cfForecastController = {
+    /** GET /api/visibility/budgets/:id/cf/forecast */
+    get(req, res) {
+        const ctx = requireFinalizedBudgetCf(req, res);
+        if (!ctx)
+            return;
+        const grid = (0, cf_forecast_service_1.computeForecast)(ctx.budget, ctx.cfId, ctx.customerKeyId);
+        res.json({ forecast: grid });
     },
 };
