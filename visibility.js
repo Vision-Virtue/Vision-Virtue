@@ -5042,22 +5042,27 @@ function renderDashboard() {
 
   let worstQuarter = null;
   for (const q of quarters) {
-    const sumWc       = q.members.reduce((s, m) => s + (Number(wcBd.total[m])       || 0), 0);
     const sumPay      = q.members.reduce((s, m) => s + (Number(wcBd.payables[m])    || 0), 0);
     const sumReceiv   = q.members.reduce((s, m) => s + (Number(wcBd.receivables[m]) || 0), 0);
     const sumInv      = q.members.reduce((s, m) => s + (Number(wcBd.inventory[m])   || 0), 0);
-    // Largest negative component drives the warning text.
+    // Compute the full quarter WC sum directly from the three
+    // components — guarantees the tile value matches their sum,
+    // even if the upstream wcBd.total ever drifts.
+    const sumWc = sumPay + sumReceiv + sumInv;
     const components = [
       { name: 'Payables',    value: sumPay },
       { name: 'Receivables', value: sumReceiv },
       { name: 'Inventory',   value: sumInv },
     ];
+    // "Largest drag" = the most-negative component (or, if none are
+    // negative, the smallest contributor — but we only flag a worst
+    // quarter when the WC sum itself is negative below).
     const worstComponent = components.reduce(
       (acc, c) => (c.value < acc.value ? c : acc),
       components[0],
     );
     if (!worstQuarter || sumWc < worstQuarter.wc) {
-      worstQuarter = { key: q.key, wc: sumWc, comp: worstComponent };
+      worstQuarter = { key: q.key, wc: sumWc, comp: worstComponent, components };
     }
   }
 
@@ -5074,16 +5079,25 @@ function renderDashboard() {
   const subEl  = document.querySelector('[data-cf-tile-sub="lowest-wc"]');
   if (worstQuarter && worstQuarter.wc < 0) {
     const qLabel = /^Q\d$/.test(worstQuarter.key) ? `${worstQuarter.key}-${String(yr).slice(-2)}` : worstQuarter.key;
+    // Main value = full WC sum for the quarter (Payables + Receivables
+    // + Inventory).
     setTile('lowest-wc', `${qLabel}  ·  ${formatTileMoney(worstQuarter.wc)}`, worstQuarter.wc);
     if (subEl) {
-      subEl.textContent = `Largest drag: ${worstQuarter.comp.name} ${formatTileMoney(worstQuarter.comp.value)}`;
+      // Per-component breakdown so the user can see that the main
+      // number is the sum of the three components, and which one
+      // drove the drag.
+      const parts = worstQuarter.components.map(c => {
+        const piece = `${c.name} ${formatTileMoney(c.value)}`;
+        return (c.name === worstQuarter.comp.name) ? `<strong>${piece}</strong>` : piece;
+      }).join(' · ');
+      subEl.innerHTML = `Full quarter WC. Largest drag: <strong>${htmlEsc(worstQuarter.comp.name)}</strong>.<br>${parts}`;
       subEl.title = `Review ${worstQuarter.comp.name} in ${qLabel} — largest WC drag of the year.`;
     }
     if (beacon) beacon.hidden = false;
   } else {
     setTile('lowest-wc', '—', 0);
     if (subEl) {
-      subEl.textContent = 'No negative WC quarters this year.';
+      subEl.innerHTML = 'No negative WC quarters this year.';
       subEl.title = '';
     }
     if (beacon) beacon.hidden = true;
