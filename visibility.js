@@ -4393,22 +4393,18 @@ function refreshManualStatus(kind) {
   const badge = document.querySelector(`[data-cf-status="${kind}"]`);
   if (!badge) return;
   const grid = cfManualCache[kind];
-  // Optional unless the user added at least one row; once any rows
-  // exist, every cell must have a value (or 0) per §10.
-  if (!grid || !grid.rows || grid.rows.length === 0) {
+  // Optional unless the user added at least one row. Empty period
+  // cells are treated as zero — no obligation to fill them.
+  const hasRows = !!(grid && grid.rows && grid.rows.length > 0);
+  if (!hasRows) {
     badge.textContent = 'Optional';
     badge.classList.remove('vis-cf-section-status-filled');
     badge.classList.add('vis-cf-section-status-optional');
     return;
   }
-  // All rows must have every period filled (0 is allowed as an
-  // explicit zero — backend persists it).
-  const allFilled = grid.rows.every(r =>
-    grid.periodKeys.every(p => r.amounts[p] !== undefined && r.amounts[p] !== null)
-  );
-  badge.textContent = allFilled ? 'Filled' : 'Required';
-  badge.classList.toggle('vis-cf-section-status-filled', allFilled);
-  badge.classList.toggle('vis-cf-section-status-optional', false);
+  badge.textContent = 'Filled';
+  badge.classList.add('vis-cf-section-status-filled');
+  badge.classList.remove('vis-cf-section-status-optional');
 }
 
 // ─── Mutations ─────────────────────────────────────────────────
