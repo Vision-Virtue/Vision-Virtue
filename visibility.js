@@ -3368,6 +3368,7 @@ function refreshPayablesStatus() {
   const filled = obOk && allTerms && allCarryFilled && g.rows.length > 0;
   badge.textContent = filled ? 'Filled' : 'Required';
   badge.classList.toggle('vis-cf-section-status-filled', filled);
+  refreshWcStatus();
 }
 
 function patchPayablesSectionSoon(openingBalance) {
@@ -3702,6 +3703,7 @@ function refreshReceivablesStatus() {
   const filled = obOk && allTerms && allCarryFilled && g.rows.length > 0;
   badge.textContent = filled ? 'Filled' : 'Required';
   badge.classList.toggle('vis-cf-section-status-filled', filled);
+  refreshWcStatus();
 }
 
 function patchReceivablesSectionSoon(openingBalance) {
@@ -3955,6 +3957,22 @@ function refreshInventoryStatus() {
   const filled = obOk;  // O.B is the binding required value
   badge.textContent = filled ? 'Filled' : 'Required';
   badge.classList.toggle('vis-cf-section-status-filled', filled);
+  refreshWcStatus();
+}
+
+/** WC parent badge: Filled iff Payables, Receivables and Inventory
+ *  are all Filled. Mirrors the same Required ↔ Filled visual states
+ *  used by leaf sections. */
+function refreshWcStatus() {
+  const wcBadge = document.querySelector('[data-cf-status="wc"]');
+  if (!wcBadge) return;
+  const childIds = ['payables', 'receivables', 'inventory'];
+  const allFilled = childIds.every(id => {
+    const b = document.querySelector(`[data-cf-status="${id}"]`);
+    return b && b.classList.contains('vis-cf-section-status-filled');
+  });
+  wcBadge.textContent = allFilled ? 'Filled' : 'Required';
+  wcBadge.classList.toggle('vis-cf-section-status-filled', allFilled);
 }
 
 function patchInventorySoon(fields) {
