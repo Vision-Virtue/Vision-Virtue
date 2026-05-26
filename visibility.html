@@ -895,7 +895,47 @@
         </div>
 
         <div class="vis-banner vis-banner-info" id="cfDashboardInfoBanner" hidden></div>
-        <div class="vis-empty" id="cfDashboardEmpty">Select a finalized budget to view its Cash Flow dashboard.</div>
+        <div class="vis-banner vis-banner-warn" id="cfDashboardErrorBanner" hidden></div>
+        <div class="vis-empty" id="cfDashboardEmpty" hidden>Select a finalized budget to view its Cash Flow dashboard.</div>
+
+        <div class="vis-cf-dash-body" id="cfDashboardBody" hidden>
+          <div class="vis-cf-dash-grid">
+            <div class="vis-cf-dash-tile" data-cf-tile="end-cash">
+              <span class="vis-cf-dash-tile-label">End-of-year Cash</span>
+              <span class="vis-cf-dash-tile-value" data-cf-tile-value="end-cash">—</span>
+              <span class="vis-cf-dash-tile-sub">C.B at December (FY view)</span>
+            </div>
+            <div class="vis-cf-dash-tile" data-cf-tile="fy-wc">
+              <span class="vis-cf-dash-tile-label">FY WC movement</span>
+              <span class="vis-cf-dash-tile-value" data-cf-tile-value="fy-wc">—</span>
+              <span class="vis-cf-dash-tile-sub">Sum across 12 months</span>
+            </div>
+            <div class="vis-cf-dash-tile" data-cf-tile="fy-burn">
+              <span class="vis-cf-dash-tile-label">FY Burn</span>
+              <span class="vis-cf-dash-tile-value" data-cf-tile-value="fy-burn">—</span>
+              <span class="vis-cf-dash-tile-sub">EBITDA + WC + Salaries + Other Adj</span>
+            </div>
+            <div class="vis-cf-dash-tile" data-cf-tile="avg-monthly-burn">
+              <span class="vis-cf-dash-tile-label">Avg Monthly Burn</span>
+              <span class="vis-cf-dash-tile-value" data-cf-tile-value="avg-monthly-burn">—</span>
+              <span class="vis-cf-dash-tile-sub">FY Burn ÷ 12</span>
+            </div>
+            <div class="vis-cf-dash-tile" data-cf-tile="avg-quarterly-burn">
+              <span class="vis-cf-dash-tile-label">Avg Quarterly Burn</span>
+              <span class="vis-cf-dash-tile-value" data-cf-tile-value="avg-quarterly-burn">—</span>
+              <span class="vis-cf-dash-tile-sub">FY Burn ÷ 4</span>
+            </div>
+            <div class="vis-cf-dash-tile vis-cf-dash-tile-warn" data-cf-tile="lowest-wc">
+              <span class="vis-cf-dash-tile-label">
+                Lowest WC Quarter
+                <span class="vis-cf-dash-beacon" data-cf-tile-beacon="lowest-wc" hidden aria-hidden="true"></span>
+              </span>
+              <span class="vis-cf-dash-tile-value" data-cf-tile-value="lowest-wc">—</span>
+              <span class="vis-cf-dash-tile-sub" data-cf-tile-sub="lowest-wc">Largest WC drag of the year</span>
+            </div>
+          </div>
+          <p class="vis-cf-field-hint">All tile amounts shown in thousands. Negative values appear in (parens). Tiles refresh whenever upstream sections change — switch tabs to refresh.</p>
+        </div>
 
       </div>
 

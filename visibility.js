@@ -546,6 +546,7 @@ function activateTab(tabName) {
     void refreshCfBudgetPickers();
   }
   if (tabName === 'cf-forecast') void loadForecast(true);
+  if (tabName === 'cf-dashboard') void loadDashboard(true);
 }
 for (const t of tabs) {
   t.addEventListener('click', () => {
@@ -3060,6 +3061,7 @@ document.addEventListener('change', (ev) => {
   }
   void loadCurrentCf();
   void loadForecast(true);
+  void loadDashboard(true);
 });
 
 // Live edits on the Opening Cash field — debounced autosave; the
@@ -4880,6 +4882,155 @@ document.addEventListener('change', (ev) => {
   else return;
   renderForecast();
 });
+
+
+// ─────────────────────────────────────────────────────────────
+//  PHASE 9 — CF Dashboard (spec §13)
+//  Six KPI tiles + one warning beacon, all computed from the
+//  Forecast grid (§11). Tiles re-render whenever the user
+//  switches to the Dashboard tab or picks a new budget.
+// ─────────────────────────────────────────────────────────────
+
+async function loadDashboard(force = false) {
+  const body  = document.getElementById('cfDashboardBody');
+  const empty = document.getElementById('cfDashboardEmpty');
+  if (!body || !empty) return;
+  if (!selectedCfBudgetId) {
+    body.hidden = true;
+    empty.hidden = false;
+    empty.textContent = cfBudgetCache.length === 0
+      ? 'No finalized budgets yet — finalize one in tab 3.'
+      : 'Select a finalized budget to view its Cash Flow dashboard.';
+    return;
+  }
+  // Dashboard reads from the same forecast endpoint — reuse the cache
+  // unless force or the budget changed.
+  await loadForecast(force);
+  renderDashboard();
+}
+
+function renderDashboard() {
+  const body  = document.getElementById('cfDashboardBody');
+  const empty = document.getElementById('cfDashboardEmpty');
+  const pill  = document.getElementById('cfDashboardStatusPill');
+  if (!body || !empty || !currentForecast) {
+    if (body)  body.hidden  = true;
+    if (empty) empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+  body.hidden  = false;
+
+  if (pill) {
+    const finalized = currentCf?.cf?.status === 'finalized';
+    pill.dataset.status = finalized ? 'finalized' : 'draft';
+    pill.textContent    = finalized ? 'Finalized' : 'Draft';
+  }
+
+  // ── Compute KPI values from the forecast grid ──────────────
+  const periodKeys = currentForecast.periodKeys;
+  const rows       = currentForecast.rows;
+  const wcBd       = currentForecast.wcBreakdown;
+
+  const sumAll = (rec) => periodKeys.reduce((s, p) => s + (Number(rec[p]) || 0), 0);
+
+  // End-of-year cash = C.B of the last period.
+  const endCash = Number(rows.cb[periodKeys[periodKeys.length - 1]]) || 0;
+
+  // FY WC movement = sum of WC row.
+  const fyWc = sumAll(rows.wc);
+
+  // FY Burn = EBITDA + WC + Salaries + Other Adj summed.
+  const fyBurn = sumAll(rows.ebitda) + sumAll(rows.wc) + sumAll(rows.salaries) + sumAll(rows.otherAdj);
+
+  // Avg burns.
+  const monthsInPeriod = periodKeys.length || 12;
+  const avgMonthlyBurn   = fyBurn / monthsInPeriod;
+  const avgQuarterlyBurn = fyBurn / Math.max(1, monthsInPeriod / 3);
+
+  // Lowest WC quarter — aggregate WC into 4 quarters from monthly data
+  // when possible; otherwise fall back to the per-period rows.
+  const isMonthly = periodKeys.length === 12 && periodKeys.every(k => /^M\d{2}$/.test(k));
+  const quarters  = isMonthly
+    ? [
+        { key: 'Q1', members: ['M01','M02','M03'] },
+        { key: 'Q2', members: ['M04','M05','M06'] },
+        { key: 'Q3', members: ['M07','M08','M09'] },
+        { key: 'Q4', members: ['M10','M11','M12'] },
+      ]
+    : periodKeys.map(p => ({ key: p, members: [p] }));
+
+  let worstQuarter = null;
+  for (const q of quarters) {
+    const sumWc       = q.members.reduce((s, m) => s + (Number(wcBd.total[m])       || 0), 0);
+    const sumPay      = q.members.reduce((s, m) => s + (Number(wcBd.payables[m])    || 0), 0);
+    const sumReceiv   = q.members.reduce((s, m) => s + (Number(wcBd.receivables[m]) || 0), 0);
+    const sumInv      = q.members.reduce((s, m) => s + (Number(wcBd.inventory[m])   || 0), 0);
+    // Largest negative component drives the warning text.
+    const components = [
+      { name: 'Payables',    value: sumPay },
+      { name: 'Receivables', value: sumReceiv },
+      { name: 'Inventory',   value: sumInv },
+    ];
+    const worstComponent = components.reduce(
+      (acc, c) => (c.value < acc.value ? c : acc),
+      components[0],
+    );
+    if (!worstQuarter || sumWc < worstQuarter.wc) {
+      worstQuarter = { key: q.key, wc: sumWc, comp: worstComponent };
+    }
+  }
+
+  // ── Render tiles ───────────────────────────────────────────
+  const yr = currentCf?.budget?.year || new Date().getFullYear();
+  setTile('end-cash',           formatTileMoney(endCash),        endCash);
+  setTile('fy-wc',              formatTileMoney(fyWc),           fyWc);
+  setTile('fy-burn',            formatTileMoney(fyBurn),         fyBurn);
+  setTile('avg-monthly-burn',   formatTileMoney(avgMonthlyBurn), avgMonthlyBurn);
+  setTile('avg-quarterly-burn', formatTileMoney(avgQuarterlyBurn), avgQuarterlyBurn);
+
+  // Lowest WC quarter tile + beacon.
+  const beacon = document.querySelector('[data-cf-tile-beacon="lowest-wc"]');
+  const subEl  = document.querySelector('[data-cf-tile-sub="lowest-wc"]');
+  if (worstQuarter && worstQuarter.wc < 0) {
+    const qLabel = /^Q\d$/.test(worstQuarter.key) ? `${worstQuarter.key}-${String(yr).slice(-2)}` : worstQuarter.key;
+    setTile('lowest-wc', `${qLabel}  ·  ${formatTileMoney(worstQuarter.wc)}`, worstQuarter.wc);
+    if (subEl) {
+      subEl.textContent = `Largest drag: ${worstQuarter.comp.name} ${formatTileMoney(worstQuarter.comp.value)}`;
+      subEl.title = `Review ${worstQuarter.comp.name} in ${qLabel} — largest WC drag of the year.`;
+    }
+    if (beacon) beacon.hidden = false;
+  } else {
+    setTile('lowest-wc', '—', 0);
+    if (subEl) {
+      subEl.textContent = 'No negative WC quarters this year.';
+      subEl.title = '';
+    }
+    if (beacon) beacon.hidden = true;
+  }
+}
+
+function setTile(name, text, signed) {
+  const el = document.querySelector(`[data-cf-tile-value="${name}"]`);
+  if (!el) return;
+  el.textContent = text;
+  el.classList.toggle('is-neg', Number.isFinite(signed) && signed < 0);
+}
+
+/** Format a tile value in thousands with the $ prefix, parens for
+ *  negatives. Returns '—' for zero/missing values. */
+function formatTileMoney(v) {
+  if (!Number.isFinite(v) || v === 0) return '$0';
+  const inK = Math.round(v / 1000);
+  if (inK === 0) {
+    // Sub-thousand value — show with one-decimal precision so it
+    // doesn't disappear visually.
+    const fine = (v / 1000).toFixed(1);
+    return v < 0 ? `($${fine.replace('-', '')}K)` : `$${fine}K`;
+  }
+  const mag = Math.abs(inK).toLocaleString('en-US');
+  return inK < 0 ? `($${mag}K)` : `$${mag}K`;
+}
 
 
 // ─────────────────────────────────────────────────────────────
