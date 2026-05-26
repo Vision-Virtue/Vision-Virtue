@@ -132,6 +132,11 @@ router.patch('/visibility/budgets/:id/cf/inventory', (req, res) => visibility_co
 // CF — Salaries & Benefits (spec §6)
 router.get('/visibility/budgets/:id/cf/salaries', (req, res) => visibility_controller_1.cfSalariesController.get(req, res));
 router.patch('/visibility/budgets/:id/cf/salaries', (req, res) => visibility_controller_1.cfSalariesController.patch(req, res));
+// CF — Manual sections: Other Adjustments / Financing / Capex (spec §7 / §8 / §9)
+router.get('/visibility/budgets/:id/cf/manual/:kind', (req, res) => visibility_controller_1.cfManualController.get(req, res));
+router.post('/visibility/budgets/:id/cf/manual/:kind', (req, res) => visibility_controller_1.cfManualController.create(req, res));
+router.patch('/visibility/budgets/:id/cf/manual/:kind/rows/:rowId', (req, res) => visibility_controller_1.cfManualController.patchRow(req, res));
+router.delete('/visibility/budgets/:id/cf/manual/:kind/rows/:rowId', (req, res) => visibility_controller_1.cfManualController.deleteRow(req, res));
 // ─── Admin (Raphael) — Partner Submissions ──────────────────────────────────
 // All admin endpoints require X-Admin-Pin header OR ?pin= query (matching
 // ACCESS_CODE). Query-param form lets the frontend send simple CORS

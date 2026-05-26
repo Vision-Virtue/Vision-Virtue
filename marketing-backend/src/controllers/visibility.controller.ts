@@ -39,6 +39,9 @@ import {
   cfInventorySectionRepo,
   cfInventoryPurchasesRepo,
   cfSalariesSectionRepo,
+  cfManualRowRepo,
+  CF_MANUAL_KINDS,
+  CfManualKind,
   PAYMENT_TERMS,
   PaymentTerm,
 } from '../db/visibility.repository';
@@ -57,6 +60,7 @@ import { computePayablesGrid } from '../services/cf-payables.service';
 import { computeReceivablesGrid } from '../services/cf-receivables.service';
 import { computeInventoryGrid } from '../services/cf-inventory.service';
 import { computeSalariesGrid } from '../services/cf-salaries.service';
+import { computeManualGrid } from '../services/cf-manual.service';
 
 // ─── Constants from spec §2.3 (single source of truth, mirrored on FE) ─────
 
@@ -1413,5 +1417,105 @@ export const cfSalariesController = {
     });
     const grid = computeSalariesGrid(ctx.budget, ctx.cfId, ctx.customerKeyId);
     res.json({ salaries: grid });
+  },
+};
+
+/* ============================================================
+   CF — Manual sections controller (spec §7 / §8 / §9).
+   URL kind values use hyphens for readability ('other-adj');
+   the storage layer uses snake_case ('other_adj').
+   ============================================================ */
+
+const URL_KIND_TO_STORAGE: Record<string, CfManualKind> = {
+  'other-adj': 'other_adj',
+  'financing': 'financing',
+  'capex':     'capex',
+};
+
+function resolveManualKind(req: Request, res: Response): CfManualKind | null {
+  const raw = String(req.params.kind || '').toLowerCase();
+  const kind = URL_KIND_TO_STORAGE[raw];
+  if (!kind) {
+    res.status(400).json({
+      error: { code: 'BAD_REQUEST', message: `Unknown manual section "${raw}".` },
+    });
+    return null;
+  }
+  return kind;
+}
+
+export const cfManualController = {
+  /** GET /api/visibility/budgets/:id/cf/manual/:kind */
+  get(req: Request, res: Response): void {
+    const ctx  = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const kind = resolveManualKind(req, res);        if (!kind) return;
+    const grid = computeManualGrid(ctx.budget, ctx.cfId, kind);
+    res.json({ manual: grid });
+  },
+
+  /** POST /api/visibility/budgets/:id/cf/manual/:kind
+   *  Adds an empty row. Body optional: { description?: string }. */
+  create(req: Request, res: Response): void {
+    const ctx  = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const kind = resolveManualKind(req, res);        if (!kind) return;
+    const Schema = z.object({ description: z.string().max(200).optional() });
+    const parsed = Schema.safeParse(req.body || {});
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid create payload.' } });
+      return;
+    }
+    cfManualRowRepo.create(ctx.cfId, kind, parsed.data.description || '');
+    const grid = computeManualGrid(ctx.budget, ctx.cfId, kind);
+    res.json({ manual: grid });
+  },
+
+  /** PATCH /api/visibility/budgets/:id/cf/manual/:kind/rows/:rowId
+   *  Body: { description?: string,
+   *          amounts?: { periodKey: number, ... } (signed) } */
+  patchRow(req: Request, res: Response): void {
+    const ctx  = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const kind = resolveManualKind(req, res);        if (!kind) return;
+    const rowId = String(req.params.rowId || '');
+    const existing = cfManualRowRepo.getById(rowId);
+    if (!existing || existing.kind !== kind || existing.cashFlowId !== ctx.cfId) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Row not found.' } });
+      return;
+    }
+    const Schema = z.object({
+      description: z.string().max(200).optional(),
+      amounts:     z.record(z.string(), z.number().finite()).optional(),
+    });
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid manual-row patch payload.' } });
+      return;
+    }
+    if (parsed.data.description !== undefined) {
+      cfManualRowRepo.updateDescription(rowId, parsed.data.description);
+    }
+    if (parsed.data.amounts) {
+      const allowed = new Set(periodKeysFor(ctx.budget.granularity));
+      for (const [periodKey, amount] of Object.entries(parsed.data.amounts)) {
+        if (!allowed.has(periodKey)) continue;
+        cfManualRowRepo.upsertAmount(rowId, periodKey, amount);
+      }
+    }
+    const grid = computeManualGrid(ctx.budget, ctx.cfId, kind);
+    res.json({ manual: grid });
+  },
+
+  /** DELETE /api/visibility/budgets/:id/cf/manual/:kind/rows/:rowId */
+  deleteRow(req: Request, res: Response): void {
+    const ctx  = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const kind = resolveManualKind(req, res);        if (!kind) return;
+    const rowId = String(req.params.rowId || '');
+    const existing = cfManualRowRepo.getById(rowId);
+    if (!existing || existing.kind !== kind || existing.cashFlowId !== ctx.cfId) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Row not found.' } });
+      return;
+    }
+    cfManualRowRepo.delete(rowId);
+    const grid = computeManualGrid(ctx.budget, ctx.cfId, kind);
+    res.json({ manual: grid });
   },
 };

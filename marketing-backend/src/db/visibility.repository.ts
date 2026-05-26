@@ -1328,3 +1328,141 @@ export const cfSalariesSectionRepo = {
       .run(cashFlowId, ob, jp);
   },
 };
+
+/* ============================================================
+   CF — Manual rows (Other Adjustments §7, Financing §8, Capex §9).
+   All three sections share identical UX: free-text description
+   + 12 monthly amounts (signed). FY column is computed at read
+   time as the sum of the period amounts.
+   ============================================================ */
+
+export const CF_MANUAL_KINDS = ['other_adj', 'financing', 'capex'] as const;
+export type CfManualKind = typeof CF_MANUAL_KINDS[number];
+
+export interface CfManualRow {
+  id: string;
+  cashFlowId: string;
+  kind: CfManualKind;
+  description: string;
+  orderIndex: number;
+  amounts: Record<string, number>;
+}
+
+interface DbCfManualRow {
+  id: string;
+  cash_flow_id: string;
+  kind: string;
+  description: string;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
+
+interface DbCfManualAmount {
+  cf_manual_row_id: string;
+  period_key: string;
+  amount: number;
+}
+
+function toClientManualRow(r: DbCfManualRow, amounts: Record<string, number>): CfManualRow {
+  return {
+    id: r.id,
+    cashFlowId: r.cash_flow_id,
+    kind: r.kind as CfManualKind,
+    description: r.description,
+    orderIndex: r.order_index,
+    amounts,
+  };
+}
+
+export const cfManualRowRepo = {
+  listByCfAndKind(cashFlowId: string, kind: CfManualKind): CfManualRow[] {
+    const db = getDb();
+    const rows = db
+      .prepare(
+        `SELECT id, cash_flow_id, kind, description, order_index, created_at, updated_at
+         FROM cf_manual_rows
+         WHERE cash_flow_id = ? AND kind = ?
+         ORDER BY order_index ASC, created_at ASC`,
+      )
+      .all(cashFlowId, kind) as DbCfManualRow[];
+
+    if (rows.length === 0) return [];
+    const ids = rows.map(r => r.id);
+    const placeholders = ids.map(() => '?').join(',');
+    const amts = db
+      .prepare(
+        `SELECT cf_manual_row_id, period_key, amount
+         FROM cf_manual_row_amounts
+         WHERE cf_manual_row_id IN (${placeholders})`,
+      )
+      .all(...ids) as DbCfManualAmount[];
+
+    const byRow = new Map<string, Record<string, number>>();
+    for (const a of amts) {
+      const m = byRow.get(a.cf_manual_row_id) || {};
+      m[a.period_key] = a.amount;
+      byRow.set(a.cf_manual_row_id, m);
+    }
+    return rows.map(r => toClientManualRow(r, byRow.get(r.id) || {}));
+  },
+
+  create(cashFlowId: string, kind: CfManualKind, description = ''): CfManualRow {
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    const db = getDb();
+    const maxRow = db
+      .prepare(
+        `SELECT COALESCE(MAX(order_index), -1) AS max_idx
+         FROM cf_manual_rows WHERE cash_flow_id = ? AND kind = ?`,
+      )
+      .get(cashFlowId, kind) as { max_idx: number };
+    const orderIndex = (maxRow?.max_idx ?? -1) + 1;
+    db.prepare(
+      `INSERT INTO cf_manual_rows
+         (id, cash_flow_id, kind, description, order_index, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    ).run(id, cashFlowId, kind, description, orderIndex, now, now);
+    return {
+      id, cashFlowId, kind, description, orderIndex, amounts: {},
+    };
+  },
+
+  getById(id: string): CfManualRow | null {
+    const db = getDb();
+    const r = db
+      .prepare(
+        `SELECT id, cash_flow_id, kind, description, order_index, created_at, updated_at
+         FROM cf_manual_rows WHERE id = ?`,
+      )
+      .get(id) as DbCfManualRow | undefined;
+    if (!r) return null;
+    const amts = db
+      .prepare(`SELECT cf_manual_row_id, period_key, amount FROM cf_manual_row_amounts WHERE cf_manual_row_id = ?`)
+      .all(id) as DbCfManualAmount[];
+    const map: Record<string, number> = {};
+    for (const a of amts) map[a.period_key] = a.amount;
+    return toClientManualRow(r, map);
+  },
+
+  updateDescription(id: string, description: string): void {
+    const now = new Date().toISOString();
+    getDb()
+      .prepare(`UPDATE cf_manual_rows SET description = ?, updated_at = ? WHERE id = ?`)
+      .run(description, now, id);
+  },
+
+  upsertAmount(rowId: string, periodKey: string, amount: number): void {
+    getDb()
+      .prepare(
+        `INSERT INTO cf_manual_row_amounts (cf_manual_row_id, period_key, amount)
+         VALUES (?, ?, ?)
+         ON CONFLICT(cf_manual_row_id, period_key) DO UPDATE SET amount = excluded.amount`,
+      )
+      .run(rowId, periodKey, amount);
+  },
+
+  delete(id: string): void {
+    getDb().prepare(`DELETE FROM cf_manual_rows WHERE id = ?`).run(id);
+  },
+};
