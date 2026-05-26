@@ -17,9 +17,19 @@
      (see visibility.js sumSection — "Revenues entered negative").
      SUM(EBITDA cells) = burn (positive = burning, negative = profit).
      Cash-impact form negates this: ebitdaCash = -SUM(cells).
-   - WC component CBs are stored as positive magnitudes. Cash impact:
-       Liabilities  (Payables, Salaries):  +(CB[m] − CB[m−1])
-       Assets       (Receivables, Inventory): −(CB[m] − CB[m−1])
+   - WC component CBs: each section uses its own sign convention.
+       Payables    — signed (negative = credit liability). CB grows more
+                     negative as A/P grows.
+       Receivables — signed (positive = debit asset). CB grows more
+                     positive as A/R grows.
+       Inventory   — signed (positive = debit asset). CB grows more
+                     positive as inventory builds.
+       Salaries    — positive magnitude (liability stored as +X). CB
+                     grows more positive as accrual grows.
+     Cash-impact formula uses sign = −1 for the three signed sections
+     (matches spec §12: "−(CB[m] − CB[m−1])") and sign = +1 for
+     Salaries (the magnitude-stored section): a growing positive CB
+     means an unpaid accrual, which is a positive cash impact.
      For Jan, m−1 CB = OB of that section (per §3.8/§4.6/§5.3/§6.1).
    - Manual rows are stored with user-chosen sign (already cash-impact
      form): inflows positive, outflows negative.
@@ -95,7 +105,7 @@ function computeForecast(budget, cashFlowId, customerKeyId) {
     const receivablesGrid = (0, cf_receivables_service_1.computeReceivablesGrid)(budget, cashFlowId, customerKeyId);
     const inventoryGrid = (0, cf_inventory_service_1.computeInventoryGrid)(budget, cashFlowId, customerKeyId);
     const salariesGrid = (0, cf_salaries_service_1.computeSalariesGrid)(budget, cashFlowId, customerKeyId);
-    const payablesMov = cashImpactFromRoll(payablesGrid.summary.cb, payablesGrid.openingBalance, periodKeys, +1);
+    const payablesMov = cashImpactFromRoll(payablesGrid.summary.cb, payablesGrid.openingBalance, periodKeys, -1);
     const receivablesMov = cashImpactFromRoll(receivablesGrid.summary.cb, receivablesGrid.openingBalance, periodKeys, -1);
     const inventoryMov = cashImpactFromRoll(inventoryGrid.summary.cb, inventoryGrid.openingBalance, periodKeys, -1);
     const salariesMov = cashImpactFromRoll(salariesGrid.summary.cb, salariesGrid.openingBalance, periodKeys, +1);
