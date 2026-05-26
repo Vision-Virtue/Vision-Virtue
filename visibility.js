@@ -3355,18 +3355,29 @@ function refreshPayablesStatus() {
   if (!badge) return;
   if (!currentPayables) {
     badge.textContent = 'Required';
+    badge.title = '';
     badge.classList.remove('vis-cf-section-status-filled');
     return;
   }
   const g = currentPayables.payables;
   const obOk = (g.openingBalance || 0) !== 0;
-  const allTerms = g.rows.every(r => !!r.paymentTerm);
-  const allCarryFilled = g.rows.every(r =>
-    Object.entries(r.paymentNeedsCarry).every(([p, needs]) =>
-      !needs || (r.priorCarry[p] || 0) !== 0),
-  );
-  const filled = obOk && allTerms && allCarryFilled && g.rows.length > 0;
-  badge.textContent = filled ? 'Filled' : 'Required';
+  const rowsWithoutTerm = g.rows.filter(r => !r.paymentTerm).length;
+  let missingCarryCells = 0;
+  for (const r of g.rows) {
+    for (const [p, needs] of Object.entries(r.paymentNeedsCarry)) {
+      if (needs && (r.priorCarry[p] || 0) === 0) missingCarryCells++;
+    }
+  }
+  const filled = obOk && rowsWithoutTerm === 0 && missingCarryCells === 0 && g.rows.length > 0;
+
+  const reasons = [];
+  if (!obOk)                  reasons.push('O.B missing');
+  if (rowsWithoutTerm > 0)    reasons.push(`${rowsWithoutTerm} row${rowsWithoutTerm === 1 ? '' : 's'} missing terms`);
+  if (missingCarryCells > 0)  reasons.push(`${missingCarryCells} carry cell${missingCarryCells === 1 ? '' : 's'}`);
+  if (g.rows.length === 0)    reasons.push('no rows');
+
+  badge.textContent = filled ? 'Filled' : (reasons.length ? `Required — ${reasons[0]}` : 'Required');
+  badge.title = filled ? '' : `Still needed: ${reasons.join(', ')}`;
   badge.classList.toggle('vis-cf-section-status-filled', filled);
   refreshWcStatus();
 }
@@ -3690,18 +3701,29 @@ function refreshReceivablesStatus() {
   if (!badge) return;
   if (!currentReceivables) {
     badge.textContent = 'Required';
+    badge.title = '';
     badge.classList.remove('vis-cf-section-status-filled');
     return;
   }
   const g = currentReceivables.receivables;
   const obOk = (g.openingBalance || 0) !== 0;
-  const allTerms = g.rows.every(r => !!r.paymentTerm);
-  const allCarryFilled = g.rows.every(r =>
-    Object.entries(r.paymentNeedsCarry).every(([p, needs]) =>
-      !needs || (r.priorCarry[p] || 0) !== 0),
-  );
-  const filled = obOk && allTerms && allCarryFilled && g.rows.length > 0;
-  badge.textContent = filled ? 'Filled' : 'Required';
+  const rowsWithoutTerm = g.rows.filter(r => !r.paymentTerm).length;
+  let missingCarryCells = 0;
+  for (const r of g.rows) {
+    for (const [p, needs] of Object.entries(r.paymentNeedsCarry)) {
+      if (needs && (r.priorCarry[p] || 0) === 0) missingCarryCells++;
+    }
+  }
+  const filled = obOk && rowsWithoutTerm === 0 && missingCarryCells === 0 && g.rows.length > 0;
+
+  const reasons = [];
+  if (!obOk)                  reasons.push('O.B missing');
+  if (rowsWithoutTerm > 0)    reasons.push(`${rowsWithoutTerm} row${rowsWithoutTerm === 1 ? '' : 's'} missing terms`);
+  if (missingCarryCells > 0)  reasons.push(`${missingCarryCells} carry cell${missingCarryCells === 1 ? '' : 's'}`);
+  if (g.rows.length === 0)    reasons.push('no rows');
+
+  badge.textContent = filled ? 'Filled' : (reasons.length ? `Required — ${reasons[0]}` : 'Required');
+  badge.title = filled ? '' : `Still needed: ${reasons.join(', ')}`;
   badge.classList.toggle('vis-cf-section-status-filled', filled);
   refreshWcStatus();
 }
