@@ -2997,6 +2997,7 @@ function refreshCfSectionStatuses() {
       obBadge.classList.remove('vis-cf-section-status-filled');
     }
   }
+  refreshCfFinalizeBtn();
 }
 
 /** Format an amount with thousands separators, no currency symbol. */
@@ -3982,6 +3983,37 @@ function refreshWcStatus() {
   });
   wcBadge.textContent = allFilled ? 'Filled' : 'Required';
   wcBadge.classList.toggle('vis-cf-section-status-filled', allFilled);
+  refreshCfFinalizeBtn();
+}
+
+/** Enable the Finalize button iff every required CF section is Filled:
+ *  Opening Cash + Payables + Receivables + Inventory + Salaries.
+ *  Other Adjustments / Financing / Capex are optional and don't gate. */
+function refreshCfFinalizeBtn() {
+  const btn = document.getElementById('cfStructureFinalizeBtn');
+  const summary = document.getElementById('cfStructureSummary');
+  if (!btn) return;
+  // While finalized, the button becomes a re-edit / re-finalize action;
+  // for now we just keep it disabled when finalized (no edit flow yet).
+  const finalizedAlready = currentCf?.cf?.status === 'finalized';
+  if (finalizedAlready) {
+    btn.disabled = true;
+    btn.textContent = 'Finalized';
+    if (summary) summary.textContent = 'Cash Flow is finalized.';
+    return;
+  }
+  const requiredIds = ['opening-cash', 'payables', 'receivables', 'inventory', 'salaries'];
+  const missing = requiredIds.filter(id => {
+    const b = document.querySelector(`[data-cf-status="${id}"]`);
+    return !b || !b.classList.contains('vis-cf-section-status-filled');
+  });
+  btn.disabled = missing.length > 0;
+  btn.textContent = 'Finalize';
+  if (summary) {
+    summary.textContent = missing.length === 0
+      ? 'All required sections filled — ready to finalize.'
+      : `Finalize unlocks after every required section is filled (${missing.length} remaining).`;
+  }
 }
 
 function patchInventorySoon(fields) {
@@ -4190,6 +4222,7 @@ function refreshSalariesStatus() {
   const filled    = obOk && janPayOk;
   badge.textContent = filled ? 'Filled' : 'Required';
   badge.classList.toggle('vis-cf-section-status-filled', filled);
+  refreshCfFinalizeBtn();
 }
 
 function patchSalariesSoon(fields) {
@@ -4533,6 +4566,39 @@ document.addEventListener('click', (ev) => {
     const tbl   = t.closest('[data-cf-manual-kind]');
     const kind  = tbl && tbl.getAttribute('data-cf-manual-kind');
     if (kind && rowId) void deleteManualRow(kind, rowId);
+  }
+});
+
+// Finalize button.
+document.getElementById('cfStructureFinalizeBtn')?.addEventListener('click', async () => {
+  if (!selectedCfBudgetId) return;
+  const btn = document.getElementById('cfStructureFinalizeBtn');
+  if (!btn || btn.disabled) return;
+  const original = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Finalizing…';
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(selectedCfBudgetId)}/cf`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ status: 'finalized' }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showBanner(document.getElementById('cfStructureErrorBanner'),
+        htmlEsc(body?.error?.message || `Finalize failed (${res.status}).`));
+      btn.disabled = false;
+      btn.textContent = original;
+      return;
+    }
+    const data = await res.json();
+    if (data?.cf) currentCf = { ...currentCf, cf: data.cf };
+    renderCfStructure();
+  } catch (err) {
+    showBanner(document.getElementById('cfStructureErrorBanner'),
+      htmlEsc(`Finalize failed: ${(err && err.message) || err}`));
+    btn.disabled = false;
+    btn.textContent = original;
   }
 });
 
