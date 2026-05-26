@@ -1295,3 +1295,36 @@ export const cfInventoryPurchasesRepo = {
       .run(cashFlowId, periodKey, amount);
   },
 };
+
+/* ============================================================
+   CF — Salaries & Benefits sub-repo (spec §6).
+   Only O.B + January payment are persisted. Feb–Dec payments
+   auto-derive from the prior month's Salaries expense (fixed
+   30+ arrears).
+   ============================================================ */
+
+export const cfSalariesSectionRepo = {
+  get(cashFlowId: string): { openingBalance: number; januaryPayment: number } {
+    const row = getDb()
+      .prepare(`SELECT opening_balance, january_payment FROM cf_salaries_section WHERE cash_flow_id = ?`)
+      .get(cashFlowId) as { opening_balance: number; january_payment: number } | undefined;
+    return {
+      openingBalance:  row?.opening_balance ?? 0,
+      januaryPayment:  row?.january_payment ?? 0,
+    };
+  },
+  upsert(cashFlowId: string, fields: { openingBalance?: number; januaryPayment?: number }): void {
+    const current = this.get(cashFlowId);
+    const ob = fields.openingBalance !== undefined ? fields.openingBalance : current.openingBalance;
+    const jp = fields.januaryPayment !== undefined ? fields.januaryPayment : current.januaryPayment;
+    getDb()
+      .prepare(
+        `INSERT INTO cf_salaries_section (cash_flow_id, opening_balance, january_payment)
+         VALUES (?, ?, ?)
+         ON CONFLICT(cash_flow_id) DO UPDATE SET
+            opening_balance = excluded.opening_balance,
+            january_payment = excluded.january_payment`,
+      )
+      .run(cashFlowId, ob, jp);
+  },
+};

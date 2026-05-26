@@ -38,6 +38,7 @@ import {
   cfReceivablesPriorCarryRepo,
   cfInventorySectionRepo,
   cfInventoryPurchasesRepo,
+  cfSalariesSectionRepo,
   PAYMENT_TERMS,
   PaymentTerm,
 } from '../db/visibility.repository';
@@ -55,6 +56,7 @@ import { buildBudgetExport } from '../services/budget-export.service';
 import { computePayablesGrid } from '../services/cf-payables.service';
 import { computeReceivablesGrid } from '../services/cf-receivables.service';
 import { computeInventoryGrid } from '../services/cf-inventory.service';
+import { computeSalariesGrid } from '../services/cf-salaries.service';
 
 // ─── Constants from spec §2.3 (single source of truth, mirrored on FE) ─────
 
@@ -1376,5 +1378,40 @@ export const cfInventoryController = {
     }
     const grid = computeInventoryGrid(ctx.budget, ctx.cfId, ctx.customerKeyId);
     res.json({ inventory: grid });
+  },
+};
+
+/* ============================================================
+   CF — Salaries & Benefits controller (spec §6)
+   ============================================================ */
+
+export const cfSalariesController = {
+  /** GET /api/visibility/budgets/:id/cf/salaries */
+  get(req: Request, res: Response): void {
+    const ctx = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const grid = computeSalariesGrid(ctx.budget, ctx.cfId, ctx.customerKeyId);
+    res.json({ salaries: grid });
+  },
+
+  /** PATCH /api/visibility/budgets/:id/cf/salaries
+   *  Body: { openingBalance?: number (positive magnitude),
+   *          januaryPayment?: number (positive magnitude) } */
+  patch(req: Request, res: Response): void {
+    const ctx = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const Schema = z.object({
+      openingBalance: z.number().finite().min(0).optional(),
+      januaryPayment: z.number().finite().min(0).optional(),
+    });
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid salaries patch payload.' } });
+      return;
+    }
+    cfSalariesSectionRepo.upsert(ctx.cfId, {
+      openingBalance: parsed.data.openingBalance,
+      januaryPayment: parsed.data.januaryPayment,
+    });
+    const grid = computeSalariesGrid(ctx.budget, ctx.cfId, ctx.customerKeyId);
+    res.json({ salaries: grid });
   },
 };

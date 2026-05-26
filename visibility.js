@@ -2932,6 +2932,7 @@ async function loadCurrentCf() {
   await loadPayables(true);
   await loadReceivables(true);
   await loadInventory(true);
+  await loadSalaries(true);
 }
 
 function renderCfStructure() {
@@ -4024,6 +4025,194 @@ document.addEventListener('blur', (ev) => {
   const t = ev.target;
   if (!(t instanceof HTMLInputElement)) return;
   if (!t.hasAttribute('data-cf-inv-purchases')) return;
+  const v = Math.abs(parseCfSigned(t.value));
+  t.value = v ? Math.round(v).toLocaleString('en-US') : '';
+}, true);
+
+// ─────────────────────────────────────────────────────────────
+//  CF — Salaries & Benefits (spec §6)
+// ─────────────────────────────────────────────────────────────
+
+let currentSalaries = null;
+let lastSalariesBudgetId = null;
+
+async function loadSalaries(force) {
+  if (!selectedCfBudgetId) { currentSalaries = null; renderSalaries(); return; }
+  if (!force && lastSalariesBudgetId === selectedCfBudgetId && currentSalaries) {
+    renderSalaries(); return;
+  }
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(selectedCfBudgetId)}/cf/salaries`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showBanner(
+        document.getElementById('cfStructureErrorBanner'),
+        htmlEsc(body?.error?.message || `Could not load Salaries (${res.status}).`),
+      );
+      currentSalaries = null;
+      lastSalariesBudgetId = null;
+      renderSalaries();
+      return;
+    }
+    currentSalaries = await res.json();
+    lastSalariesBudgetId = selectedCfBudgetId;
+  } catch (err) {
+    showBanner(
+      document.getElementById('cfStructureErrorBanner'),
+      htmlEsc(`Could not load Salaries: ${(err && err.message) || err}`),
+    );
+    currentSalaries = null;
+  }
+  renderSalaries();
+}
+
+function renderSalaries() {
+  const tHead = document.getElementById('cfSalariesHead');
+  const tBody = document.getElementById('cfSalariesBodyTable');
+  const obIn  = document.getElementById('cfSalariesObInput');
+  if (!tHead || !tBody) return;
+
+  if (!currentSalaries) {
+    tHead.innerHTML = ''; tBody.innerHTML = '';
+    if (obIn) obIn.value = '';
+    refreshSalariesStatus();
+    return;
+  }
+
+  const grid = currentSalaries.salaries;
+  const { periodKeys, summary, openingBalance, januaryPayment } = grid;
+  const yr = currentCf?.budget?.year || new Date().getFullYear();
+
+  // O.B input — render as ($X,XXX) magnitude.
+  if (obIn) {
+    const mag = Math.round(Math.abs(openingBalance || 0));
+    const formatted = mag ? `(${mag.toLocaleString('en-US')})` : '';
+    if (document.activeElement !== obIn && obIn.value !== formatted) {
+      obIn.value = formatted;
+    }
+  }
+
+  // ── Summary table ────────────────────────────────────────
+  tHead.innerHTML = `
+    <tr>
+      <th>Row</th>
+      ${periodKeys.map(p => `<th class="vis-cf-num">${cfPeriodLabel(p, yr)}</th>`).join('')}
+      <th class="vis-cf-num">FY</th>
+    </tr>`;
+
+  const fmtCell = (v, mode) => {
+    if (!v) return `<td class="vis-cf-num vis-cf-num-muted">—</td>`;
+    if (mode === 'credit') return `<td class="vis-cf-num">(${Math.abs(v).toLocaleString('en-US')})</td>`;
+    if (mode === 'debit')  return `<td class="vis-cf-num">${Math.abs(v).toLocaleString('en-US')}</td>`;
+    return `<td class="vis-cf-num">(${Math.abs(v).toLocaleString('en-US')})</td>`;
+  };
+
+  // Payment row — first period (Jan, typically) is the only free
+  // input. Subsequent periods are auto = − previous Expenses.
+  const paymentCells = periodKeys.map((p, idx) => {
+    if (idx === 0) {
+      const v = Number(januaryPayment || 0);
+      const display = v ? Math.round(v).toLocaleString('en-US') : '';
+      return `<td class="vis-cf-num"><input
+        type="text"
+        inputmode="decimal"
+        class="vis-cf-carry-input"
+        data-cf-sal-january="1"
+        placeholder="Enter"
+        value="${display}"
+      /></td>`;
+    }
+    const v = Number(summary.payment[p] || 0);
+    if (!v) return `<td class="vis-cf-num vis-cf-num-muted">—</td>`;
+    return `<td class="vis-cf-num vis-cf-num-out">(${Math.round(v).toLocaleString('en-US')})</td>`;
+  }).join('');
+
+  const obCells   = periodKeys.map(p => fmtCell(Math.round(Number(summary.ob[p]       || 0)), 'credit')).join('');
+  const expCells  = periodKeys.map(p => fmtCell(Math.round(Number(summary.expenses[p] || 0)), 'credit')).join('');
+  const cbCells   = periodKeys.map(p => fmtCell(Math.round(Number(summary.cb[p]       || 0)), 'credit')).join('');
+
+  const obFy   = Math.round(Number(summary.ob[periodKeys[0]]                          || 0));
+  const expFy  = periodKeys.reduce((s, p) => s + Number(summary.expenses[p] || 0), 0);
+  const payFy  = periodKeys.reduce((s, p) => s + Number(summary.payment[p]  || 0), 0);
+  const cbFy   = Math.round(Number(summary.cb[periodKeys[periodKeys.length - 1]]      || 0));
+
+  tBody.innerHTML =
+    `<tr><th>O.B</th>${obCells}${fmtCell(obFy,  'credit')}</tr>` +
+    `<tr><th>Expenses</th>${expCells}${fmtCell(Math.round(expFy), 'credit')}</tr>` +
+    `<tr><th>Payment</th>${paymentCells}<td class="vis-cf-num vis-cf-num-out">${payFy ? `(${Math.round(payFy).toLocaleString('en-US')})` : '—'}</td></tr>` +
+    `<tr><th>C.B</th>${cbCells}${fmtCell(cbFy, 'credit')}</tr>`;
+
+  refreshSalariesStatus();
+}
+
+function refreshSalariesStatus() {
+  const badge = document.querySelector('[data-cf-status="salaries"]');
+  if (!badge) return;
+  if (!currentSalaries) {
+    badge.textContent = 'Required';
+    badge.classList.remove('vis-cf-section-status-filled');
+    return;
+  }
+  const g = currentSalaries.salaries;
+  // Per §10: O.B + Jan Payment both filled.
+  const obOk      = (g.openingBalance || 0) !== 0;
+  const janPayOk  = (g.januaryPayment || 0) !== 0;
+  const filled    = obOk && janPayOk;
+  badge.textContent = filled ? 'Filled' : 'Required';
+  badge.classList.toggle('vis-cf-section-status-filled', filled);
+}
+
+function patchSalariesSoon(fields) {
+  if (!selectedCfBudgetId) return;
+  // Distinct debounce key per logical input so the two fields don't
+  // step on each other.
+  const key = fields.openingBalance !== undefined
+    ? `cf:sal:ob:${selectedCfBudgetId}`
+    : `cf:sal:jan:${selectedCfBudgetId}`;
+  debounce(key, async () => {
+    try {
+      const res = await api(`/api/visibility/budgets/${encodeURIComponent(selectedCfBudgetId)}/cf/salaries`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(fields),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        showBanner(document.getElementById('cfStructureErrorBanner'),
+          htmlEsc(body?.error?.message || `Save failed (${res.status}).`));
+        return;
+      }
+      const data = await res.json();
+      if (data?.salaries) {
+        currentSalaries = { ...currentSalaries, salaries: data.salaries };
+        renderSalaries();
+      }
+    } catch (err) {
+      showBanner(document.getElementById('cfStructureErrorBanner'),
+        htmlEsc(`Save failed: ${(err && err.message) || err}`));
+    }
+  }, 400);
+}
+
+// Salaries O.B (positive magnitude; user may type with or without parens).
+document.addEventListener('input', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (t.id !== 'cfSalariesObInput') return;
+  patchSalariesSoon({ openingBalance: Math.abs(parseCfSigned(t.value)) });
+});
+
+// Salaries January payment (positive magnitude).
+document.addEventListener('input', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (!t.hasAttribute('data-cf-sal-january')) return;
+  patchSalariesSoon({ januaryPayment: Math.abs(parseCfSigned(t.value)) });
+});
+document.addEventListener('blur', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (!t.hasAttribute('data-cf-sal-january')) return;
   const v = Math.abs(parseCfSigned(t.value));
   t.value = v ? Math.round(v).toLocaleString('en-US') : '';
 }, true);

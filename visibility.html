@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0" />
   <title>Vision &amp; Virtue | Visibility</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="visibility.css?v=18" />
+  <link rel="stylesheet" href="visibility.css?v=19" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
@@ -702,8 +702,31 @@
               <span class="vis-cf-section-title">Salaries &amp; Benefits</span>
               <span class="vis-cf-section-status" data-cf-status="salaries">Required</span>
             </summary>
-            <div class="vis-cf-section-body">
-              <div class="vis-cf-coming">Salaries cash flow editor arrives in a future phase.</div>
+            <div class="vis-cf-section-body" id="cfSalariesBody">
+              <label class="vis-cf-field">
+                <span class="vis-cf-field-label">Opening Balance (S&amp;B)</span>
+                <span class="vis-cf-input-wrap">
+                  <span class="vis-cf-input-prefix">$</span>
+                  <input
+                    type="text"
+                    inputmode="decimal"
+                    class="vis-cf-input vis-cf-input-amount"
+                    id="cfSalariesObInput"
+                    placeholder="0"
+                    autocomplete="off"
+                  />
+                </span>
+              </label>
+              <p class="vis-cf-field-hint">Accrued salary liability from the prior year. Enter a positive amount; displayed as ($X,XXX) — credit balance.</p>
+
+              <h4 class="vis-cf-summary-title">Salaries summary</h4>
+              <div class="vis-cf-grid-wrap">
+                <table class="vis-cf-grid vis-cf-summary-table" id="cfSalariesTable">
+                  <thead id="cfSalariesHead"></thead>
+                  <tbody id="cfSalariesBodyTable"></tbody>
+                </table>
+              </div>
+              <p class="vis-cf-field-hint">Expenses are auto-pulled from the budget — sum of all lines whose Budget Category is <strong>Salaries and benefits</strong>. Payments are fixed at 30+ arrears (Jan is the only free input; Feb–Dec auto-equal the previous month's Expenses).</p>
             </div>
           </details>
 
@@ -823,6 +846,6 @@
     </div>
   </div>
 
-  <script src="visibility.js?v=34" defer></script>
+  <script src="visibility.js?v=35" defer></script>
 </body>
 </html>

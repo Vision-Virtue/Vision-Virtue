@@ -4,7 +4,7 @@
    Tables: gl_accounts, financial_structure_state.
    ============================================================ */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cfInventoryPurchasesRepo = exports.cfInventorySectionRepo = exports.cfReceivablesPriorCarryRepo = exports.cfReceivablesRowRepo = exports.cfReceivablesSectionRepo = exports.cfPayablesPriorCarryRepo = exports.cfPayablesRowRepo = exports.cfPayablesSectionRepo = exports.PAYMENT_TERMS = exports.cashFlowRepo = exports.salariesStateRepo = exports.salariesRowRepo = exports.budgetCellRepo = exports.budgetLineRepo = exports.budgetRepo = exports.BUDGET_CAP_PER_CUSTOMER = exports.SCALES = exports.CURRENCIES = exports.GRANULARITIES = exports.orgStructureRepo = exports.orgEntityRepo = exports.ORG_DIMENSIONS = exports.financialStructureRepo = exports.glAccountRepo = void 0;
+exports.cfSalariesSectionRepo = exports.cfInventoryPurchasesRepo = exports.cfInventorySectionRepo = exports.cfReceivablesPriorCarryRepo = exports.cfReceivablesRowRepo = exports.cfReceivablesSectionRepo = exports.cfPayablesPriorCarryRepo = exports.cfPayablesRowRepo = exports.cfPayablesSectionRepo = exports.PAYMENT_TERMS = exports.cashFlowRepo = exports.salariesStateRepo = exports.salariesRowRepo = exports.budgetCellRepo = exports.budgetLineRepo = exports.budgetRepo = exports.BUDGET_CAP_PER_CUSTOMER = exports.SCALES = exports.CURRENCIES = exports.GRANULARITIES = exports.orgStructureRepo = exports.orgEntityRepo = exports.ORG_DIMENSIONS = exports.financialStructureRepo = exports.glAccountRepo = void 0;
 exports.periodKeysFor = periodKeysFor;
 const uuid_1 = require("uuid");
 const database_1 = require("./database");
@@ -956,5 +956,34 @@ exports.cfInventoryPurchasesRepo = {
          VALUES (?, ?, ?)
          ON CONFLICT(cash_flow_id, period_key) DO UPDATE SET amount = excluded.amount`)
             .run(cashFlowId, periodKey, amount);
+    },
+};
+/* ============================================================
+   CF — Salaries & Benefits sub-repo (spec §6).
+   Only O.B + January payment are persisted. Feb–Dec payments
+   auto-derive from the prior month's Salaries expense (fixed
+   30+ arrears).
+   ============================================================ */
+exports.cfSalariesSectionRepo = {
+    get(cashFlowId) {
+        const row = (0, database_1.getDb)()
+            .prepare(`SELECT opening_balance, january_payment FROM cf_salaries_section WHERE cash_flow_id = ?`)
+            .get(cashFlowId);
+        return {
+            openingBalance: row?.opening_balance ?? 0,
+            januaryPayment: row?.january_payment ?? 0,
+        };
+    },
+    upsert(cashFlowId, fields) {
+        const current = this.get(cashFlowId);
+        const ob = fields.openingBalance !== undefined ? fields.openingBalance : current.openingBalance;
+        const jp = fields.januaryPayment !== undefined ? fields.januaryPayment : current.januaryPayment;
+        (0, database_1.getDb)()
+            .prepare(`INSERT INTO cf_salaries_section (cash_flow_id, opening_balance, january_payment)
+         VALUES (?, ?, ?)
+         ON CONFLICT(cash_flow_id) DO UPDATE SET
+            opening_balance = excluded.opening_balance,
+            january_payment = excluded.january_payment`)
+            .run(cashFlowId, ob, jp);
     },
 };
