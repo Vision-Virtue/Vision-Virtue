@@ -4124,7 +4124,7 @@ function renderSalaries() {
     }
     const v = Number(summary.payment[p] || 0);
     if (!v) return `<td class="vis-cf-num vis-cf-num-muted">—</td>`;
-    return `<td class="vis-cf-num vis-cf-num-out">(${Math.round(v).toLocaleString('en-US')})</td>`;
+    return `<td class="vis-cf-num vis-cf-num-out">${Math.round(Math.abs(v)).toLocaleString('en-US')}</td>`;
   }).join('');
 
   const obCells   = periodKeys.map(p => fmtCell(Math.round(Number(summary.ob[p]       || 0)), 'credit')).join('');
@@ -4139,7 +4139,7 @@ function renderSalaries() {
   tBody.innerHTML =
     `<tr><th>O.B</th>${obCells}${fmtCell(obFy,  'credit')}</tr>` +
     `<tr><th>Expenses</th>${expCells}${fmtCell(Math.round(expFy), 'credit')}</tr>` +
-    `<tr><th>Payment</th>${paymentCells}<td class="vis-cf-num vis-cf-num-out">${payFy ? `(${Math.round(payFy).toLocaleString('en-US')})` : '—'}</td></tr>` +
+    `<tr><th>Payment</th>${paymentCells}<td class="vis-cf-num vis-cf-num-out">${payFy ? Math.round(Math.abs(payFy)).toLocaleString('en-US') : '—'}</td></tr>` +
     `<tr><th>C.B</th>${cbCells}${fmtCell(cbFy, 'credit')}</tr>`;
 
   refreshSalariesStatus();
