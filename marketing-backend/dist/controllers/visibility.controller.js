@@ -3,7 +3,7 @@
    Visibility offering — Controller (Phase 1: Financial Structure)
    ============================================================ */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cfSalariesController = exports.cfInventoryController = exports.cfReceivablesController = exports.cfPayablesController = exports.cashFlowController = exports.salariesController = exports.budgetsController = exports.visibilityController = exports.BUDGET_CATEGORIES_BY_SECTION = exports.PL_SECTIONS = void 0;
+exports.cfManualController = exports.cfSalariesController = exports.cfInventoryController = exports.cfReceivablesController = exports.cfPayablesController = exports.cashFlowController = exports.salariesController = exports.budgetsController = exports.visibilityController = exports.BUDGET_CATEGORIES_BY_SECTION = exports.PL_SECTIONS = void 0;
 const zod_1 = require("zod");
 const partner_repository_1 = require("../db/partner.repository");
 const visibility_repository_1 = require("../db/visibility.repository");
@@ -15,6 +15,7 @@ const cf_payables_service_1 = require("../services/cf-payables.service");
 const cf_receivables_service_1 = require("../services/cf-receivables.service");
 const cf_inventory_service_1 = require("../services/cf-inventory.service");
 const cf_salaries_service_1 = require("../services/cf-salaries.service");
+const cf_manual_service_1 = require("../services/cf-manual.service");
 // ─── Constants from spec §2.3 (single source of truth, mirrored on FE) ─────
 exports.PL_SECTIONS = [
     'Revenues', 'COGS', 'R&D', 'S&M', 'G&A',
@@ -1383,5 +1384,115 @@ exports.cfSalariesController = {
         });
         const grid = (0, cf_salaries_service_1.computeSalariesGrid)(ctx.budget, ctx.cfId, ctx.customerKeyId);
         res.json({ salaries: grid });
+    },
+};
+/* ============================================================
+   CF — Manual sections controller (spec §7 / §8 / §9).
+   URL kind values use hyphens for readability ('other-adj');
+   the storage layer uses snake_case ('other_adj').
+   ============================================================ */
+const URL_KIND_TO_STORAGE = {
+    'other-adj': 'other_adj',
+    'financing': 'financing',
+    'capex': 'capex',
+};
+function resolveManualKind(req, res) {
+    const raw = String(req.params.kind || '').toLowerCase();
+    const kind = URL_KIND_TO_STORAGE[raw];
+    if (!kind) {
+        res.status(400).json({
+            error: { code: 'BAD_REQUEST', message: `Unknown manual section "${raw}".` },
+        });
+        return null;
+    }
+    return kind;
+}
+exports.cfManualController = {
+    /** GET /api/visibility/budgets/:id/cf/manual/:kind */
+    get(req, res) {
+        const ctx = requireFinalizedBudgetCf(req, res);
+        if (!ctx)
+            return;
+        const kind = resolveManualKind(req, res);
+        if (!kind)
+            return;
+        const grid = (0, cf_manual_service_1.computeManualGrid)(ctx.budget, ctx.cfId, kind);
+        res.json({ manual: grid });
+    },
+    /** POST /api/visibility/budgets/:id/cf/manual/:kind
+     *  Adds an empty row. Body optional: { description?: string }. */
+    create(req, res) {
+        const ctx = requireFinalizedBudgetCf(req, res);
+        if (!ctx)
+            return;
+        const kind = resolveManualKind(req, res);
+        if (!kind)
+            return;
+        const Schema = zod_1.z.object({ description: zod_1.z.string().max(200).optional() });
+        const parsed = Schema.safeParse(req.body || {});
+        if (!parsed.success) {
+            res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid create payload.' } });
+            return;
+        }
+        visibility_repository_1.cfManualRowRepo.create(ctx.cfId, kind, parsed.data.description || '');
+        const grid = (0, cf_manual_service_1.computeManualGrid)(ctx.budget, ctx.cfId, kind);
+        res.json({ manual: grid });
+    },
+    /** PATCH /api/visibility/budgets/:id/cf/manual/:kind/rows/:rowId
+     *  Body: { description?: string,
+     *          amounts?: { periodKey: number, ... } (signed) } */
+    patchRow(req, res) {
+        const ctx = requireFinalizedBudgetCf(req, res);
+        if (!ctx)
+            return;
+        const kind = resolveManualKind(req, res);
+        if (!kind)
+            return;
+        const rowId = String(req.params.rowId || '');
+        const existing = visibility_repository_1.cfManualRowRepo.getById(rowId);
+        if (!existing || existing.kind !== kind || existing.cashFlowId !== ctx.cfId) {
+            res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Row not found.' } });
+            return;
+        }
+        const Schema = zod_1.z.object({
+            description: zod_1.z.string().max(200).optional(),
+            amounts: zod_1.z.record(zod_1.z.string(), zod_1.z.number().finite()).optional(),
+        });
+        const parsed = Schema.safeParse(req.body);
+        if (!parsed.success) {
+            res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid manual-row patch payload.' } });
+            return;
+        }
+        if (parsed.data.description !== undefined) {
+            visibility_repository_1.cfManualRowRepo.updateDescription(rowId, parsed.data.description);
+        }
+        if (parsed.data.amounts) {
+            const allowed = new Set((0, visibility_repository_1.periodKeysFor)(ctx.budget.granularity));
+            for (const [periodKey, amount] of Object.entries(parsed.data.amounts)) {
+                if (!allowed.has(periodKey))
+                    continue;
+                visibility_repository_1.cfManualRowRepo.upsertAmount(rowId, periodKey, amount);
+            }
+        }
+        const grid = (0, cf_manual_service_1.computeManualGrid)(ctx.budget, ctx.cfId, kind);
+        res.json({ manual: grid });
+    },
+    /** DELETE /api/visibility/budgets/:id/cf/manual/:kind/rows/:rowId */
+    deleteRow(req, res) {
+        const ctx = requireFinalizedBudgetCf(req, res);
+        if (!ctx)
+            return;
+        const kind = resolveManualKind(req, res);
+        if (!kind)
+            return;
+        const rowId = String(req.params.rowId || '');
+        const existing = visibility_repository_1.cfManualRowRepo.getById(rowId);
+        if (!existing || existing.kind !== kind || existing.cashFlowId !== ctx.cfId) {
+            res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Row not found.' } });
+            return;
+        }
+        visibility_repository_1.cfManualRowRepo.delete(rowId);
+        const grid = (0, cf_manual_service_1.computeManualGrid)(ctx.budget, ctx.cfId, kind);
+        res.json({ manual: grid });
     },
 };

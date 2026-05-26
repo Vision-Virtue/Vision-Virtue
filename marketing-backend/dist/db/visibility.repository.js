@@ -4,7 +4,7 @@
    Tables: gl_accounts, financial_structure_state.
    ============================================================ */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cfSalariesSectionRepo = exports.cfInventoryPurchasesRepo = exports.cfInventorySectionRepo = exports.cfReceivablesPriorCarryRepo = exports.cfReceivablesRowRepo = exports.cfReceivablesSectionRepo = exports.cfPayablesPriorCarryRepo = exports.cfPayablesRowRepo = exports.cfPayablesSectionRepo = exports.PAYMENT_TERMS = exports.cashFlowRepo = exports.salariesStateRepo = exports.salariesRowRepo = exports.budgetCellRepo = exports.budgetLineRepo = exports.budgetRepo = exports.BUDGET_CAP_PER_CUSTOMER = exports.SCALES = exports.CURRENCIES = exports.GRANULARITIES = exports.orgStructureRepo = exports.orgEntityRepo = exports.ORG_DIMENSIONS = exports.financialStructureRepo = exports.glAccountRepo = void 0;
+exports.cfManualRowRepo = exports.CF_MANUAL_KINDS = exports.cfSalariesSectionRepo = exports.cfInventoryPurchasesRepo = exports.cfInventorySectionRepo = exports.cfReceivablesPriorCarryRepo = exports.cfReceivablesRowRepo = exports.cfReceivablesSectionRepo = exports.cfPayablesPriorCarryRepo = exports.cfPayablesRowRepo = exports.cfPayablesSectionRepo = exports.PAYMENT_TERMS = exports.cashFlowRepo = exports.salariesStateRepo = exports.salariesRowRepo = exports.budgetCellRepo = exports.budgetLineRepo = exports.budgetRepo = exports.BUDGET_CAP_PER_CUSTOMER = exports.SCALES = exports.CURRENCIES = exports.GRANULARITIES = exports.orgStructureRepo = exports.orgEntityRepo = exports.ORG_DIMENSIONS = exports.financialStructureRepo = exports.glAccountRepo = void 0;
 exports.periodKeysFor = periodKeysFor;
 const uuid_1 = require("uuid");
 const database_1 = require("./database");
@@ -985,5 +985,97 @@ exports.cfSalariesSectionRepo = {
             opening_balance = excluded.opening_balance,
             january_payment = excluded.january_payment`)
             .run(cashFlowId, ob, jp);
+    },
+};
+/* ============================================================
+   CF — Manual rows (Other Adjustments §7, Financing §8, Capex §9).
+   All three sections share identical UX: free-text description
+   + 12 monthly amounts (signed). FY column is computed at read
+   time as the sum of the period amounts.
+   ============================================================ */
+exports.CF_MANUAL_KINDS = ['other_adj', 'financing', 'capex'];
+function toClientManualRow(r, amounts) {
+    return {
+        id: r.id,
+        cashFlowId: r.cash_flow_id,
+        kind: r.kind,
+        description: r.description,
+        orderIndex: r.order_index,
+        amounts,
+    };
+}
+exports.cfManualRowRepo = {
+    listByCfAndKind(cashFlowId, kind) {
+        const db = (0, database_1.getDb)();
+        const rows = db
+            .prepare(`SELECT id, cash_flow_id, kind, description, order_index, created_at, updated_at
+         FROM cf_manual_rows
+         WHERE cash_flow_id = ? AND kind = ?
+         ORDER BY order_index ASC, created_at ASC`)
+            .all(cashFlowId, kind);
+        if (rows.length === 0)
+            return [];
+        const ids = rows.map(r => r.id);
+        const placeholders = ids.map(() => '?').join(',');
+        const amts = db
+            .prepare(`SELECT cf_manual_row_id, period_key, amount
+         FROM cf_manual_row_amounts
+         WHERE cf_manual_row_id IN (${placeholders})`)
+            .all(...ids);
+        const byRow = new Map();
+        for (const a of amts) {
+            const m = byRow.get(a.cf_manual_row_id) || {};
+            m[a.period_key] = a.amount;
+            byRow.set(a.cf_manual_row_id, m);
+        }
+        return rows.map(r => toClientManualRow(r, byRow.get(r.id) || {}));
+    },
+    create(cashFlowId, kind, description = '') {
+        const id = (0, uuid_1.v4)();
+        const now = new Date().toISOString();
+        const db = (0, database_1.getDb)();
+        const maxRow = db
+            .prepare(`SELECT COALESCE(MAX(order_index), -1) AS max_idx
+         FROM cf_manual_rows WHERE cash_flow_id = ? AND kind = ?`)
+            .get(cashFlowId, kind);
+        const orderIndex = (maxRow?.max_idx ?? -1) + 1;
+        db.prepare(`INSERT INTO cf_manual_rows
+         (id, cash_flow_id, kind, description, order_index, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`).run(id, cashFlowId, kind, description, orderIndex, now, now);
+        return {
+            id, cashFlowId, kind, description, orderIndex, amounts: {},
+        };
+    },
+    getById(id) {
+        const db = (0, database_1.getDb)();
+        const r = db
+            .prepare(`SELECT id, cash_flow_id, kind, description, order_index, created_at, updated_at
+         FROM cf_manual_rows WHERE id = ?`)
+            .get(id);
+        if (!r)
+            return null;
+        const amts = db
+            .prepare(`SELECT cf_manual_row_id, period_key, amount FROM cf_manual_row_amounts WHERE cf_manual_row_id = ?`)
+            .all(id);
+        const map = {};
+        for (const a of amts)
+            map[a.period_key] = a.amount;
+        return toClientManualRow(r, map);
+    },
+    updateDescription(id, description) {
+        const now = new Date().toISOString();
+        (0, database_1.getDb)()
+            .prepare(`UPDATE cf_manual_rows SET description = ?, updated_at = ? WHERE id = ?`)
+            .run(description, now, id);
+    },
+    upsertAmount(rowId, periodKey, amount) {
+        (0, database_1.getDb)()
+            .prepare(`INSERT INTO cf_manual_row_amounts (cf_manual_row_id, period_key, amount)
+         VALUES (?, ?, ?)
+         ON CONFLICT(cf_manual_row_id, period_key) DO UPDATE SET amount = excluded.amount`)
+            .run(rowId, periodKey, amount);
+    },
+    delete(id) {
+        (0, database_1.getDb)().prepare(`DELETE FROM cf_manual_rows WHERE id = ?`).run(id);
     },
 };

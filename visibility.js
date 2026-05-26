@@ -2933,6 +2933,9 @@ async function loadCurrentCf() {
   await loadReceivables(true);
   await loadInventory(true);
   await loadSalaries(true);
+  await loadManualSection('other-adj', true);
+  await loadManualSection('financing', true);
+  await loadManualSection('capex', true);
 }
 
 function renderCfStructure() {
@@ -4215,6 +4218,334 @@ document.addEventListener('blur', (ev) => {
   if (!t.hasAttribute('data-cf-sal-january')) return;
   const v = Math.abs(parseCfSigned(t.value));
   t.value = v ? Math.round(v).toLocaleString('en-US') : '';
+}, true);
+
+
+// ─────────────────────────────────────────────────────────────
+//  PHASE 7 — CF Manual sections (spec §7 / §8 / §9)
+//  Other Adjustments / Financing / Capex.
+//  All three share the same UX, so a single renderer is used,
+//  keyed by `kind` ('other-adj' | 'financing' | 'capex').
+// ─────────────────────────────────────────────────────────────
+
+const CF_MANUAL_KINDS = ['other-adj', 'financing', 'capex'];
+
+// Per-kind cache: { kind: grid }. grid shape mirrors the server.
+const cfManualCache = Object.create(null);
+const cfManualLastBudgetId = Object.create(null);
+
+function manualTableEl(kind) {
+  return document.querySelector(`[data-cf-manual-kind="${kind}"]`);
+}
+
+async function loadManualSection(kind, force = false) {
+  if (!CF_MANUAL_KINDS.includes(kind)) return;
+  if (!selectedCfBudgetId) { cfManualCache[kind] = null; renderManualSection(kind); return; }
+  if (!force && cfManualLastBudgetId[kind] === selectedCfBudgetId && cfManualCache[kind]) {
+    renderManualSection(kind); return;
+  }
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(selectedCfBudgetId)}/cf/manual/${encodeURIComponent(kind)}`);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showBanner(
+        document.getElementById('cfStructureErrorBanner'),
+        htmlEsc(body?.error?.message || `Could not load ${kind} (${res.status}).`),
+      );
+      cfManualCache[kind] = null;
+      cfManualLastBudgetId[kind] = null;
+      renderManualSection(kind);
+      return;
+    }
+    const data = await res.json();
+    cfManualCache[kind] = data.manual;
+    cfManualLastBudgetId[kind] = selectedCfBudgetId;
+  } catch (err) {
+    showBanner(
+      document.getElementById('cfStructureErrorBanner'),
+      htmlEsc(`Could not load ${kind}: ${(err && err.message) || err}`),
+    );
+    cfManualCache[kind] = null;
+  }
+  renderManualSection(kind);
+}
+
+function renderManualSection(kind) {
+  const table = manualTableEl(kind);
+  if (!table) return;
+  const tHead = table.querySelector('thead');
+  const tBody = table.querySelector('tbody');
+  const tFoot = table.querySelector('tfoot');
+  const grid  = cfManualCache[kind];
+
+  if (!grid) {
+    tHead.innerHTML = ''; tBody.innerHTML = ''; tFoot.innerHTML = '';
+    refreshManualStatus(kind);
+    return;
+  }
+  const { periodKeys, rows, totals, totalFy } = grid;
+  const yr = currentCf?.budget?.year || new Date().getFullYear();
+
+  // ── Header ─────────────────────────────────────────────────
+  tHead.innerHTML = `
+    <tr>
+      <th>Description</th>
+      ${periodKeys.map(p => `<th class="vis-cf-num">${cfPeriodLabel(p, yr)}</th>`).join('')}
+      <th class="vis-cf-num">FY</th>
+      <th aria-label="Actions"></th>
+    </tr>`;
+
+  // ── Body ───────────────────────────────────────────────────
+  if (!rows || rows.length === 0) {
+    const cols = 2 + periodKeys.length + 1;
+    tBody.innerHTML = `<tr><td class="vis-cf-manual-empty" colspan="${cols}">No rows yet. Click "+ Add row" to add one.</td></tr>`;
+  } else {
+    tBody.innerHTML = rows.map(r => {
+      const cells = periodKeys.map(p => {
+        const v = Number(r.amounts[p]) || 0;
+        const display = v ? formatCfSigned(v) : '';
+        return `<td class="vis-cf-num"><input
+          type="text"
+          inputmode="decimal"
+          class="vis-cf-carry-input"
+          data-cf-manual-amount="1"
+          data-cf-manual-period="${p}"
+          data-cf-manual-row="${r.id}"
+          placeholder="0"
+          value="${display}"
+        /></td>`;
+      }).join('');
+      const fyDisplay = r.fy ? formatCfSigned(r.fy) : '—';
+      const fyClass   = r.fy && r.fy < 0 ? 'vis-cf-num vis-cf-num-out' : 'vis-cf-num';
+      return `<tr data-cf-manual-row-id="${r.id}">
+        <td><input
+          type="text"
+          class="vis-cf-manual-desc"
+          data-cf-manual-desc="1"
+          data-cf-manual-row="${r.id}"
+          placeholder="Description"
+          value="${htmlEsc(r.description || '')}"
+        /></td>
+        ${cells}
+        <td class="${fyClass}">${fyDisplay}</td>
+        <td><button type="button" class="vis-cf-manual-delete" data-cf-manual-del="1" data-cf-manual-row="${r.id}" aria-label="Delete row">×</button></td>
+      </tr>`;
+    }).join('');
+  }
+
+  // ── Footer total ───────────────────────────────────────────
+  if (!rows || rows.length === 0) {
+    tFoot.innerHTML = '';
+  } else {
+    const totalCells = periodKeys.map(p => {
+      const v = Number(totals[p]) || 0;
+      const cls = v < 0 ? 'vis-cf-num vis-cf-num-out' : 'vis-cf-num';
+      return `<td class="${cls}">${v ? formatCfSigned(v) : '—'}</td>`;
+    }).join('');
+    const fyCls = totalFy < 0 ? 'vis-cf-num vis-cf-num-out' : 'vis-cf-num';
+    tFoot.innerHTML = `
+      <tr>
+        <th>Total</th>
+        ${totalCells}
+        <td class="${fyCls}">${totalFy ? formatCfSigned(totalFy) : '—'}</td>
+        <td></td>
+      </tr>`;
+  }
+
+  refreshManualStatus(kind);
+}
+
+/** Format a signed CF amount: positive → "1,234", negative → "(1,234)". */
+function formatCfSigned(n) {
+  if (!Number.isFinite(n) || n === 0) return '';
+  const mag = Math.round(Math.abs(n)).toLocaleString('en-US');
+  return n < 0 ? `(${mag})` : mag;
+}
+
+function refreshManualStatus(kind) {
+  const badge = document.querySelector(`[data-cf-status="${kind}"]`);
+  if (!badge) return;
+  const grid = cfManualCache[kind];
+  // Optional unless the user added at least one row; once any rows
+  // exist, every cell must have a value (or 0) per §10.
+  if (!grid || !grid.rows || grid.rows.length === 0) {
+    badge.textContent = 'Optional';
+    badge.classList.remove('vis-cf-section-status-filled');
+    badge.classList.add('vis-cf-section-status-optional');
+    return;
+  }
+  // All rows must have every period filled (0 is allowed as an
+  // explicit zero — backend persists it).
+  const allFilled = grid.rows.every(r =>
+    grid.periodKeys.every(p => r.amounts[p] !== undefined && r.amounts[p] !== null)
+  );
+  badge.textContent = allFilled ? 'Filled' : 'Required';
+  badge.classList.toggle('vis-cf-section-status-filled', allFilled);
+  badge.classList.toggle('vis-cf-section-status-optional', false);
+}
+
+// ─── Mutations ─────────────────────────────────────────────────
+
+async function addManualRow(kind) {
+  if (!selectedCfBudgetId) return;
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(selectedCfBudgetId)}/cf/manual/${encodeURIComponent(kind)}`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({}),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showBanner(document.getElementById('cfStructureErrorBanner'),
+        htmlEsc(body?.error?.message || `Could not add row (${res.status}).`));
+      return;
+    }
+    const data = await res.json();
+    cfManualCache[kind] = data.manual;
+    renderManualSection(kind);
+  } catch (err) {
+    showBanner(document.getElementById('cfStructureErrorBanner'),
+      htmlEsc(`Could not add row: ${(err && err.message) || err}`));
+  }
+}
+
+async function deleteManualRow(kind, rowId) {
+  if (!selectedCfBudgetId || !rowId) return;
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(selectedCfBudgetId)}/cf/manual/${encodeURIComponent(kind)}/rows/${encodeURIComponent(rowId)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showBanner(document.getElementById('cfStructureErrorBanner'),
+        htmlEsc(body?.error?.message || `Could not delete row (${res.status}).`));
+      return;
+    }
+    const data = await res.json();
+    cfManualCache[kind] = data.manual;
+    renderManualSection(kind);
+  } catch (err) {
+    showBanner(document.getElementById('cfStructureErrorBanner'),
+      htmlEsc(`Could not delete row: ${(err && err.message) || err}`));
+  }
+}
+
+function patchManualRowSoon(kind, rowId, fields) {
+  if (!selectedCfBudgetId || !rowId) return;
+  // Distinct debounce key per (kind, row, field) so concurrent edits
+  // to different cells coalesce independently.
+  const fieldKey = fields.description !== undefined
+    ? 'desc'
+    : `amt:${Object.keys(fields.amounts || {})[0] || ''}`;
+  const key = `cf:manual:${kind}:${rowId}:${fieldKey}`;
+  debounce(key, async () => {
+    try {
+      const res = await api(`/api/visibility/budgets/${encodeURIComponent(selectedCfBudgetId)}/cf/manual/${encodeURIComponent(kind)}/rows/${encodeURIComponent(rowId)}`, {
+        method:  'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify(fields),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        showBanner(document.getElementById('cfStructureErrorBanner'),
+          htmlEsc(body?.error?.message || `Save failed (${res.status}).`));
+        return;
+      }
+      const data = await res.json();
+      cfManualCache[kind] = data.manual;
+      // Re-render only the totals + FY (don't blow away inputs the user
+      // is still typing into). Cheapest correct option: full re-render
+      // only if the user isn't currently focused on an input in this
+      // table.
+      const tbl  = manualTableEl(kind);
+      const live = tbl && tbl.contains(document.activeElement);
+      if (!live) renderManualSection(kind);
+      else {
+        // Recompute totals row in place.
+        const tFoot = tbl.querySelector('tfoot');
+        const grid  = data.manual;
+        if (tFoot && grid && grid.rows.length > 0) {
+          const totalCells = grid.periodKeys.map(p => {
+            const v = Number(grid.totals[p]) || 0;
+            const cls = v < 0 ? 'vis-cf-num vis-cf-num-out' : 'vis-cf-num';
+            return `<td class="${cls}">${v ? formatCfSigned(v) : '—'}</td>`;
+          }).join('');
+          const fyCls = grid.totalFy < 0 ? 'vis-cf-num vis-cf-num-out' : 'vis-cf-num';
+          tFoot.innerHTML = `<tr><th>Total</th>${totalCells}<td class="${fyCls}">${grid.totalFy ? formatCfSigned(grid.totalFy) : '—'}</td><td></td></tr>`;
+        }
+        // And the focused row's FY cell.
+        const row = grid && grid.rows.find(r => r.id === document.activeElement?.dataset?.cfManualRow);
+        if (row) {
+          const tr = tbl.querySelector(`tr[data-cf-manual-row-id="${row.id}"]`);
+          if (tr) {
+            const cells = tr.querySelectorAll('td');
+            // FY is second-to-last cell (action button is last).
+            const fyCell = cells[cells.length - 2];
+            if (fyCell) {
+              fyCell.className = row.fy < 0 ? 'vis-cf-num vis-cf-num-out' : 'vis-cf-num';
+              fyCell.textContent = row.fy ? formatCfSigned(row.fy) : '—';
+            }
+          }
+        }
+        refreshManualStatus(kind);
+      }
+    } catch (err) {
+      showBanner(document.getElementById('cfStructureErrorBanner'),
+        htmlEsc(`Save failed: ${(err && err.message) || err}`));
+    }
+  }, 400);
+}
+
+// ─── Event listeners (delegated) ──────────────────────────────
+
+// Add row buttons.
+document.addEventListener('click', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLElement)) return;
+  const addKind = t.getAttribute('data-cf-manual-add');
+  if (addKind) { ev.preventDefault(); void addManualRow(addKind); return; }
+  if (t.hasAttribute('data-cf-manual-del')) {
+    ev.preventDefault();
+    const rowId = t.getAttribute('data-cf-manual-row');
+    const tbl   = t.closest('[data-cf-manual-kind]');
+    const kind  = tbl && tbl.getAttribute('data-cf-manual-kind');
+    if (kind && rowId) void deleteManualRow(kind, rowId);
+  }
+});
+
+// Description input.
+document.addEventListener('input', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (!t.hasAttribute('data-cf-manual-desc')) return;
+  const tbl  = t.closest('[data-cf-manual-kind]');
+  const kind = tbl && tbl.getAttribute('data-cf-manual-kind');
+  const rowId = t.getAttribute('data-cf-manual-row');
+  if (!kind || !rowId) return;
+  patchManualRowSoon(kind, rowId, { description: t.value });
+});
+
+// Amount input.
+document.addEventListener('input', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (!t.hasAttribute('data-cf-manual-amount')) return;
+  const tbl  = t.closest('[data-cf-manual-kind]');
+  const kind = tbl && tbl.getAttribute('data-cf-manual-kind');
+  const rowId = t.getAttribute('data-cf-manual-row');
+  const period = t.getAttribute('data-cf-manual-period');
+  if (!kind || !rowId || !period) return;
+  const v = parseCfSigned(t.value);
+  patchManualRowSoon(kind, rowId, { amounts: { [period]: v } });
+});
+
+// Amount blur — pretty-print (parens for negatives).
+document.addEventListener('blur', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLInputElement)) return;
+  if (!t.hasAttribute('data-cf-manual-amount')) return;
+  const v = parseCfSigned(t.value);
+  t.value = v ? formatCfSigned(v) : '';
 }, true);
 
 

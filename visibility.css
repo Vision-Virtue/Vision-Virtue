@@ -1521,6 +1521,59 @@
   color: rgba(255, 255, 255, 0.85);
 }
 .vis-cf-summary-table { min-width: 800px; }
+
+/* Manual sections (Other Adj / Financing / Capex) */
+.vis-cf-manual-actions {
+  margin: 0.75rem 0 0.25rem;
+}
+.vis-cf-manual-desc {
+  width: 14rem;
+  background: rgba(255, 255, 255, 0.04);
+  color: #ffffff;
+  border: 1px dashed rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+.vis-cf-manual-desc:focus {
+  outline: none;
+  border-style: solid;
+  border-color: rgba(217, 156, 33, 0.6);
+  background: rgba(217, 156, 33, 0.08);
+}
+.vis-cf-manual-desc-empty::placeholder {
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.4);
+}
+.vis-cf-manual-delete {
+  background: transparent;
+  border: 1px solid rgba(255, 80, 80, 0.35);
+  color: rgba(255, 120, 120, 0.85);
+  border-radius: 4px;
+  padding: 0.15rem 0.45rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+  line-height: 1;
+}
+.vis-cf-manual-delete:hover {
+  background: rgba(255, 80, 80, 0.12);
+  color: #ffb0b0;
+}
+.vis-cf-manual-empty {
+  text-align: center;
+  color: rgba(255, 255, 255, 0.45);
+  font-style: italic;
+  padding: 1rem 0.5rem;
+  font-size: 0.85rem;
+}
+.vis-cf-summary-table tfoot th,
+.vis-cf-summary-table tfoot td {
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.03);
+}
+
 .vis-cf-summary-table tbody th {
   text-align: left;
   font-weight: 700;

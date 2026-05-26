@@ -730,7 +730,7 @@
             </div>
           </details>
 
-          <!-- §2 / row 4 — Other Adjustments -->
+          <!-- §2 / row 4 — Other Adjustments (§7) -->
           <details class="vis-cf-section" data-cf-section="other-adj">
             <summary class="vis-cf-section-summary">
               <span class="vis-cf-section-num">4</span>
@@ -738,11 +738,21 @@
               <span class="vis-cf-section-status vis-cf-section-status-optional" data-cf-status="other-adj">Optional</span>
             </summary>
             <div class="vis-cf-section-body">
-              <div class="vis-cf-coming">Manual adjustment rows arrive in a future phase.</div>
+              <div class="vis-cf-grid-wrap">
+                <table class="vis-cf-grid vis-cf-summary-table" id="cfOtherAdjTable" data-cf-manual-kind="other-adj">
+                  <thead></thead>
+                  <tbody></tbody>
+                  <tfoot></tfoot>
+                </table>
+              </div>
+              <div class="vis-cf-manual-actions">
+                <button type="button" class="vis-btn vis-btn-ghost" data-cf-manual-add="other-adj">+ Add row</button>
+              </div>
+              <p class="vis-cf-field-hint">Free-form adjustments per period. Enter positive amounts as <strong>1,234</strong> and negative as <strong>(1,234)</strong>. FY column auto-sums the 12 months.</p>
             </div>
           </details>
 
-          <!-- §2 / row 5 — Financing -->
+          <!-- §2 / row 5 — Financing (§8) -->
           <details class="vis-cf-section" data-cf-section="financing">
             <summary class="vis-cf-section-summary">
               <span class="vis-cf-section-num">5</span>
@@ -750,11 +760,21 @@
               <span class="vis-cf-section-status vis-cf-section-status-optional" data-cf-status="financing">Optional</span>
             </summary>
             <div class="vis-cf-section-body">
-              <div class="vis-cf-coming">Financing rows arrive in a future phase.</div>
+              <div class="vis-cf-grid-wrap">
+                <table class="vis-cf-grid vis-cf-summary-table" id="cfFinancingTable" data-cf-manual-kind="financing">
+                  <thead></thead>
+                  <tbody></tbody>
+                  <tfoot></tfoot>
+                </table>
+              </div>
+              <div class="vis-cf-manual-actions">
+                <button type="button" class="vis-btn vis-btn-ghost" data-cf-manual-add="financing">+ Add row</button>
+              </div>
+              <p class="vis-cf-field-hint">Typical rows: <strong>Interest expense</strong>, <strong>Interest on deposits</strong>, <strong>Fundraising</strong>. Cash inflows positive; outflows in (parens).</p>
             </div>
           </details>
 
-          <!-- §2 / row 6 — Capex -->
+          <!-- §2 / row 6 — Capex (§9) -->
           <details class="vis-cf-section" data-cf-section="capex">
             <summary class="vis-cf-section-summary">
               <span class="vis-cf-section-num">6</span>
@@ -762,7 +782,17 @@
               <span class="vis-cf-section-status vis-cf-section-status-optional" data-cf-status="capex">Optional</span>
             </summary>
             <div class="vis-cf-section-body">
-              <div class="vis-cf-coming">Capex rows arrive in a future phase.</div>
+              <div class="vis-cf-grid-wrap">
+                <table class="vis-cf-grid vis-cf-summary-table" id="cfCapexTable" data-cf-manual-kind="capex">
+                  <thead></thead>
+                  <tbody></tbody>
+                  <tfoot></tfoot>
+                </table>
+              </div>
+              <div class="vis-cf-manual-actions">
+                <button type="button" class="vis-btn vis-btn-ghost" data-cf-manual-add="capex">+ Add row</button>
+              </div>
+              <p class="vis-cf-field-hint">Capital expenditures (cash outflows) — e.g. <strong>Laptops</strong>, <strong>Office build-out</strong>, <strong>Lab equipment</strong>. Enter as (parens).</p>
             </div>
           </details>
 
