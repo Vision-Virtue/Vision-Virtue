@@ -2289,11 +2289,12 @@ function renderPivot(data) {
   const opexPctFy = absFy('Revenues') !== 0 ? (opexFy / absFy('Revenues')) * 100 : 0;
   writePct('Total OPEX %', opexPctCells, opexPctFy, 'is-pct is-opex-pct');
 
-  // Adjusted EBITDA = |Revenues| - |COGS| - Total OPEX  (= GP - OPEX)
+  // Adjusted EBITDA = |Revenues| - |COGS| - Total OPEX  (= GP - OPEX).
+  // Display in accounting format so a loss renders as ($X,XXX).
   const ebCells = {};
   for (const p of periodKeys) ebCells[p] = gpCells[p] - opexCells[p];
   const ebFy = gpFy - opexFy;
-  writeComputed('Adjusted EBITDA', ebCells, ebFy, fmtAbs, 'is-section is-ebitda');
+  writeComputed('Adjusted EBITDA', ebCells, ebFy, fmtAcct, 'is-section is-ebitda');
 
   // Adjusted EBITDA % = EBITDA / |Revenues| × 100
   const ebPct = {};
@@ -2978,7 +2979,9 @@ function renderCfStructure() {
     if (document.activeElement !== obInput && obInput.value !== formatted) {
       obInput.value = persisted ? formatted : '';
     }
-    obInput.disabled = status === 'finalized';
+    // Per §10: finalized CFs remain editable — section saves overwrite
+    // the same CF (no version history). Don't lock the input.
+    obInput.disabled = false;
   }
 
   refreshCfSectionStatuses();
