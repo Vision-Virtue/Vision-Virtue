@@ -1288,6 +1288,21 @@ export const cfPayablesController = {
     const grid = computePayablesGrid(ctx.budget, ctx.cfId, ctx.customerKeyId);
     res.json({ payables: grid });
   },
+
+  /** DELETE /api/visibility/budgets/:id/cf/payables/rows/:rowId
+   *  Used by the orphan-rows banner (§16). Refuses to delete rows
+   *  for live budget combos — they auto-reappear on the next compute. */
+  deleteRow(req: Request, res: Response): void {
+    const ctx = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const row = cfPayablesRowRepo.getById(req.params.rowId);
+    if (!row || row.cashFlowId !== ctx.cfId) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Payables row not found.' } });
+      return;
+    }
+    cfPayablesRowRepo.deleteById(row.id);
+    const grid = computePayablesGrid(ctx.budget, ctx.cfId, ctx.customerKeyId);
+    res.json({ payables: grid });
+  },
 };
 
 /* ============================================================
@@ -1343,6 +1358,20 @@ export const cfReceivablesController = {
         cfReceivablesPriorCarryRepo.upsert(row.id, periodKey, amount);
       }
     }
+    const grid = computeReceivablesGrid(ctx.budget, ctx.cfId, ctx.customerKeyId);
+    res.json({ receivables: grid });
+  },
+
+  /** DELETE /api/visibility/budgets/:id/cf/receivables/rows/:rowId
+   *  Used by the orphan-rows banner (§16). */
+  deleteRow(req: Request, res: Response): void {
+    const ctx = requireFinalizedBudgetCf(req, res); if (!ctx) return;
+    const row = cfReceivablesRowRepo.getById(req.params.rowId);
+    if (!row || row.cashFlowId !== ctx.cfId) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Receivables row not found.' } });
+      return;
+    }
+    cfReceivablesRowRepo.deleteById(row.id);
     const grid = computeReceivablesGrid(ctx.budget, ctx.cfId, ctx.customerKeyId);
     res.json({ receivables: grid });
   },

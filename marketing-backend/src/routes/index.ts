@@ -265,14 +265,16 @@ router.get(   '/visibility/budgets/:id/cf',                        (req, res) =>
 router.patch( '/visibility/budgets/:id/cf',                        (req, res) => cashFlowController.patch(req, res));
 
 // CF — Payables (spec §3)
-router.get(   '/visibility/budgets/:id/cf/payables',                  (req, res) => cfPayablesController.get(req, res));
-router.patch( '/visibility/budgets/:id/cf/payables',                  (req, res) => cfPayablesController.patchSection(req, res));
-router.patch( '/visibility/budgets/:id/cf/payables/rows/:rowId',      (req, res) => cfPayablesController.patchRow(req, res));
+router.get(    '/visibility/budgets/:id/cf/payables',                 (req, res) => cfPayablesController.get(req, res));
+router.patch(  '/visibility/budgets/:id/cf/payables',                 (req, res) => cfPayablesController.patchSection(req, res));
+router.patch(  '/visibility/budgets/:id/cf/payables/rows/:rowId',     (req, res) => cfPayablesController.patchRow(req, res));
+router.delete( '/visibility/budgets/:id/cf/payables/rows/:rowId',     (req, res) => cfPayablesController.deleteRow(req, res));
 
 // CF — Receivables (spec §4)
-router.get(   '/visibility/budgets/:id/cf/receivables',               (req, res) => cfReceivablesController.get(req, res));
-router.patch( '/visibility/budgets/:id/cf/receivables',               (req, res) => cfReceivablesController.patchSection(req, res));
-router.patch( '/visibility/budgets/:id/cf/receivables/rows/:rowId',   (req, res) => cfReceivablesController.patchRow(req, res));
+router.get(    '/visibility/budgets/:id/cf/receivables',              (req, res) => cfReceivablesController.get(req, res));
+router.patch(  '/visibility/budgets/:id/cf/receivables',              (req, res) => cfReceivablesController.patchSection(req, res));
+router.patch(  '/visibility/budgets/:id/cf/receivables/rows/:rowId',  (req, res) => cfReceivablesController.patchRow(req, res));
+router.delete( '/visibility/budgets/:id/cf/receivables/rows/:rowId',  (req, res) => cfReceivablesController.deleteRow(req, res));
 
 // CF — Inventory (spec §5)
 router.get(   '/visibility/budgets/:id/cf/inventory',                 (req, res) => cfInventoryController.get(req, res));

@@ -547,7 +547,27 @@ function activateTab(tabName) {
   }
   if (tabName === 'cf-forecast') void loadForecast(true);
   if (tabName === 'cf-dashboard') void loadDashboard(true);
+  if (tabName === 'cf-structure') maybeShowCfHelp();
 }
+
+/** Show the pre-entry CF Structure help (§17) on first visit.
+ *  Dismissal is remembered in localStorage. */
+function maybeShowCfHelp() {
+  const help = document.getElementById('cfStructureHelp');
+  if (!help) return;
+  try {
+    if (localStorage.getItem('vv-cf-help-dismissed') === '1') {
+      help.hidden = true;
+      return;
+    }
+  } catch (_e) { /* private mode — show every time */ }
+  help.hidden = false;
+}
+document.getElementById('cfStructureHelpClose')?.addEventListener('click', () => {
+  const help = document.getElementById('cfStructureHelp');
+  if (help) help.hidden = true;
+  try { localStorage.setItem('vv-cf-help-dismissed', '1'); } catch (_e) { /* ignore */ }
+});
 for (const t of tabs) {
   t.addEventListener('click', () => {
     if (t.classList.contains('is-disabled')) return;
@@ -3214,15 +3234,13 @@ function renderPayables() {
   const { periodKeys, rows, summary, openingBalance, monthlySupported } = grid;
   const yr = currentCf?.budget?.year || new Date().getFullYear();
 
-  // Granularity warning (Phase 3 supports monthly only).
-  if (warn) {
-    if (!monthlySupported) {
-      warn.innerHTML = 'Payables computation is monthly-only in this phase. Switch the budget to <strong>Monthly</strong> granularity to see Expense / Payment values.';
-      warn.hidden = false;
-    } else {
-      warn.hidden = true;
-    }
-  }
+  // Granularity warning is no longer relevant (§14 — all granularities
+  // now compute payment lag). Banner kept hidden for back-compat.
+  if (warn) warn.hidden = true;
+  void monthlySupported;
+
+  // Orphan-rows banner (§16).
+  renderOrphansBanner('payables', grid.orphans || []);
 
   // Opening balance — signed display. Positive = debit balance
   // (no parens), negative = credit balance (parens). Preserve focus
@@ -3355,6 +3373,71 @@ function renderPayables() {
 
   refreshPayablesStatus();
 }
+
+/** Render the orphan-rows banner (§16) for a given WC section.
+ *  `section` is 'payables' or 'receivables'. */
+function renderOrphansBanner(section, orphans) {
+  const banner = document.getElementById(section === 'payables'
+    ? 'cfPayablesOrphansBanner'
+    : 'cfReceivablesOrphansBanner');
+  if (!banner) return;
+  if (!orphans || orphans.length === 0) {
+    banner.hidden = true;
+    banner.innerHTML = '';
+    return;
+  }
+  const listItems = orphans.map(o => {
+    const tag = `${htmlEsc(o.plSection)} · ${htmlEsc(o.budgetCategory)}`;
+    return `<li>
+      <span class="vis-cf-orphan-label">${tag}</span>
+      <button type="button"
+              class="vis-cf-manual-delete"
+              data-cf-orphan-section="${section}"
+              data-cf-orphan-row="${o.rowId}"
+              aria-label="Delete orphan row">×</button>
+    </li>`;
+  }).join('');
+  banner.innerHTML = `
+    <div class="vis-cf-orphan-head">
+      <strong>${orphans.length} ${section} row${orphans.length === 1 ? '' : 's'} reference combinations no longer in the budget.</strong>
+      Review or delete below.
+    </div>
+    <ul class="vis-cf-orphan-list">${listItems}</ul>`;
+  banner.hidden = false;
+}
+
+// Delete-orphan click handler.
+document.addEventListener('click', async (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLElement)) return;
+  if (!t.hasAttribute('data-cf-orphan-row')) return;
+  ev.preventDefault();
+  const section = t.getAttribute('data-cf-orphan-section');
+  const rowId   = t.getAttribute('data-cf-orphan-row');
+  if (!section || !rowId || !selectedCfBudgetId) return;
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(selectedCfBudgetId)}/cf/${section}/rows/${encodeURIComponent(rowId)}`, {
+      method: 'DELETE',
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      showBanner(document.getElementById('cfStructureErrorBanner'),
+        htmlEsc(body?.error?.message || `Could not delete orphan row (${res.status}).`));
+      return;
+    }
+    const data = await res.json();
+    if (section === 'payables' && data?.payables) {
+      currentPayables = data;
+      renderPayables();
+    } else if (section === 'receivables' && data?.receivables) {
+      currentReceivables = data;
+      renderReceivables();
+    }
+  } catch (err) {
+    showBanner(document.getElementById('cfStructureErrorBanner'),
+      htmlEsc(`Could not delete orphan row: ${(err && err.message) || err}`));
+  }
+});
 
 /** Update the Payables section badge: Filled iff O.B set AND every
  *  row has a term. Prior-carry cells are optional — empty means 0. */
@@ -3567,14 +3650,11 @@ function renderReceivables() {
   const { periodKeys, rows, summary, openingBalance, monthlySupported } = grid;
   const yr = currentCf?.budget?.year || new Date().getFullYear();
 
-  if (warn) {
-    if (!monthlySupported) {
-      warn.innerHTML = 'Receivables computation is monthly-only in this phase. Switch the budget to <strong>Monthly</strong> granularity to see Revenue / Payment values.';
-      warn.hidden = false;
-    } else {
-      warn.hidden = true;
-    }
-  }
+  if (warn) warn.hidden = true;
+  void monthlySupported;
+
+  // Orphan-rows banner (§16).
+  renderOrphansBanner('receivables', grid.orphans || []);
 
   if (obIn) {
     const formatted = fmtCfSigned(openingBalance, true);

@@ -531,6 +531,20 @@
         <div class="vis-banner vis-banner-info"  id="cfStructureInfoBanner"  hidden></div>
         <div class="vis-empty" id="cfStructureEmpty" hidden>Select a finalized budget to begin configuring Cash Flow sections.</div>
 
+        <!-- Pre-entry help (§17) — shown until the user dismisses. -->
+        <aside class="vis-cf-help" id="cfStructureHelp" hidden>
+          <div class="vis-cf-help-head">
+            <strong>How CF Structure works</strong>
+            <button type="button" class="vis-cf-help-close" id="cfStructureHelpClose" aria-label="Dismiss help">×</button>
+          </div>
+          <div class="vis-cf-help-body">
+            <p><strong>Opening Balances (O.B):</strong> the closing balance from your prior year. Liabilities (A/P, accrued salaries) are <em>credit balances</em>, entered as a positive amount and displayed as <code>($X,XXX)</code>. Assets (cash, A/R, inventory) are <em>debit balances</em>, displayed as <code>$X,XXX</code>.</p>
+            <p><strong>Payment terms (Payables / Receivables):</strong> each row picks a term — <code>Cash</code>, <code>30+</code>, <code>60+</code>, <code>90+</code>, <code>120+</code>, <code>180+</code>. The cash-out (or cash-in) month = expense month + lag-in-days. For example, a <code>60+</code> expense in March is paid in May.</p>
+            <p><strong>Prior-period carry:</strong> yellow "Enter" cells in early months for terms longer than the budget can look back. Empty = $0 — no obligation unless you actually had pre-year activity to settle.</p>
+            <p><strong>Finalize</strong> unlocks once Opening Cash + every required section badge says <strong>Filled</strong>. Optional sections (Other Adjustments / Financing / Capex) don't gate it.</p>
+          </div>
+        </aside>
+
         <!-- Section list (spec §2). Each <details> is a collapsible
              top-level section; bodies for §3–§9 are implemented in
              later phases. -->
@@ -555,6 +569,7 @@
                     id="cfOpeningCashInput"
                     placeholder="0"
                     autocomplete="off"
+                    title="Cash on hand at the start of the budget year. Debit balance — enter as a positive amount; displayed as $X,XXX."
                   />
                 </span>
               </label>
@@ -579,6 +594,7 @@
                 </summary>
                 <div class="vis-cf-subsection-body" id="cfPayablesBody">
                   <div class="vis-banner vis-banner-warn" id="cfPayablesGranularityWarn" hidden></div>
+                  <div class="vis-banner vis-banner-warn" id="cfPayablesOrphansBanner" hidden></div>
                   <label class="vis-cf-field">
                     <span class="vis-cf-field-label">Opening Balance (A/P)</span>
                     <span class="vis-cf-input-wrap">
@@ -590,6 +606,7 @@
                         id="cfPayablesObInput"
                         placeholder="0"
                         autocomplete="off"
+                        title="Closing A/P from the prior year — what you owed vendors at year-end. Credit balance (liability); enter as a positive amount; displayed as ($X,XXX)."
                       />
                     </span>
                   </label>
@@ -623,6 +640,7 @@
                 </summary>
                 <div class="vis-cf-subsection-body" id="cfReceivablesBody">
                   <div class="vis-banner vis-banner-warn" id="cfReceivablesGranularityWarn" hidden></div>
+                  <div class="vis-banner vis-banner-warn" id="cfReceivablesOrphansBanner" hidden></div>
                   <label class="vis-cf-field">
                     <span class="vis-cf-field-label">Opening Balance (A/R)</span>
                     <span class="vis-cf-input-wrap">
@@ -634,6 +652,7 @@
                         id="cfReceivablesObInput"
                         placeholder="0"
                         autocomplete="off"
+                        title="Closing A/R from the prior year — what customers owed you at year-end. Debit balance (asset); enter as a positive amount; displayed as $X,XXX."
                       />
                     </span>
                   </label>
@@ -676,6 +695,7 @@
                         id="cfInventoryObInput"
                         placeholder="0"
                         autocomplete="off"
+                        title="Inventory on hand at the start of the budget year. Debit balance (asset); enter as a positive amount; displayed as $X,XXX."
                       />
                     </span>
                   </label>
@@ -714,6 +734,7 @@
                     id="cfSalariesObInput"
                     placeholder="0"
                     autocomplete="off"
+                    title="Accrued salary liability from the prior year — unpaid salaries at year-end. Credit balance (liability); enter as a positive amount; displayed as ($X,XXX)."
                   />
                 </span>
               </label>
