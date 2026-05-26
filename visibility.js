@@ -545,6 +545,7 @@ function activateTab(tabName) {
   if (tabName === 'cf-structure' || tabName === 'cf-forecast' || tabName === 'cf-dashboard') {
     void refreshCfBudgetPickers();
   }
+  if (tabName === 'cf-forecast') void loadForecast(true);
 }
 for (const t of tabs) {
   t.addEventListener('click', () => {
@@ -3055,6 +3056,7 @@ document.addEventListener('change', (ev) => {
     if (other !== t) other.value = selectedCfBudgetId || '';
   }
   void loadCurrentCf();
+  void loadForecast(true);
 });
 
 // Live edits on the Opening Cash field — debounced autosave; the
@@ -4636,6 +4638,245 @@ document.addEventListener('blur', (ev) => {
   const v = parseCfSigned(t.value);
   t.value = v ? formatCfSigned(v) : '';
 }, true);
+
+
+// ─────────────────────────────────────────────────────────────
+//  PHASE 8 — CF Forecast view (spec §11 + §12)
+// ─────────────────────────────────────────────────────────────
+
+let currentForecast = null;
+let lastForecastBudgetId = null;
+let cfForecastView = { period: 'monthly', scale: 'standard', burnDetail: 'expanded' };
+
+async function loadForecast(force = false) {
+  const body  = document.getElementById('cfForecastBody');
+  const empty = document.getElementById('cfForecastEmpty');
+  if (!body || !empty) return;
+  if (!selectedCfBudgetId) {
+    currentForecast = null;
+    body.hidden = true;
+    empty.hidden = false;
+    empty.textContent = cfBudgetCache.length === 0
+      ? 'No finalized budgets yet — finalize one in tab 3.'
+      : 'Select a finalized budget to view the Cash Flow forecast.';
+    return;
+  }
+  if (!force && lastForecastBudgetId === selectedCfBudgetId && currentForecast) {
+    renderForecast();
+    return;
+  }
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(selectedCfBudgetId)}/cf/forecast`);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      showBanner(
+        document.getElementById('cfForecastErrorBanner'),
+        htmlEsc(data?.error?.message || `Could not load forecast (${res.status}).`),
+      );
+      currentForecast = null;
+      body.hidden = true;
+      empty.hidden = false;
+      empty.textContent = 'Forecast unavailable.';
+      return;
+    }
+    const data = await res.json();
+    currentForecast = data.forecast;
+    lastForecastBudgetId = selectedCfBudgetId;
+    showBanner(document.getElementById('cfForecastErrorBanner'), '');
+  } catch (err) {
+    currentForecast = null;
+    showBanner(
+      document.getElementById('cfForecastErrorBanner'),
+      htmlEsc(`Could not load forecast: ${(err && err.message) || err}`),
+    );
+    body.hidden = true;
+    empty.hidden = false;
+    return;
+  }
+  renderForecast();
+}
+
+/** Aggregate native periods (typically monthly) into the chosen
+ *  display period. Returns { displayKeys, ob, cb, movements } where
+ *  movements has the same per-key shape as `rows` minus ob/cb. */
+function aggregateForecast(grid, period) {
+  const native = grid.periodKeys;          // budget native keys
+  const isMonthly = native.length === 12 && native.every(k => /^M\d{2}$/.test(k));
+  const isQuarterly = native.length === 4 && native.every(k => /^Q\d$/.test(k));
+
+  // Determine display group → list of native keys.
+  let groups;
+  if (period === 'monthly') {
+    groups = native.map(k => ({ key: k, members: [k] }));
+  } else if (period === 'quarterly') {
+    if (isMonthly) {
+      groups = [
+        { key: 'Q1', members: ['M01','M02','M03'] },
+        { key: 'Q2', members: ['M04','M05','M06'] },
+        { key: 'Q3', members: ['M07','M08','M09'] },
+        { key: 'Q4', members: ['M10','M11','M12'] },
+      ];
+    } else if (isQuarterly) {
+      groups = native.map(k => ({ key: k, members: [k] }));
+    } else {
+      groups = [{ key: 'FY', members: native }];
+    }
+  } else {  // fy
+    groups = [{ key: 'FY', members: native }];
+  }
+
+  const movementRows = ['ebitda', 'wc', 'salaries', 'otherAdj', 'financing', 'capex'];
+  const sumGroup = (rec, members) => members.reduce((s, m) => s + (Number(rec[m]) || 0), 0);
+
+  const displayKeys = groups.map(g => g.key);
+  const ob = {}, cb = {}, movements = {};
+  for (const name of movementRows) movements[name] = {};
+
+  for (const g of groups) {
+    // OB of the group = OB of the first month in the group.
+    ob[g.key] = Number(grid.rows.ob[g.members[0]]) || 0;
+    // CB of the group = CB of the last month in the group.
+    cb[g.key] = Number(grid.rows.cb[g.members[g.members.length - 1]]) || 0;
+    for (const name of movementRows) {
+      movements[name][g.key] = sumGroup(grid.rows[name], g.members);
+    }
+  }
+
+  // WC breakdown — same aggregation.
+  const wcKeys = ['payables', 'receivables', 'inventory', 'total'];
+  const wc = {};
+  for (const k of wcKeys) wc[k] = {};
+  for (const g of groups) {
+    for (const k of wcKeys) {
+      wc[k][g.key] = sumGroup(grid.wcBreakdown[k], g.members);
+    }
+  }
+
+  return { displayKeys, ob, cb, movements, wc };
+}
+
+function formatForecastCell(v, scale) {
+  if (!Number.isFinite(v) || v === 0) return '—';
+  const divisor = scale === 'thousands' ? 1000 : 1;
+  const scaled = v / divisor;
+  const mag = Math.round(Math.abs(scaled)).toLocaleString('en-US');
+  return scaled < 0 ? `(${mag})` : mag;
+}
+
+function cellCls(v) {
+  if (!Number.isFinite(v) || v === 0) return 'vis-cf-num vis-cf-num-muted';
+  return v < 0 ? 'vis-cf-num vis-cf-num-neg' : 'vis-cf-num';
+}
+
+function periodLabelForDisplay(key, year) {
+  if (/^M\d{2}$/.test(key)) return cfPeriodLabel(key, year);
+  if (/^Q\d$/.test(key))    return `${key}-${String(year).slice(-2)}`;
+  if (key === 'FY')         return `FY ${year}`;
+  return key;
+}
+
+function renderForecast() {
+  const body  = document.getElementById('cfForecastBody');
+  const empty = document.getElementById('cfForecastEmpty');
+  const mainTable = document.getElementById('cfForecastTable');
+  const wcTable   = document.getElementById('cfForecastWcTable');
+  const pill      = document.getElementById('cfForecastStatusPill');
+  if (!body || !empty || !mainTable || !wcTable) return;
+
+  if (!currentForecast) {
+    body.hidden = true;
+    empty.hidden = false;
+    return;
+  }
+  empty.hidden = true;
+  body.hidden  = false;
+
+  if (pill) {
+    const finalized = currentCf?.cf?.status === 'finalized';
+    pill.dataset.status = finalized ? 'finalized' : 'draft';
+    pill.textContent    = finalized ? 'Finalized' : 'Draft';
+  }
+
+  const yr     = currentCf?.budget?.year || new Date().getFullYear();
+  const period = cfForecastView.period;
+  const scale  = cfForecastView.scale;
+  const expanded = cfForecastView.burnDetail === 'expanded';
+
+  // Aggregate.
+  const agg = aggregateForecast(currentForecast, period);
+  const keys = agg.displayKeys;
+
+  // FY column comes from the FY aggregation regardless of display.
+  const fyAgg = aggregateForecast(currentForecast, 'fy');
+  const fyKey = fyAgg.displayKeys[0];
+
+  // ── Header ─────────────────────────────────────────────────
+  const headPeriods = keys.map(k => `<th class="vis-cf-num">${htmlEsc(periodLabelForDisplay(k, yr))}</th>`).join('');
+  const showFy = period !== 'fy';
+  const head = `<tr>
+    <th>Row</th>
+    ${headPeriods}
+    ${showFy ? '<th class="vis-cf-num">FY</th>' : ''}
+  </tr>`;
+
+  // ── Main body ──────────────────────────────────────────────
+  const renderRow = (label, valueMap, fyValue, cls) => {
+    const cells = keys.map(k => {
+      const v = Number(valueMap[k]) || 0;
+      return `<td class="${cellCls(v)}">${formatForecastCell(v, scale)}</td>`;
+    }).join('');
+    const fyCell = showFy
+      ? `<td class="${cellCls(fyValue)}">${formatForecastCell(fyValue, scale)}</td>`
+      : '';
+    return `<tr class="${cls || ''}"><th>${htmlEsc(label)}</th>${cells}${fyCell}</tr>`;
+  };
+
+  const fyMov = (name) => fyAgg.movements[name][fyKey];
+
+  const burnSum = (k) => agg.movements.ebitda[k] + agg.movements.wc[k]
+                       + agg.movements.salaries[k] + agg.movements.otherAdj[k];
+  const burnMap = {};
+  for (const k of keys) burnMap[k] = burnSum(k);
+  const fyBurn = fyMov('ebitda') + fyMov('wc') + fyMov('salaries') + fyMov('otherAdj');
+
+  let bodyHtml = '';
+  bodyHtml += renderRow('O.B', agg.ob, agg.ob[keys[0]], 'is-cf-anchor');
+  if (expanded) {
+    bodyHtml += renderRow('Adjusted EBITDA',   agg.movements.ebitda,   fyMov('ebitda'),   'is-cf-derived');
+    bodyHtml += renderRow('WC',                agg.movements.wc,       fyMov('wc'),       'is-cf-derived');
+    bodyHtml += renderRow('Salaries & Benefits', agg.movements.salaries, fyMov('salaries'), 'is-cf-derived');
+    bodyHtml += renderRow('Other Adjustments', agg.movements.otherAdj, fyMov('otherAdj'), 'is-cf-derived');
+  } else {
+    bodyHtml += renderRow('Burn', burnMap, fyBurn, 'is-cf-derived');
+  }
+  bodyHtml += renderRow('Financing', agg.movements.financing, fyMov('financing'), 'is-cf-derived');
+  bodyHtml += renderRow('Capex',     agg.movements.capex,     fyMov('capex'),     'is-cf-derived');
+  bodyHtml += renderRow('C.B', agg.cb, agg.cb[keys[keys.length - 1]], 'is-cf-total');
+
+  mainTable.querySelector('thead').innerHTML = head;
+  mainTable.querySelector('tbody').innerHTML = bodyHtml;
+
+  // ── WC breakdown ───────────────────────────────────────────
+  let wcHtml = '';
+  wcHtml += renderRow('Payables',    agg.wc.payables,    fyAgg.wc.payables[fyKey],    'is-cf-derived');
+  wcHtml += renderRow('Receivables', agg.wc.receivables, fyAgg.wc.receivables[fyKey], 'is-cf-derived');
+  wcHtml += renderRow('Inventory',   agg.wc.inventory,   fyAgg.wc.inventory[fyKey],   'is-cf-derived');
+  wcHtml += renderRow('Total',       agg.wc.total,       fyAgg.wc.total[fyKey],       'is-cf-total');
+
+  wcTable.querySelector('thead').innerHTML = head;
+  wcTable.querySelector('tbody').innerHTML = wcHtml;
+}
+
+// ── Forecast view controls ────────────────────────────────────
+document.addEventListener('change', (ev) => {
+  const t = ev.target;
+  if (!(t instanceof HTMLSelectElement)) return;
+  if (t.id === 'cfForecastPeriod')      cfForecastView.period      = t.value;
+  else if (t.id === 'cfForecastScale')  cfForecastView.scale       = t.value;
+  else if (t.id === 'cfForecastBurnDetail') cfForecastView.burnDetail = t.value;
+  else return;
+  renderForecast();
+});
 
 
 // ─────────────────────────────────────────────────────────────
