@@ -279,3 +279,45 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     else start();
   });
 })();
+
+/* ============================================================
+   VISIBILITY DEMO — Video modal
+   ============================================================ */
+(function () {
+  var playBtn  = document.getElementById('visibilityPlayBtn');
+  var modal    = document.getElementById('vdemoModal');
+  var closeBtn = document.getElementById('vdemoClose');
+  var video    = document.getElementById('vdemoVideo');
+
+  if (!playBtn || !modal || !video) return;
+
+  function openModal() {
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    video.play();
+    closeBtn.focus();
+  }
+
+  function closeModal() {
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    video.pause();
+    video.currentTime = 0;
+    playBtn.focus();
+  }
+
+  playBtn.addEventListener('click', openModal);
+  closeBtn.addEventListener('click', closeModal);
+
+  // Close when clicking the dark backdrop (not the video box itself)
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal) closeModal();
+  });
+
+  // Close on Escape key
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+  });
+})();
