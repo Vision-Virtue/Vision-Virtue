@@ -2609,7 +2609,18 @@ function renderDashboard() {
   } catch (_e) { /* registration is best-effort */ }
   const agg = computeDashboardAgg();
   const empty = dashEmptyCheck(agg);
-  document.getElementById('dashEmpty').hidden = !empty;
+  const dashEmpty = document.getElementById('dashEmpty');
+  dashEmpty.hidden = !empty;
+  // Be specific about *why* the dashboard is empty so the user knows
+  // whether to add Structure rows or fill in amounts.
+  if (empty) {
+    const lineCount = (currentBudget?.lines || []).length;
+    if (lineCount === 0) {
+      dashEmpty.textContent = 'No data to visualize. Add Budget Structure rows first.';
+    } else {
+      dashEmpty.textContent = `Structure has ${lineCount} row${lineCount === 1 ? '' : 's'} but no amounts have been entered yet. Fill in monthly cells to see the dashboard.`;
+    }
+  }
   document.getElementById('dashScaleHint').hidden = empty;
   document.getElementById('dashScaleHint').innerHTML =
     `All amounts are shown in <strong>thousands</strong> (rounded). Source: this budget's Structure rows.`;
