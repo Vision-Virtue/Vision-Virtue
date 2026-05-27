@@ -2591,11 +2591,15 @@ function dashEmptyCheck(agg) {
 function renderDashboard() {
   const dash = document.getElementById('dashboardSection');
   if (!dash) return;
-  // Chart.js loads via CDN with `defer`; if the user opens the
-  // Dashboard tab before it lands, retry shortly.
-  if (typeof Chart === 'undefined') {
+  // Chart.js + datalabels plugin load via CDN with `defer`; if the
+  // user opens the Dashboard tab before they land, retry shortly.
+  if (typeof Chart === 'undefined' || typeof ChartDataLabels === 'undefined') {
     setTimeout(renderDashboard, 60);
     return;
+  }
+  // Register the datalabels plugin once (idempotent).
+  if (!Chart.registry.plugins.get('datalabels')) {
+    Chart.register(ChartDataLabels);
   }
   const agg = computeDashboardAgg();
   const empty = dashEmptyCheck(agg);
@@ -2636,6 +2640,19 @@ function renderDashboard() {
         titleColor: '#ffffff',
         bodyColor: DASH_LABEL_COLOR,
       },
+      // Datalabels — small "$NK" numbers on top of bars / outside line
+      // points. Dashboard chart data is already in thousands so the
+      // formatter appends "K". Charts can opt-out by setting
+      // `plugins.datalabels.display = false`.
+      datalabels: {
+        color: '#ffffff',
+        font: { family: 'Inter', size: 10, weight: '600' },
+        anchor: 'end',
+        align: 'end',
+        offset: 4,
+        clamp: true,
+        formatter: (v) => (Number.isFinite(v) && v !== 0 ? `${Math.round(v).toLocaleString('en-US')}K` : ''),
+      },
     },
   };
   const cartesianScales = {
@@ -2663,6 +2680,7 @@ function renderDashboard() {
         plugins: {
           ...baseOpts.plugins,
           legend: { ...baseOpts.plugins.legend, position: 'right' },
+          datalabels: { display: false },
           tooltip: {
             ...baseOpts.plugins.tooltip,
             callbacks: {
@@ -2700,13 +2718,19 @@ function renderDashboard() {
       },
       options: {
         ...baseOpts,
-        plugins: { ...baseOpts.plugins, legend: { display: false } },
+        plugins: {
+          ...baseOpts.plugins,
+          legend: { display: false },
+          datalabels: { ...baseOpts.plugins.datalabels, align: 'top' },
+        },
         scales: cartesianScales,
       },
     }));
   }
 
-  // Revenue by Product (horizontal bar)
+  // Revenue by Product (horizontal bar). Cap the bar thickness so a
+  // single product doesn't balloon to the full canvas height; leaves
+  // visible space for additional products.
   if (agg.revByProduct.length > 0) {
     const ctx = document.getElementById('dashRevByProduct');
     setDashChart('revByProduct', new Chart(ctx, {
@@ -2718,16 +2742,40 @@ function renderDashboard() {
           data: agg.revByProduct.map(d => Math.round(d.value / 1000)),
           backgroundColor: DASH_PALETTE[0],
           borderRadius: 6,
+          maxBarThickness: 28,
+          categoryPercentage: 0.6,
+          barPercentage: 0.7,
         }],
       },
       options: {
         ...baseOpts,
         indexAxis: 'y',
-        plugins: { ...baseOpts.plugins, legend: { display: false } },
+        plugins: {
+          ...baseOpts.plugins,
+          legend: { display: false },
+          datalabels: { ...baseOpts.plugins.datalabels, align: 'right' },
+        },
         scales: cartesianScales,
       },
     }));
   }
+
+  // Shared dataset sizing for vertical bar charts. We cap the bar
+  // thickness so a single bar doesn't fill the canvas, but leave it
+  // free to shrink when many categories are present.
+  const verticalBarSizing = {
+    maxBarThickness: 36,
+    categoryPercentage: 0.65,
+    barPercentage: 0.75,
+  };
+  // Datalabels override for vertical bars: keep anchor at the value
+  // endpoint regardless of sign, flip only the align so negative-value
+  // labels sit below the bar (not inside it).
+  const verticalBarLabels = {
+    ...baseOpts.plugins.datalabels,
+    anchor: 'end',
+    align:  (ctx) => (ctx.raw >= 0 ? 'top' : 'bottom'),
+  };
 
   // EBITDA by Product (vertical bar, signed)
   if (agg.ebitdaByProduct.length > 0) {
@@ -2741,11 +2789,16 @@ function renderDashboard() {
           data: agg.ebitdaByProduct.map(d => Math.round(d.ebitda / 1000)),
           backgroundColor: (ctx) => (ctx.raw >= 0 ? '#5b8de0' : '#f2937f'),
           borderRadius: 6,
+          ...verticalBarSizing,
         }],
       },
       options: {
         ...baseOpts,
-        plugins: { ...baseOpts.plugins, legend: { display: false } },
+        plugins: {
+          ...baseOpts.plugins,
+          legend: { display: false },
+          datalabels: verticalBarLabels,
+        },
         scales: {
           ...cartesianScales,
           y: { ...cartesianScales.y, grid: { color: DASH_GRID_COLOR, drawBorder: true } },
@@ -2766,11 +2819,16 @@ function renderDashboard() {
           data: agg.opexByActivity.map(d => Math.round(d.value / 1000)),
           backgroundColor: DASH_PALETTE[3],
           borderRadius: 6,
+          ...verticalBarSizing,
         }],
       },
       options: {
         ...baseOpts,
-        plugins: { ...baseOpts.plugins, legend: { display: false } },
+        plugins: {
+          ...baseOpts.plugins,
+          legend: { display: false },
+          datalabels: verticalBarLabels,
+        },
         scales: cartesianScales,
       },
     }));
@@ -2788,11 +2846,16 @@ function renderDashboard() {
           data: agg.ebitdaByDivision.map(d => Math.round(d.ebitda / 1000)),
           backgroundColor: (ctx) => (ctx.raw >= 0 ? '#8ed47b' : '#f2937f'),
           borderRadius: 6,
+          ...verticalBarSizing,
         }],
       },
       options: {
         ...baseOpts,
-        plugins: { ...baseOpts.plugins, legend: { display: false } },
+        plugins: {
+          ...baseOpts.plugins,
+          legend: { display: false },
+          datalabels: verticalBarLabels,
+        },
         scales: cartesianScales,
       },
     }));
@@ -2818,6 +2881,7 @@ function renderDashboard() {
         plugins: {
           ...baseOpts.plugins,
           legend: { ...baseOpts.plugins.legend, position: 'right' },
+          datalabels: { display: false },
           tooltip: {
             ...baseOpts.plugins.tooltip,
             callbacks: {

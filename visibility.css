@@ -1015,6 +1015,9 @@
   gap: 1.4rem;
   padding-top: 0.25rem;
 }
+/* `display: flex` above wins over the HTML `[hidden]` attribute's
+ * implicit `display: none` — restore the hidden behavior. */
+.vis-dashboard[hidden] { display: none; }
 
 .vis-dash-area {
   display: flex;
