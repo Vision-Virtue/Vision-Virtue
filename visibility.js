@@ -5501,7 +5501,7 @@ function formatTileMoney(v) {
     const recentHistory = cfoHistory.slice(-10);
 
     try {
-      const res = await api('/visibility/cfo/chat', {
+      const res = await api('/api/visibility/cfo/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, history: recentHistory, context }),
