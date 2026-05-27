@@ -1972,6 +1972,8 @@ sbEditBtn?.addEventListener('click', async () => {
       sbState.status = 'editing';
       refreshSBStatus();
       showBanner(sbInfoBanner, '');
+      // Reload rows from server so the table reflects the current state
+      await loadSalaries();
     }
   } catch (err) {
     showBanner(sbErrorBanner, htmlEsc(`Could not re-open: ${(err && err.message) || err}`));
@@ -2425,6 +2427,75 @@ function fmtThousandsSigned(v) {
     : n.toLocaleString('en-US');
 }
 
+// Derive dashboard KPIs from the server-computed P&L pivot (groups array).
+// Used as fallback when computeDashboardAgg() returns all zeros (e.g. GL
+// accounts not yet mapped to plSection on the client side).
+function computeDashboardAggFromPivot(pivotData) {
+  if (!pivotData) return null;
+  const groups = pivotData.groups || [];
+  if (groups.length === 0) return null;
+  const byName = new Map(groups.map(g => [g.plSection, g]));
+  const absTotal = (sec) => Math.abs(byName.get(sec)?.fyTotal || 0);
+  const totalRev  = absTotal('Revenues');
+  const totalCogs = absTotal('COGS');
+  const totalRnd  = absTotal('R&D');
+  const totalSm   = absTotal('S&M');
+  const totalGa   = absTotal('G&A');
+  const totalOpex = totalRnd + totalSm + totalGa;
+  if (totalRev + totalCogs + totalOpex === 0) return null;
+
+  // Revenue by category from pivot
+  const revGroup = byName.get('Revenues');
+  const revByCategory = (revGroup?.categories || []).map(c => ({
+    name: c.name, value: Math.abs(c.fyTotal || 0),
+  })).filter(d => d.value > 0);
+
+  // Revenue by quarter from pivot period cells
+  const periodKeys = pivotData.periodKeys || [];
+  const revCells = revGroup?.cells || {};
+  const sumMonths = (...keys) => keys.reduce((s, k) => s + Math.abs(revCells[k] || 0), 0);
+  let revByQuarter;
+  if (periodKeys.some(k => k.startsWith('M'))) {
+    revByQuarter = {
+      Q1: sumMonths('M01','M02','M03'), Q2: sumMonths('M04','M05','M06'),
+      Q3: sumMonths('M07','M08','M09'), Q4: sumMonths('M10','M11','M12'),
+    };
+  } else if (periodKeys.some(k => k.startsWith('Q'))) {
+    revByQuarter = {
+      Q1: Math.abs(revCells.Q1||0), Q2: Math.abs(revCells.Q2||0),
+      Q3: Math.abs(revCells.Q3||0), Q4: Math.abs(revCells.Q4||0),
+    };
+  } else {
+    const q = totalRev / 4;
+    revByQuarter = { Q1: q, Q2: q, Q3: q, Q4: q };
+  }
+
+  // Salaries & benefits from opex categories
+  const opexSections = ['R&D', 'S&M', 'G&A'];
+  let salariesAndBenefits = 0;
+  for (const sec of opexSections) {
+    const g = byName.get(sec);
+    for (const c of g?.categories || []) {
+      if (c.name === 'Salaries and benefits') salariesAndBenefits += Math.abs(c.fyTotal || 0);
+    }
+  }
+
+  return {
+    totalRev, totalCogs, totalOpex, salariesAndBenefits,
+    gmPct:           totalRev > 0 ? ((totalRev - totalCogs) / totalRev) * 100 : 0,
+    opexPct:         totalRev > 0 ? (totalOpex / totalRev) * 100 : 0,
+    salariesOpexPct: totalOpex > 0 ? (salariesAndBenefits / totalOpex) * 100 : 0,
+    revByCategory,
+    revByQuarter,
+    revByProduct:    [],   // pivot doesn't carry org-dimension breakdown
+    ebitdaByProduct: [],
+    opexByActivity:  [],
+    ebitdaByDivision:[],
+    opexByDepartment:[],
+    _fromPivot: true,     // flag so we can show a hint
+  };
+}
+
 function computeDashboardAgg() {
   if (!currentBudget) return null;
   const lines = currentBudget.lines || [];
@@ -2607,7 +2678,13 @@ function renderDashboard() {
       Chart.register(ChartDataLabels);
     }
   } catch (_e) { /* registration is best-effort */ }
-  const agg = computeDashboardAgg();
+
+  // Primary: compute from local lines. Fallback: derive KPIs from the server-computed
+  // P&L pivot (lastPivotData) when GL accounts lack plSection mappings client-side.
+  let agg = computeDashboardAgg();
+  if (dashEmptyCheck(agg) && lastPivotData) {
+    agg = computeDashboardAggFromPivot(lastPivotData) || agg;
+  }
   const empty = dashEmptyCheck(agg);
   const dashEmpty = document.getElementById('dashEmpty');
   dashEmpty.hidden = !empty;
@@ -2622,8 +2699,9 @@ function renderDashboard() {
     }
   }
   document.getElementById('dashScaleHint').hidden = empty;
-  document.getElementById('dashScaleHint').innerHTML =
-    `All amounts are shown in <strong>thousands</strong> (rounded). Source: this budget's Structure rows.`;
+  document.getElementById('dashScaleHint').innerHTML = agg._fromPivot
+    ? `All amounts are shown in <strong>thousands</strong> (rounded). Source: P&L Pivot (server-computed). Product/division charts require GL → plSection mapping in Financial Structure.`
+    : `All amounts are shown in <strong>thousands</strong> (rounded). Source: this budget's Structure rows.`;
   destroyDashCharts();
   if (empty) {
     // Clear KPI text too.
@@ -5343,7 +5421,7 @@ function formatTileMoney(v) {
       activities:  (osEntities.activity  || []).map(e => e.name || e),
     };
 
-    // Step 3: Budget
+    // Step 3: Budget — cells is a {M01:..,M02:..} object, NOT an array
     if (currentBudget) {
       const b = currentBudget.budget;
       ctx.budget = {
@@ -5353,23 +5431,36 @@ function formatTileMoney(v) {
         linesBySection: {}
       };
       (currentBudget.lines || []).forEach(line => {
-        const sec = line.plSection || 'Unknown';
+        const gl = findGL(line.glAccountId);
+        const sec = gl?.plSection || 'Unmapped';
+        const category = gl
+          ? (gl.budgetCategory === (dropdowns.yourBudgetCategoryToken || 'Your Budget Category')
+             ? gl.budgetCategoryCustom : gl.budgetCategory)
+          : null;
         if (!ctx.budget.linesBySection[sec]) ctx.budget.linesBySection[sec] = { lines: [], total: 0 };
-        const total = (line.cells || []).reduce((s, c) => s + (Number(c.amount) || 0), 0);
+        // line.cells is { M01: val, M02: val, … } — use Object.values to sum
+        const total = Object.values(line.cells || {}).reduce((s, v) => s + (Number(v) || 0), 0);
         ctx.budget.linesBySection[sec].lines.push({
-          category: line.budgetCategory, description: line.description, total
+          category,
+          provider: line.serviceProviderName,
+          description: line.serviceDescription,
+          total
         });
         ctx.budget.linesBySection[sec].total += total;
       });
     }
 
-    // Step 4: P&L Pivot
+    // Step 4: P&L Pivot — use server-computed groups (lastPivotData.groups, NOT .sections/.totals)
     if (lastPivotData) {
-      // Send a compact summary rather than the full table
+      const groups = lastPivotData.groups || [];
       ctx.plSummary = {
         available: true,
-        sections: Object.keys(lastPivotData.sections || {})
-        // totals omitted — too large for API payload
+        periodKeys: lastPivotData.periodKeys || [],
+        sections: groups.map(g => ({
+          section: g.plSection,
+          fyTotal: g.fyTotal,
+          categories: (g.categories || []).map(c => ({ name: c.name, fyTotal: c.fyTotal }))
+        }))
       };
     }
 
@@ -5495,23 +5586,30 @@ function formatTileMoney(v) {
     sendBtn.disabled = true;
     appendTyping();
 
-    const context = gatherContext();
-
-    // Build history for multi-turn (last 10 turns max to keep payload small)
-    const recentHistory = cfoHistory.slice(-10);
-
-    // "Still thinking…" hint after 15 s — Opus 4.7 can take a moment
-    let thinkingTimer = setTimeout(() => {
-      const t = document.getElementById('cfoTyping');
-      if (t) t.querySelector('.cfo-typing').insertAdjacentHTML('afterend',
-        '<div class="cfo-still-thinking">Still thinking — Opus can take a moment…</div>');
-    }, 15000);
-
-    // Hard abort after 60 s so the UI never hangs forever
-    const controller = new AbortController();
-    const abortTimer = setTimeout(() => controller.abort(), 60000);
+    let thinkingTimer = null;
+    let abortTimer    = null;
+    const controller  = new AbortController();
 
     try {
+      // Build context + history inside try so any error is caught & shown
+      const context       = gatherContext();
+      const recentHistory = cfoHistory.slice(-10);
+
+      // "Still thinking…" hint after 15 s — Opus can take a moment
+      thinkingTimer = setTimeout(() => {
+        const t = document.getElementById('cfoTyping');
+        if (t) {
+          const inner = t.querySelector('.cfo-typing');
+          if (inner && !inner.nextElementSibling) {
+            inner.insertAdjacentHTML('afterend',
+              '<div class="cfo-still-thinking">Still thinking — Opus can take a moment…</div>');
+          }
+        }
+      }, 15000);
+
+      // Hard abort after 60 s so the UI never hangs forever
+      abortTimer = setTimeout(() => controller.abort(), 60000);
+
       const res = await api('/api/visibility/cfo/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -5534,12 +5632,12 @@ function formatTileMoney(v) {
         cfoHistory.push({ role: 'assistant', content: reply });
       }
     } catch (err) {
-      clearTimeout(abortTimer);
-      clearTimeout(thinkingTimer);
+      if (abortTimer)    clearTimeout(abortTimer);
+      if (thinkingTimer) clearTimeout(thinkingTimer);
       removeTyping();
       const msg = err && err.name === 'AbortError'
         ? 'Request timed out after 60 s. Please try again.'
-        : `Connection error: ${err && err.message ? err.message : 'Could not reach server.'}`;
+        : `Error: ${err && err.message ? err.message : 'Could not process request.'}`;
       appendCfoMessage(msg, 'cfo', true);
     } finally {
       busy = false;
