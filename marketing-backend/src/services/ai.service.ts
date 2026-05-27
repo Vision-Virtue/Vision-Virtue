@@ -19,7 +19,7 @@ import {
 } from '../agents/prompts';
 import { BraveSearchService } from './search.service';
 
-const MODEL = 'claude-sonnet-4-6';
+const MODEL = 'claude-opus-4-7';
 const MAX_TOKENS = 8096;
 
 // ─── JSON Extraction Helper ───────────────────────────────────────────────────

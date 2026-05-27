@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.AIService = void 0;
 const types_1 = require("../types");
 const prompts_1 = require("../agents/prompts");
-const MODEL = 'claude-sonnet-4-6';
+const MODEL = 'claude-opus-4-7';
 const MAX_TOKENS = 8096;
 // ─── JSON Extraction Helper ───────────────────────────────────────────────────
 function findMatchingBrace(str, start) {
@@ -221,6 +221,29 @@ class AIService {
         const raw = await this.callClaude(prompt);
         const parsed = extractJson(raw);
         return validateAIResponse(parsed, 'draft');
+    }
+    async cfoVisibilityChat(message, history, customerContext) {
+        const systemPrompt = (0, prompts_1.cfoVisibilitySystemPrompt)(customerContext);
+        const messages = [
+            ...history.map(h => ({ role: h.role, content: h.content })),
+            { role: 'user', content: message },
+        ];
+        try {
+            const response = await this.client.messages.create({
+                model: MODEL,
+                max_tokens: 2048,
+                system: systemPrompt,
+                messages,
+            });
+            const content = response.content[0];
+            if (content.type !== 'text') {
+                throw new types_1.ApiError(500, 'Unexpected response type from Claude', 'AI_UNEXPECTED_RESPONSE');
+            }
+            return content.text.trim();
+        }
+        catch (err) {
+            throw this.mapAnthropicError(err, 'CFO Visibility chat failed');
+        }
     }
     async directAgentChat(agentKey, message, history) {
         const systemPrompt = prompts_1.AGENT_SYSTEM_PROMPTS[agentKey];
