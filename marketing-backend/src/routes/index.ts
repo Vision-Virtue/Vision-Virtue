@@ -4,7 +4,7 @@ import { linkedInController } from '../controllers/linkedin.controller';
 import { authController, verifyPin } from '../controllers/auth.controller';
 import { chatController } from '../controllers/chat.controller';
 import { partnerController } from '../controllers/partner.controller';
-import { visibilityController, budgetsController, salariesController, cashFlowController, cfPayablesController, cfReceivablesController, cfInventoryController, cfSalariesController, cfManualController, cfForecastController } from '../controllers/visibility.controller';
+import { visibilityController, budgetsController, salariesController, cashFlowController, cfPayablesController, cfReceivablesController, cfInventoryController, cfSalariesController, cfManualController, cfForecastController, cfoChatController } from '../controllers/visibility.controller';
 import { requireRaphael, requireLinkedIn, requireAdminPin } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -292,6 +292,12 @@ router.delete( '/visibility/budgets/:id/cf/manual/:kind/rows/:rowId',      (req,
 
 // CF — Forecast (spec §11 + §12)
 router.get( '/visibility/budgets/:id/cf/forecast',                         (req, res) => cfForecastController.get(req, res));
+
+// CFO Visibility Chat
+router.post(
+  '/visibility/cfo/chat',
+  asyncHandler(async (req, res) => { await cfoChatController.chat(req, res); }),
+);
 
 // ─── Admin (Raphael) — Partner Submissions ──────────────────────────────────
 // All admin endpoints require X-Admin-Pin header OR ?pin= query (matching

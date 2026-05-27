@@ -4,7 +4,9 @@
 
 import { Request, Response } from 'express';
 import { z } from 'zod';
+import Anthropic from '@anthropic-ai/sdk';
 import { customerKeyRepo, CustomerKeyRow } from '../db/partner.repository';
+import { AIService } from '../services/ai.service';
 import {
   glAccountRepo,
   financialStructureRepo,
@@ -1560,5 +1562,52 @@ export const cfForecastController = {
     const ctx = requireFinalizedBudgetCf(req, res); if (!ctx) return;
     const grid = computeForecast(ctx.budget, ctx.cfId, ctx.customerKeyId);
     res.json({ forecast: grid });
+  },
+};
+
+/* ============================================================
+   CFO Visibility Chat
+   POST /api/visibility/cfo/chat
+   Requires X-Customer-Key header.
+   Accepts { message, history?, context? } and returns Marcus Vale's
+   CFO-level response as XML parsed on the frontend.
+   ============================================================ */
+
+export const cfoChatController = {
+  async chat(req: Request, res: Response): Promise<void> {
+    const keyRow = resolveCustomerKey(req);
+    if (!keyRow) {
+      res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Valid customer key required.' } });
+      return;
+    }
+
+    const { message, history = [], context = {} } = req.body as {
+      message?: string;
+      history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+      context?: Record<string, unknown>;
+    };
+
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'message is required.' } });
+      return;
+    }
+    if (message.trim().length > 4000) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Message too long (max 4000 chars).' } });
+      return;
+    }
+    if (!Array.isArray(history)) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'history must be an array.' } });
+      return;
+    }
+
+    const apiKey = process.env.ANTHROPIC_API_KEY;
+    if (!apiKey) {
+      res.status(500).json({ error: { code: 'MISSING_CONFIG', message: 'AI not configured on server.' } });
+      return;
+    }
+
+    const aiService = new AIService(new Anthropic({ apiKey }));
+    const reply = await aiService.cfoVisibilityChat(message.trim(), history, context as Record<string, unknown>);
+    res.json({ success: true, data: { reply } });
   },
 };

@@ -15,10 +15,11 @@ import {
   economistQAPrompt,
   vpCorrectAnnotationsPrompt,
   AGENT_SYSTEM_PROMPTS,
+  cfoVisibilitySystemPrompt,
 } from '../agents/prompts';
 import { BraveSearchService } from './search.service';
 
-const MODEL = 'claude-sonnet-4-6';
+const MODEL = 'claude-opus-4-7';
 const MAX_TOKENS = 8096;
 
 // ─── JSON Extraction Helper ───────────────────────────────────────────────────
@@ -261,6 +262,33 @@ export class AIService {
     const raw = await this.callClaude(prompt);
     const parsed = extractJson(raw);
     return validateAIResponse(parsed, 'draft');
+  }
+
+  async cfoVisibilityChat(
+    message: string,
+    history: Array<{ role: 'user' | 'assistant'; content: string }>,
+    customerContext: Record<string, unknown>,
+  ): Promise<string> {
+    const systemPrompt = cfoVisibilitySystemPrompt(customerContext);
+    const messages: Anthropic.MessageParam[] = [
+      ...history.map(h => ({ role: h.role as 'user' | 'assistant', content: h.content })),
+      { role: 'user', content: message },
+    ];
+    try {
+      const response = await this.client.messages.create({
+        model: MODEL,
+        max_tokens: 2048,
+        system: systemPrompt,
+        messages,
+      });
+      const content = response.content[0];
+      if (content.type !== 'text') {
+        throw new ApiError(500, 'Unexpected response type from Claude', 'AI_UNEXPECTED_RESPONSE');
+      }
+      return content.text.trim();
+    } catch (err) {
+      throw this.mapAnthropicError(err, 'CFO Visibility chat failed');
+    }
   }
 
   async directAgentChat(

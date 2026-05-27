@@ -3,8 +3,10 @@
    Visibility offering — Controller (Phase 1: Financial Structure)
    ============================================================ */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cfForecastController = exports.cfManualController = exports.cfSalariesController = exports.cfInventoryController = exports.cfReceivablesController = exports.cfPayablesController = exports.cashFlowController = exports.salariesController = exports.budgetsController = exports.visibilityController = exports.BUDGET_CATEGORIES_BY_SECTION = exports.PL_SECTIONS = void 0;
+exports.cfoChatController = exports.cfForecastController = exports.cfManualController = exports.cfSalariesController = exports.cfInventoryController = exports.cfReceivablesController = exports.cfPayablesController = exports.cashFlowController = exports.salariesController = exports.budgetsController = exports.visibilityController = exports.BUDGET_CATEGORIES_BY_SECTION = exports.PL_SECTIONS = void 0;
 const zod_1 = require("zod");
+const sdk_1 = require("@anthropic-ai/sdk");
+const ai_service_1 = require("../services/ai.service");
 const partner_repository_1 = require("../db/partner.repository");
 const visibility_repository_1 = require("../db/visibility.repository");
 const gl_parser_service_1 = require("../services/gl-parser.service");
@@ -1540,4 +1542,40 @@ exports.cfForecastController = {
         const grid = (0, cf_forecast_service_1.computeForecast)(ctx.budget, ctx.cfId, ctx.customerKeyId);
         res.json({ forecast: grid });
     },
+};
+/* ============================================================
+   CFO Visibility Chat
+   POST /api/visibility/cfo/chat
+   Requires X-Customer-Key header.
+   ============================================================ */
+exports.cfoChatController = {
+    async chat(req, res) {
+        const keyRow = resolveCustomerKey(req);
+        if (!keyRow) {
+            res.status(401).json({ error: { code: 'UNAUTHORIZED', message: 'Valid customer key required.' } });
+            return;
+        }
+        const { message, history = [], context = {} } = req.body;
+        if (!message || typeof message !== 'string' || !message.trim()) {
+            res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'message is required.' } });
+            return;
+        }
+        if (message.trim().length > 4000) {
+            res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Message too long (max 4000 chars).' } });
+            return;
+        }
+        if (!Array.isArray(history)) {
+            res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'history must be an array.' } });
+            return;
+        }
+        const apiKey = process.env.ANTHROPIC_API_KEY;
+        if (!apiKey) {
+            res.status(500).json({ error: { code: 'MISSING_CONFIG', message: 'AI not configured on server.' } });
+            return;
+        }
+        const aiService = new ai_service_1.AIService(new sdk_1.default({ apiKey }));
+        const reply = await aiService.cfoVisibilityChat(message.trim(), history, context);
+        res.json({ success: true, data: { reply } });
+    },
+};
 };
