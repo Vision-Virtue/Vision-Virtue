@@ -2659,7 +2659,7 @@ function dashEmptyCheck(agg) {
   return sum === 0;
 }
 
-function renderDashboard() {
+async function renderDashboard() {
   const dash = document.getElementById('dashboardSection');
   if (!dash) return;
   // Chart.js loads via CDN with `defer`; retry shortly if the user
@@ -2679,11 +2679,20 @@ function renderDashboard() {
     }
   } catch (_e) { /* registration is best-effort */ }
 
-  // Primary: compute from local lines. Fallback: derive KPIs from the server-computed
-  // P&L pivot (lastPivotData) when GL accounts lack plSection mappings client-side.
+  // Primary: compute from local lines + glRows.
   let agg = computeDashboardAgg();
-  if (dashEmptyCheck(agg) && lastPivotData) {
-    agg = computeDashboardAggFromPivot(lastPivotData) || agg;
+
+  // Fallback path: if primary gives zero (GL accounts not yet plSection-mapped
+  // client-side, or user opened Dashboard before P&L Pivot tab), fetch the
+  // server-computed pivot on-demand and derive KPIs from it.
+  if (dashEmptyCheck(agg) && currentBudget) {
+    if (!lastPivotData) {
+      try {
+        const pvRes = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/pivot`);
+        if (pvRes.ok) lastPivotData = await pvRes.json();
+      } catch (_e) { /* best-effort */ }
+    }
+    if (lastPivotData) agg = computeDashboardAggFromPivot(lastPivotData) || agg;
   }
   const empty = dashEmptyCheck(agg);
   const dashEmpty = document.getElementById('dashEmpty');
