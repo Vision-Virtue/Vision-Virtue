@@ -2591,16 +2591,22 @@ function dashEmptyCheck(agg) {
 function renderDashboard() {
   const dash = document.getElementById('dashboardSection');
   if (!dash) return;
-  // Chart.js + datalabels plugin load via CDN with `defer`; if the
-  // user opens the Dashboard tab before they land, retry shortly.
-  if (typeof Chart === 'undefined' || typeof ChartDataLabels === 'undefined') {
+  // Chart.js loads via CDN with `defer`; retry shortly if the user
+  // opens the Dashboard tab before it lands.
+  if (typeof Chart === 'undefined') {
     setTimeout(renderDashboard, 60);
     return;
   }
-  // Register the datalabels plugin once (idempotent).
-  if (!Chart.registry.plugins.get('datalabels')) {
-    Chart.register(ChartDataLabels);
-  }
+  // Register the datalabels plugin if available. We don't block on
+  // it — if the CDN is blocked (ad blockers, CSP, offline) the
+  // dashboard still renders, just without value labels.
+  try {
+    if (typeof ChartDataLabels !== 'undefined'
+        && Chart.registry?.plugins?.get
+        && !Chart.registry.plugins.get('datalabels')) {
+      Chart.register(ChartDataLabels);
+    }
+  } catch (_e) { /* registration is best-effort */ }
   const agg = computeDashboardAgg();
   const empty = dashEmptyCheck(agg);
   document.getElementById('dashEmpty').hidden = !empty;
