@@ -5243,3 +5243,302 @@ function formatTileMoney(v) {
   }
   renderOrg();
 })();
+
+// ============================================================
+//  MARCUS VALE — CFO ADVISOR
+//  Slide-in chat panel connected to all 6 Visibility steps.
+// ============================================================
+(function setupCfoAdvisor() {
+
+  // ── DOM refs ──────────────────────────────────────────────
+  const engageBtn  = document.getElementById('cfoEngageBtn');
+  const panel      = document.getElementById('cfoPanel');
+  const closeBtn   = document.getElementById('cfoPanelClose');
+  const backdrop   = document.getElementById('cfoBackdrop');
+  const messagesEl = document.getElementById('cfoMessages');
+  const inputEl    = document.getElementById('cfoInput');
+  const sendBtn    = document.getElementById('cfoSendBtn');
+
+  if (!engageBtn || !panel || !messagesEl || !inputEl || !sendBtn) return;
+
+  // ── Conversation history (for multi-turn context) ─────────
+  let cfoHistory = [];
+  let greeted    = false;
+  let busy       = false;
+
+  // ── Open / close ──────────────────────────────────────────
+  function openPanel() {
+    panel.classList.add('is-open');
+    panel.setAttribute('aria-hidden', 'false');
+    backdrop.classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+    if (!greeted) { greet(); greeted = true; }
+    setTimeout(() => inputEl.focus(), 350);
+  }
+
+  function closePanel() {
+    panel.classList.remove('is-open');
+    panel.setAttribute('aria-hidden', 'true');
+    backdrop.classList.remove('is-open');
+    document.body.style.overflow = '';
+  }
+
+  engageBtn.addEventListener('click', openPanel);
+  closeBtn.addEventListener('click', closePanel);
+  backdrop.addEventListener('click', closePanel);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && panel.classList.contains('is-open')) closePanel();
+  });
+
+  // ── Greeting (static, no API call) ───────────────────────
+  function greet() {
+    const steps = [];
+    if (fsStatus === 'completed')  steps.push('Financial Structure');
+    if (osStatus === 'completed')  steps.push('Organizational Structure');
+    if (currentBudget)             steps.push('Budget');
+    if (lastPivotData)             steps.push('P&L');
+    if (currentCf)                 steps.push('CF Structure');
+    if (currentForecast)           steps.push('CF Forecast');
+
+    let greeting;
+    if (steps.length === 0) {
+      greeting = "Your workspace is empty. Start with Step 1 — Financial Structure. Upload your GL list and map every account to a P&L section. That's the foundation everything else sits on.";
+    } else {
+      greeting = `Your data is on my desk. I can see: ${steps.join(', ')}. Ask me about your structure, margins, cost drivers, anomalies, or cash position. Make it count.`;
+    }
+    appendCfoMessage(greeting, 'cfo', true);
+  }
+
+  // ── Context snapshot (sent with every message) ───────────
+  function gatherContext() {
+    const ctx = {};
+
+    // Step 1: Financial Structure
+    ctx.financialStructure = {
+      status: fsStatus,
+      totalAccounts: glRows.length,
+      mapped: glRows.filter(r => r.plSection && r.budgetCategory).length,
+      unmapped: glRows.filter(r => !r.plSection || !r.budgetCategory).length,
+      bySection: {}
+    };
+    glRows.forEach(r => {
+      if (!r.plSection) return;
+      if (!ctx.financialStructure.bySection[r.plSection]) ctx.financialStructure.bySection[r.plSection] = [];
+      ctx.financialStructure.bySection[r.plSection].push({
+        glNumber: r.glNumber,
+        glName: r.glName,
+        category: r.budgetCategory === (dropdowns.yourBudgetCategoryToken || 'Your Budget Category')
+          ? r.budgetCategoryCustom : r.budgetCategory,
+        inventoryRelated: r.inventoryRelated
+      });
+    });
+
+    // Step 2: Org Structure
+    ctx.orgStructure = {
+      status: osStatus,
+      companies:   (osEntities.company   || []).map(e => e.name || e),
+      divisions:   (osEntities.division  || []).map(e => e.name || e),
+      departments: (osEntities.department|| []).map(e => e.name || e),
+      products:    (osEntities.product   || []).map(e => e.name || e),
+      activities:  (osEntities.activity  || []).map(e => e.name || e),
+    };
+
+    // Step 3: Budget
+    if (currentBudget) {
+      const b = currentBudget.budget;
+      ctx.budget = {
+        name: b.name, currency: b.currency, granularity: b.granularity,
+        scale: b.scale, year: b.year, status: b.status,
+        totalLines: (currentBudget.lines || []).length,
+        linesBySection: {}
+      };
+      (currentBudget.lines || []).forEach(line => {
+        const sec = line.plSection || 'Unknown';
+        if (!ctx.budget.linesBySection[sec]) ctx.budget.linesBySection[sec] = { lines: [], total: 0 };
+        const total = (line.cells || []).reduce((s, c) => s + (Number(c.amount) || 0), 0);
+        ctx.budget.linesBySection[sec].lines.push({
+          category: line.budgetCategory, description: line.description, total
+        });
+        ctx.budget.linesBySection[sec].total += total;
+      });
+    }
+
+    // Step 4: P&L Pivot
+    if (lastPivotData) {
+      // Send a compact summary rather than the full table
+      ctx.plSummary = {
+        available: true,
+        sections: Object.keys(lastPivotData.sections || {}),
+        totals: lastPivotData.totals || null
+      };
+    }
+
+    // Step 5: CF Structure
+    if (currentCf) {
+      ctx.cfStructure = {
+        budgetName: currentCf.budget ? currentCf.budget.name : null,
+        openingBalance: currentCf.cf ? currentCf.cf.openingBalance : null,
+      };
+    }
+
+    // Step 6: CF Forecast
+    if (currentForecast) {
+      // Send first 3 periods as a sample
+      const periods = Object.keys(currentForecast).slice(0, 3);
+      ctx.cfForecast = { available: true, samplePeriods: periods.length };
+    }
+
+    return ctx;
+  }
+
+  // ── Message rendering ─────────────────────────────────────
+  function appendUserMessage(text) {
+    const div = document.createElement('div');
+    div.className = 'cfo-msg cfo-msg-user';
+    div.innerHTML = `<div class="cfo-msg-bubble">${htmlEsc(text)}</div>`;
+    messagesEl.appendChild(div);
+    scrollToBottom();
+  }
+
+  function parseCfoXml(raw) {
+    // Extract the four sections from the CFO XML response
+    function extract(tag) {
+      const m = raw.match(new RegExp(`<${tag}>([\s\S]*?)<\/${tag}>`));
+      return m ? m[1].trim() : '';
+    }
+    return {
+      analysis:     extract('analysis'),
+      actionItems:  extract('action_items'),
+      flags:        extract('flags'),
+      nextQuestion: extract('next_question'),
+    };
+  }
+
+  function appendCfoMessage(raw, _role = 'cfo', isGreeting = false) {
+    const div = document.createElement('div');
+    div.className = 'cfo-msg cfo-msg-cfo';
+
+    if (isGreeting || !raw.includes('<cfo_response>')) {
+      // Plain text (greeting or fallback)
+      div.innerHTML = `<div class="cfo-msg-bubble">${htmlEsc(raw)}</div>`;
+    } else {
+      const p = parseCfoXml(raw);
+      const sections = [];
+
+      if (p.analysis) {
+        sections.push(`<div class="cfo-response-section">
+          <div class="cfo-response-label">Analysis</div>
+          <div class="cfo-response-body">${htmlEsc(p.analysis)}</div>
+        </div>`);
+      }
+      if (p.actionItems) {
+        sections.push(`<div class="cfo-response-section">
+          <div class="cfo-response-label">Action Items</div>
+          <div class="cfo-response-body">${htmlEsc(p.actionItems)}</div>
+        </div>`);
+      }
+      if (p.flags && p.flags.toLowerCase() !== 'none identified.') {
+        sections.push(`<div class="cfo-response-section cfo-response-flags">
+          <div class="cfo-response-label">⚑ Flags</div>
+          <div class="cfo-response-body">${htmlEsc(p.flags)}</div>
+        </div>`);
+      }
+      if (p.nextQuestion) {
+        sections.push(`<div class="cfo-response-section cfo-response-next">
+          <div class="cfo-response-label">Next Step</div>
+          <div class="cfo-response-body">${htmlEsc(p.nextQuestion)}</div>
+        </div>`);
+      }
+
+      div.innerHTML = `<div class="cfo-msg-bubble">
+        <div class="cfo-response">${sections.join('') || htmlEsc(raw)}</div>
+      </div>`;
+    }
+
+    messagesEl.appendChild(div);
+    scrollToBottom();
+  }
+
+  function appendTyping() {
+    const div = document.createElement('div');
+    div.className = 'cfo-msg cfo-msg-cfo';
+    div.id = 'cfoTyping';
+    div.innerHTML = `<div class="cfo-typing">
+      <div class="cfo-typing-dot"></div>
+      <div class="cfo-typing-dot"></div>
+      <div class="cfo-typing-dot"></div>
+    </div>`;
+    messagesEl.appendChild(div);
+    scrollToBottom();
+  }
+
+  function removeTyping() {
+    const t = document.getElementById('cfoTyping');
+    if (t) t.remove();
+  }
+
+  function scrollToBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  // ── Send message ──────────────────────────────────────────
+  async function sendMessage() {
+    if (busy) return;
+    const text = inputEl.value.trim();
+    if (!text) return;
+
+    inputEl.value = '';
+    inputEl.style.height = '';
+    appendUserMessage(text);
+
+    busy = true;
+    sendBtn.disabled = true;
+    appendTyping();
+
+    const context = gatherContext();
+
+    // Build history for multi-turn (last 10 turns max to keep payload small)
+    const recentHistory = cfoHistory.slice(-10);
+
+    try {
+      const res = await api('/visibility/cfo/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, history: recentHistory, context }),
+      });
+
+      const data = await res.json();
+      removeTyping();
+
+      if (!res.ok) {
+        appendCfoMessage(`Error: ${data?.error?.message || 'Could not reach CFO. Try again.'}`, 'cfo', true);
+      } else {
+        const reply = data?.data?.reply || '';
+        appendCfoMessage(reply);
+        // Store in history for multi-turn
+        cfoHistory.push({ role: 'user', content: text });
+        cfoHistory.push({ role: 'assistant', content: reply });
+      }
+    } catch (err) {
+      removeTyping();
+      appendCfoMessage(`Connection error: ${err && err.message ? err.message : 'Could not reach server.'}`, 'cfo', true);
+    } finally {
+      busy = false;
+      sendBtn.disabled = false;
+      inputEl.focus();
+    }
+  }
+
+  // ── Event listeners ───────────────────────────────────────
+  sendBtn.addEventListener('click', sendMessage);
+  inputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+
+  // Auto-resize textarea
+  inputEl.addEventListener('input', () => {
+    inputEl.style.height = '';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+  });
+
+})();
