@@ -2145,6 +2145,14 @@
 .cfo-send-btn:hover { background: rgba(91, 141, 224, 0.38); }
 .cfo-send-btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
+/* "Still thinking…" hint */
+.cfo-still-thinking {
+  font-size: 0.75rem;
+  color: rgba(155, 189, 242, 0.55);
+  font-style: italic;
+  margin-top: 0.35rem;
+}
+
 /* Mobile responsive */
 @media (max-width: 540px) {
   .cfo-strip { flex-wrap: wrap; }

@@ -5368,8 +5368,8 @@ function formatTileMoney(v) {
       // Send a compact summary rather than the full table
       ctx.plSummary = {
         available: true,
-        sections: Object.keys(lastPivotData.sections || {}),
-        totals: lastPivotData.totals || null
+        sections: Object.keys(lastPivotData.sections || {})
+        // totals omitted — too large for API payload
       };
     }
 
@@ -5500,13 +5500,27 @@ function formatTileMoney(v) {
     // Build history for multi-turn (last 10 turns max to keep payload small)
     const recentHistory = cfoHistory.slice(-10);
 
+    // "Still thinking…" hint after 15 s — Opus 4.7 can take a moment
+    let thinkingTimer = setTimeout(() => {
+      const t = document.getElementById('cfoTyping');
+      if (t) t.querySelector('.cfo-typing').insertAdjacentHTML('afterend',
+        '<div class="cfo-still-thinking">Still thinking — Opus can take a moment…</div>');
+    }, 15000);
+
+    // Hard abort after 60 s so the UI never hangs forever
+    const controller = new AbortController();
+    const abortTimer = setTimeout(() => controller.abort(), 60000);
+
     try {
       const res = await api('/api/visibility/cfo/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: text, history: recentHistory, context }),
+        signal: controller.signal,
       });
 
+      clearTimeout(abortTimer);
+      clearTimeout(thinkingTimer);
       const data = await res.json();
       removeTyping();
 
@@ -5520,8 +5534,13 @@ function formatTileMoney(v) {
         cfoHistory.push({ role: 'assistant', content: reply });
       }
     } catch (err) {
+      clearTimeout(abortTimer);
+      clearTimeout(thinkingTimer);
       removeTyping();
-      appendCfoMessage(`Connection error: ${err && err.message ? err.message : 'Could not reach server.'}`, 'cfo', true);
+      const msg = err && err.name === 'AbortError'
+        ? 'Request timed out after 60 s. Please try again.'
+        : `Connection error: ${err && err.message ? err.message : 'Could not reach server.'}`;
+      appendCfoMessage(msg, 'cfo', true);
     } finally {
       busy = false;
       sendBtn.disabled = false;
