@@ -2049,7 +2049,7 @@ function setView(view) {
   const dash = document.getElementById('dashboardSection');
   if (dash) dash.hidden = view !== 'dashboard';
   if (view === 'pivot')     void refreshPivot();
-  if (view === 'dashboard') renderDashboard();
+  if (view === 'dashboard') void renderBudgetDashboard();
 }
 
 for (const t of viewTabs) {
@@ -2682,13 +2682,13 @@ function dashEmptyCheck(agg) {
   return sum === 0;
 }
 
-async function renderDashboard() {
+async function renderBudgetDashboard() {
   const dash = document.getElementById('dashboardSection');
   if (!dash) return;
   // Chart.js loads via CDN with `defer`; retry shortly if the user
   // opens the Dashboard tab before it lands.
   if (typeof Chart === 'undefined') {
-    setTimeout(() => void renderDashboard(), 100);
+    setTimeout(() => void renderBudgetDashboard(), 100);
     return;
   }
   // Register the datalabels plugin if available.
@@ -2740,14 +2740,9 @@ async function renderDashboard() {
     } else {
       dashEmpty.textContent = `Structure has ${lineCount} row${lineCount === 1 ? '' : 's'} but no amounts have been entered yet. Fill in monthly cells to see the dashboard.`;
     }
-  }
-  document.getElementById('dashScaleHint').hidden = empty;
-  document.getElementById('dashScaleHint').innerHTML = agg._fromPivot
-    ? `All amounts are shown in <strong>thousands</strong> (rounded). Source: P&L Pivot (server-computed). Product/division charts require GL → plSection mapping in Financial Structure.`
-    : `All amounts are shown in <strong>thousands</strong> (rounded). Source: this budget's Structure rows.`;
-  destroyDashCharts();
-  if (empty) {
-    // Clear KPI text too.
+    // Early return — agg may be null here so we must not access agg._fromPivot below.
+    document.getElementById('dashScaleHint').hidden = true;
+    destroyDashCharts();
     document.getElementById('dashTotalRev').textContent  = '—';
     document.getElementById('dashGmPct').textContent     = '—';
     document.getElementById('dashTotalOpex').textContent = '—';
@@ -2756,6 +2751,12 @@ async function renderDashboard() {
     document.getElementById('dashSalariesAbs').textContent = '—';
     return;
   }
+  // agg is guaranteed non-null past this point.
+  document.getElementById('dashScaleHint').hidden = false;
+  document.getElementById('dashScaleHint').innerHTML = agg._fromPivot
+    ? `All amounts are shown in <strong>thousands</strong> (rounded). Source: P&L Pivot (server-computed). Product/division charts require GL → plSection mapping in Financial Structure.`
+    : `All amounts are shown in <strong>thousands</strong> (rounded). Source: this budget's Structure rows.`;
+  destroyDashCharts();
 
   // ── Top-line KPIs ─────────────────────────────────────────
   document.getElementById('dashTotalRev').textContent  = fmtThousands(agg.totalRev);
