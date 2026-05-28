@@ -2404,6 +2404,7 @@ function setView(view) {
   }
   if (structureSection) structureSection.hidden = view !== 'structure';
   if (sbSection)        sbSection.hidden        = view !== 'structure' || !currentBudget?.budget?.sbEnabled;
+  if (rcSection)        rcSection.hidden        = view !== 'structure' || !currentBudget?.budget?.rcEnabled;
   if (pivotSection)     pivotSection.hidden     = view !== 'pivot';
   const dash = document.getElementById('dashboardSection');
   if (dash) dash.hidden = view !== 'dashboard';
