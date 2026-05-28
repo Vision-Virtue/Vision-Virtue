@@ -4,7 +4,7 @@ import { linkedInController } from '../controllers/linkedin.controller';
 import { authController, verifyPin } from '../controllers/auth.controller';
 import { chatController } from '../controllers/chat.controller';
 import { partnerController } from '../controllers/partner.controller';
-import { visibilityController, budgetsController, salariesController, cashFlowController, cfPayablesController, cfReceivablesController, cfInventoryController, cfSalariesController, cfManualController, cfForecastController, cfoChatController } from '../controllers/visibility.controller';
+import { visibilityController, budgetsController, salariesController, rcController, cashFlowController, cfPayablesController, cfReceivablesController, cfInventoryController, cfSalariesController, cfManualController, cfForecastController, cfoChatController } from '../controllers/visibility.controller';
 import { requireRaphael, requireLinkedIn, requireAdminPin } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -259,6 +259,14 @@ router.post(
 );
 router.post(  '/visibility/budgets/:id/salaries/finalize',         (req, res) => salariesController.finalize(req, res));
 router.post(  '/visibility/budgets/:id/salaries/edit',             (req, res) => salariesController.edit(req, res));
+
+// Phase 3c — Revenues & COGS (per budget).
+router.get(   '/visibility/budgets/:id/rc',                        (req, res) => rcController.list(req, res));
+router.post(  '/visibility/budgets/:id/rc',                        (req, res) => rcController.createRow(req, res));
+router.patch( '/visibility/budgets/:id/rc/:rowId',                 (req, res) => rcController.patchRow(req, res));
+router.delete('/visibility/budgets/:id/rc/:rowId',                 (req, res) => rcController.removeRow(req, res));
+router.post(  '/visibility/budgets/:id/rc/finalize',               (req, res) => rcController.finalize(req, res));
+router.post(  '/visibility/budgets/:id/rc/edit',                   (req, res) => rcController.edit(req, res));
 
 // ─── CF (Cash Flow) — spec §15 ──────────────────────────────────────────────
 router.get(   '/visibility/budgets/:id/cf',                        (req, res) => cashFlowController.getOrCreate(req, res));
