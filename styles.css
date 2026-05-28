@@ -489,7 +489,7 @@ body {
   transition: max-height 0.4s ease;
 }
 
-.mobile-menu.open { max-height: 300px; }
+.mobile-menu.open { max-height: 520px; }
 
 .mobile-link {
   display: block;
@@ -2540,6 +2540,7 @@ body {
 @media (max-width: 480px) {
   .hero-actions { flex-direction: column; width: 100%; }
   .btn { width: 100%; justify-content: center; }
+  .whatwedo-grid { grid-template-columns: 1fr; }
 }
 
 /* ============================================================
@@ -2873,7 +2874,6 @@ body {
   aspect-ratio: 16 / 9;
   background: #000;
   /* native controls include fullscreen — no extra button needed */
-}
 }
 
 .fw-obj-cell {
