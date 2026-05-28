@@ -2720,11 +2720,34 @@ async function renderBudgetDashboard() {
     } catch (_e) { /* best-effort — fall through to client-side path */ }
   }
 
-  // Primary path: server pivot (authoritative)
+  // Primary path: server pivot (authoritative for top-line KPIs)
   let agg = lastPivotData ? computeDashboardAggFromPivot(lastPivotData) : null;
 
-  // Secondary path: client-side computation from currentBudget.lines + glRows
-  if (dashEmptyCheck(agg)) agg = computeDashboardAgg();
+  // Client-side path: always run so we have dimensional data
+  // (per-Product / per-Activity / per-Department / per-Division breakdowns
+  //  are derived from currentBudget.lines org FKs — the pivot API doesn't expose them).
+  const clientAgg = computeDashboardAgg();
+
+  if (agg && clientAgg) {
+    // Merge: keep pivot's accurate totals but fill in dimensional arrays from client-side.
+    agg = Object.assign({}, agg, {
+      revByProduct:    clientAgg.revByProduct,
+      ebitdaByProduct: clientAgg.ebitdaByProduct,
+      opexByActivity:  clientAgg.opexByActivity,
+      ebitdaByDivision: clientAgg.ebitdaByDivision,
+      opexByDepartment: clientAgg.opexByDepartment,
+      // Prefer client-side category breakdown (handles granularity) unless pivot gave one
+      revByCategory: agg.revByCategory.length > 0 ? agg.revByCategory : clientAgg.revByCategory,
+      // Client-side quarterly split respects the budget's granularity setting
+      revByQuarter: clientAgg.revByQuarter,
+      // Client-side salaries computation is more precise (category-level filter)
+      salariesAndBenefits: clientAgg.salariesAndBenefits > 0
+        ? clientAgg.salariesAndBenefits : agg.salariesAndBenefits,
+    });
+  } else if (!agg) {
+    // No pivot data — fall back entirely to client-side
+    agg = clientAgg;
+  }
 
   const empty = dashEmptyCheck(agg);
   dashEmpty.hidden = !empty;
