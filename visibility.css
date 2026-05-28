@@ -684,6 +684,19 @@
   color: #ffffff;
 }
 
+.vis-budget-structure-note {
+  font-size: 0.78rem;
+  color: rgba(155, 189, 242, 0.75);
+  background: rgba(91, 141, 224, 0.07);
+  border: 1px solid rgba(91, 141, 224, 0.18);
+  border-radius: 6px;
+  padding: 0.45rem 0.75rem;
+  margin: 0 0 0.75rem;
+  line-height: 1.55;
+}
+.vis-budget-structure-note strong { color: rgba(155, 189, 242, 0.95); }
+.vis-budget-structure-note em     { font-style: normal; opacity: 0.85; }
+
 .vis-budget-table-wrap { max-width: 100%; overflow-x: auto; }
 .vis-budget-table { min-width: 2400px; font-size: 0.82rem; }
 .vis-budget-table thead th {

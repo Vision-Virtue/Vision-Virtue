@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0" />
   <title>Vision &amp; Virtue | Visibility</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="visibility.css?v=21" />
+  <link rel="stylesheet" href="visibility.css?v=22" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
@@ -419,6 +419,9 @@
                 <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="deleteBudgetLineBtn" disabled>Delete row</button>
               </div>
             </div>
+            <p class="vis-budget-structure-note">
+              <strong>Sign convention:</strong> Enter <em>Revenue</em> amounts as <strong>negative</strong> (credit movement) and <em>Cost / Expense</em> amounts as <strong>positive</strong> (debit). The Revenues &amp; COGS module applies this automatically when it populates lines from the R&amp;C table.
+            </p>
             <div class="vis-table-wrap vis-budget-table-wrap">
               <table class="vis-table vis-budget-table" id="budgetTable">
                 <thead id="budgetTableHead"></thead>
@@ -1088,6 +1091,6 @@
   <!-- Backdrop (click to close) -->
   <div class="cfo-backdrop" id="cfoBackdrop" aria-hidden="true"></div>
 
-  <script src="visibility.js?v=43" defer></script>
+  <script src="visibility.js?v=44" defer></script>
 </body>
 </html>
