@@ -2428,27 +2428,40 @@ function fmtThousandsSigned(v) {
 }
 
 // Derive dashboard KPIs from the server-computed P&L pivot (groups array).
-// Used as fallback when computeDashboardAgg() returns all zeros (e.g. GL
-// accounts not yet mapped to plSection on the client side).
+// Works with any section names — matches by substring so 'Financial Income/(Expenses)'
+// and similar non-standard names are still counted.
 function computeDashboardAggFromPivot(pivotData) {
   if (!pivotData) return null;
   const groups = pivotData.groups || [];
   if (groups.length === 0) return null;
+
+  // Verify there's ANY non-zero data in the pivot at all
+  const hasData = groups.some(g => Math.abs(g.fyTotal || 0) > 0);
+  if (!hasData) return null;
+
   const byName = new Map(groups.map(g => [g.plSection, g]));
   const absTotal = (sec) => Math.abs(byName.get(sec)?.fyTotal || 0);
+
+  // Standard P&L sections
   const totalRev  = absTotal('Revenues');
   const totalCogs = absTotal('COGS');
   const totalRnd  = absTotal('R&D');
   const totalSm   = absTotal('S&M');
   const totalGa   = absTotal('G&A');
   const totalOpex = totalRnd + totalSm + totalGa;
-  if (totalRev + totalCogs + totalOpex === 0) return null;
 
-  // Revenue by category from pivot
+  // Revenue by category from pivot — Revenues section categories
   const revGroup = byName.get('Revenues');
   const revByCategory = (revGroup?.categories || []).map(c => ({
     name: c.name, value: Math.abs(c.fyTotal || 0),
   })).filter(d => d.value > 0);
+
+  // If no standard Revenues group, build a "Total Revenue" category from all revenue-like groups
+  // by showing ALL sections in the mix chart
+  const finalRevByCategory = revByCategory.length > 0 ? revByCategory :
+    groups.filter(g => Math.abs(g.fyTotal || 0) > 0).map(g => ({
+      name: g.plSection, value: Math.abs(g.fyTotal || 0),
+    }));
 
   // Revenue by quarter from pivot period cells
   const periodKeys = pivotData.periodKeys || [];
@@ -2470,29 +2483,39 @@ function computeDashboardAggFromPivot(pivotData) {
     revByQuarter = { Q1: q, Q2: q, Q3: q, Q4: q };
   }
 
-  // Salaries & benefits from opex categories
-  const opexSections = ['R&D', 'S&M', 'G&A'];
+  // Salaries & benefits from all sections' categories
   let salariesAndBenefits = 0;
-  for (const sec of opexSections) {
-    const g = byName.get(sec);
-    for (const c of g?.categories || []) {
+  for (const g of groups) {
+    for (const c of g.categories || []) {
       if (c.name === 'Salaries and benefits') salariesAndBenefits += Math.abs(c.fyTotal || 0);
     }
   }
 
+  // If no standard OPEX, treat all non-Revenue non-COGS groups as OPEX
+  const effectiveTotalOpex = totalOpex > 0 ? totalOpex :
+    groups.filter(g => g.plSection !== 'Revenues' && g.plSection !== 'COGS')
+          .reduce((s, g) => s + Math.abs(g.fyTotal || 0), 0);
+
+  // Effective revenue = largest value among all groups (Revenues preferred)
+  const effectiveTotalRev = totalRev > 0 ? totalRev :
+    Math.max(...groups.map(g => Math.abs(g.fyTotal || 0)), 0);
+
   return {
-    totalRev, totalCogs, totalOpex, salariesAndBenefits,
-    gmPct:           totalRev > 0 ? ((totalRev - totalCogs) / totalRev) * 100 : 0,
-    opexPct:         totalRev > 0 ? (totalOpex / totalRev) * 100 : 0,
-    salariesOpexPct: totalOpex > 0 ? (salariesAndBenefits / totalOpex) * 100 : 0,
-    revByCategory,
+    totalRev: effectiveTotalRev,
+    totalCogs,
+    totalOpex: effectiveTotalOpex,
+    salariesAndBenefits,
+    gmPct: effectiveTotalRev > 0 ? ((effectiveTotalRev - totalCogs) / effectiveTotalRev) * 100 : 0,
+    opexPct: effectiveTotalRev > 0 ? (effectiveTotalOpex / effectiveTotalRev) * 100 : 0,
+    salariesOpexPct: effectiveTotalOpex > 0 ? (salariesAndBenefits / effectiveTotalOpex) * 100 : 0,
+    revByCategory: finalRevByCategory,
     revByQuarter,
-    revByProduct:    [],   // pivot doesn't carry org-dimension breakdown
+    revByProduct:    [],
     ebitdaByProduct: [],
     opexByActivity:  [],
     ebitdaByDivision:[],
     opexByDepartment:[],
-    _fromPivot: true,     // flag so we can show a hint
+    _fromPivot: true,
   };
 }
 
@@ -2665,44 +2688,55 @@ async function renderDashboard() {
   // Chart.js loads via CDN with `defer`; retry shortly if the user
   // opens the Dashboard tab before it lands.
   if (typeof Chart === 'undefined') {
-    setTimeout(renderDashboard, 60);
+    setTimeout(() => void renderDashboard(), 100);
     return;
   }
-  // Register the datalabels plugin if available. We don't block on
-  // it — if the CDN is blocked (ad blockers, CSP, offline) the
-  // dashboard still renders, just without value labels.
+  // Register the datalabels plugin if available.
   try {
     if (typeof ChartDataLabels !== 'undefined'
         && Chart.registry?.plugins?.get
         && !Chart.registry.plugins.get('datalabels')) {
       Chart.register(ChartDataLabels);
     }
-  } catch (_e) { /* registration is best-effort */ }
+  } catch (_e) { /* best-effort */ }
 
-  // Primary: compute from local lines + glRows.
-  let agg = computeDashboardAgg();
-
-  // Fallback path: if primary gives zero (GL accounts not yet plSection-mapped
-  // client-side, or user opened Dashboard before P&L Pivot tab), fetch the
-  // server-computed pivot on-demand and derive KPIs from it.
-  if (dashEmptyCheck(agg) && currentBudget) {
-    if (!lastPivotData) {
-      try {
-        const pvRes = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/pivot`);
-        if (pvRes.ok) lastPivotData = await pvRes.json();
-      } catch (_e) { /* best-effort */ }
-    }
-    if (lastPivotData) agg = computeDashboardAggFromPivot(lastPivotData) || agg;
-  }
-  const empty = dashEmptyCheck(agg);
+  // Show a loading hint while we fetch
   const dashEmpty = document.getElementById('dashEmpty');
+  const scaleHint = document.getElementById('dashScaleHint');
+  dashEmpty.hidden = false;
+  dashEmpty.textContent = 'Loading dashboard…';
+  if (scaleHint) scaleHint.hidden = true;
+
+  // ── Always fetch the authoritative server-computed pivot ──────
+  // (Do this even if lastPivotData is already set — ensures fresh data
+  //  and is the ONLY reliable way to populate the dashboard regardless
+  //  of whether glRows has plSection mappings loaded client-side.)
+  if (currentBudget) {
+    try {
+      const pvRes = await api(
+        `/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/pivot`,
+      );
+      if (pvRes.ok) lastPivotData = await pvRes.json();
+    } catch (_e) { /* best-effort — fall through to client-side path */ }
+  }
+
+  // Primary path: server pivot (authoritative)
+  let agg = lastPivotData ? computeDashboardAggFromPivot(lastPivotData) : null;
+
+  // Secondary path: client-side computation from currentBudget.lines + glRows
+  if (dashEmptyCheck(agg)) agg = computeDashboardAgg();
+
+  const empty = dashEmptyCheck(agg);
   dashEmpty.hidden = !empty;
   // Be specific about *why* the dashboard is empty so the user knows
   // whether to add Structure rows or fill in amounts.
   if (empty) {
     const lineCount = (currentBudget?.lines || []).length;
+    const pivotGroups = lastPivotData?.groups?.length || 0;
     if (lineCount === 0) {
       dashEmpty.textContent = 'No data to visualize. Add Budget Structure rows first.';
+    } else if (pivotGroups > 0) {
+      dashEmpty.textContent = 'Budget structure exists but all amounts are zero. Fill in the monthly cell values to see the dashboard.';
     } else {
       dashEmpty.textContent = `Structure has ${lineCount} row${lineCount === 1 ? '' : 's'} but no amounts have been entered yet. Fill in monthly cells to see the dashboard.`;
     }
