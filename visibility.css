@@ -1118,6 +1118,22 @@
 }
 .vis-cube-kpi-accent .vis-cube-value { color: #ffffff; }
 
+/* Gross Margin % — light green tile */
+.vis-cube-kpi-green {
+  background: linear-gradient(160deg, rgba(74, 180, 74, 0.22) 0%, rgba(74, 180, 74, 0.05) 100%);
+  border-color: rgba(120, 210, 100, 0.40);
+}
+.vis-cube-kpi-green .vis-cube-value { color: #a8efb0; }
+.vis-cube-kpi-green .vis-cube-label { color: rgba(168, 239, 176, 0.80); }
+.vis-cube-kpi-green .vis-cube-foot  { color: rgba(168, 239, 176, 0.60); }
+
+/* KPI tiles — larger amount text to fill the cube */
+.vis-cube-kpi .vis-cube-value {
+  font-size: 2.6rem;
+}
+/* Salaries & benefits / OPEX % — slightly smaller so the longer label doesn't crowd */
+#dashSalariesPct { font-size: 2.2rem; }
+
 .vis-cube-chart {
   min-height: 230px;
 }

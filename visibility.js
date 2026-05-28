@@ -1127,10 +1127,11 @@ function parsePct(str) {
 // scale change is display-only; underlying values untouched).
 function scaleFactor(scale) { return scale === 'thousands' ? 1000 : 1; }
 
-/** Format a raw amount for display in a period input. Empty/zero → ''. */
+/** Format a raw amount for display in a period input. Empty/zero → ''.
+ *  Budget Structure stores only integers, so no decimal places are shown. */
 function fmtCellDisplay(raw, scale) {
   if (!Number.isFinite(raw) || raw === 0) return '';
-  return (raw / scaleFactor(scale)).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return (raw / scaleFactor(scale)).toLocaleString('en-US', { maximumFractionDigits: 0 });
 }
 
 /** Format an amount for display in read-only cells.
@@ -1254,7 +1255,8 @@ budgetTableBody.addEventListener('change', async (ev) => {
 
   if (field === 'cell') {
     const period = target.dataset.period;
-    const raw = parseCellInput(target.value, currentBudget.budget.scale);
+    // Budget Structure only stores integers — round any decimal input.
+    const raw = Math.round(parseCellInput(target.value, currentBudget.budget.scale));
     line.cells[period] = raw;
     // Reformat the cell with commas now that the user has finished typing
     // (change event fires on blur for text inputs).
