@@ -5893,19 +5893,107 @@ function formatTileMoney(v) {
       };
     }
 
-    // Step 5: CF Structure
+    // Step 5: CF Structure — pass full settings so CFO can assess WC params
     if (currentCf) {
       ctx.cfStructure = {
-        budgetName: currentCf.budget ? currentCf.budget.name : null,
-        openingBalance: currentCf.cf ? currentCf.cf.openingBalance : null,
+        budgetName:     currentCf.budget?.name || null,
+        openingBalance: currentCf.cf?.openingBalance ?? null,
+        status:         currentCf.cf?.status || null,
+        granularity:    currentCf.budget?.granularity || null,
+        periodKeys:     currentCf.periodKeys || [],
       };
+      // Payables section (if user has navigated to it)
+      if (currentPayables && currentPayables.payables) {
+        const pRows = currentPayables.payables.rows || [];
+        ctx.cfStructure.payables = {
+          openingBalance: currentPayables.payables.openingBalance ?? 0,
+          rowCount: pRows.length,
+          rows: pRows.map(r => ({
+            plSection:   r.plSection,
+            category:    r.budgetCategory,
+            paymentTerm: r.paymentTerm,
+            fyExpense:   r.fyExpense,
+            fyPayment:   r.fyPayment,
+          })),
+        };
+      }
+      // Receivables section
+      if (currentReceivables && currentReceivables.receivables) {
+        const rRows = currentReceivables.receivables.rows || [];
+        ctx.cfStructure.receivables = {
+          openingBalance: currentReceivables.receivables.openingBalance ?? 0,
+          rowCount: rRows.length,
+          rows: rRows.map(r => ({
+            plSection:      r.plSection,
+            category:       r.budgetCategory,
+            paymentTerm:    r.paymentTerm,
+            fyRevenue:      r.fyRevenue,
+            fyCollection:   r.fyCollection,
+          })),
+        };
+      }
+      // Inventory section
+      if (currentInventory && currentInventory.inventory) {
+        const iRows = currentInventory.inventory.rows || [];
+        ctx.cfStructure.inventory = {
+          openingBalance: currentInventory.inventory.openingBalance ?? 0,
+          rowCount: iRows.length,
+          rows: iRows.map(r => ({
+            plSection:   r.plSection,
+            category:    r.budgetCategory,
+            paymentTerm: r.paymentTerm,
+            fyAmount:    r.fyAmount,
+          })),
+        };
+      }
+      // Salaries section
+      if (currentSalaries && currentSalaries.salaries) {
+        const sRows = currentSalaries.salaries.rows || [];
+        ctx.cfStructure.salaries = {
+          openingBalance: currentSalaries.salaries.openingBalance ?? 0,
+          rowCount: sRows.length,
+          rows: sRows.map(r => ({
+            description:  r.description,
+            fyTotal:      r.fyTotal,
+          })),
+        };
+      }
     }
 
-    // Step 6: CF Forecast
+    // Step 6: CF Forecast — pass actual numbers per period
     if (currentForecast) {
-      // Send first 3 periods as a sample
-      const periods = Object.keys(currentForecast).slice(0, 3);
-      ctx.cfForecast = { available: true, samplePeriods: periods.length };
+      const pks  = currentForecast.periodKeys || [];
+      const rows = currentForecast.rows || {};
+      // Build per-period breakdown
+      const periods = {};
+      for (const pk of pks) {
+        periods[pk] = {
+          openingBalance: rows.ob?.[pk]        ?? 0,
+          ebitda:         rows.ebitda?.[pk]    ?? 0,
+          workingCapital: rows.wc?.[pk]        ?? 0,
+          salaries:       rows.salaries?.[pk]  ?? 0,
+          otherAdj:       rows.otherAdj?.[pk]  ?? 0,
+          financing:      rows.financing?.[pk] ?? 0,
+          capex:          rows.capex?.[pk]     ?? 0,
+          closingBalance: rows.cb?.[pk]        ?? 0,
+        };
+      }
+      // Compute summary metrics for quick CFO assessment
+      const cbValues          = pks.map(pk => rows.cb?.[pk] ?? 0);
+      const minClosingBalance = cbValues.length ? Math.min(...cbValues) : null;
+      const finalBalance      = cbValues.length ? cbValues[cbValues.length - 1] : null;
+      const negativePeriods   = pks.filter(pk => (rows.cb?.[pk] ?? 0) < 0);
+      ctx.cfForecast = {
+        granularity: currentForecast.granularity,
+        periodKeys:  pks,
+        periods,
+        wcBreakdown: currentForecast.wcBreakdown || null,
+        summary: {
+          minClosingBalance,
+          finalClosingBalance:    finalBalance,
+          periodsWithNegativeCash: negativePeriods,
+        },
+      };
     }
 
     return ctx;
