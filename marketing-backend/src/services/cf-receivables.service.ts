@@ -230,7 +230,7 @@ export function computeReceivablesGrid(
   const orphans: Array<{ rowId: string; companyId: string | null; plSection: string; budgetCategory: string }> = [];
   for (const r of allStoredRows) {
     if (!r.plSection || !r.budgetCategory) continue;
-    const key = `${r.companyId ?? ''}|${r.plSection}|${r.budgetCategory}`;
+    const key = `${r.companyId ?? ''}|${r.budgetCategory}`; // must match liveKeys (2-part: no plSection — always 'Revenues')
     if (!liveKeys.has(key)) {
       orphans.push({
         rowId:          r.id,

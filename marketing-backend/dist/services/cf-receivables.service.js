@@ -165,7 +165,7 @@ function computeReceivablesGrid(budget, cashFlowId, customerKeyId) {
     for (const r of allStoredRows) {
         if (!r.plSection || !r.budgetCategory)
             continue;
-        const key = `${r.companyId ?? ''}|${r.plSection}|${r.budgetCategory}`;
+        const key = `${r.companyId ?? ''}|${r.budgetCategory}`; // must match liveKeys (2-part: plSection always 'Revenues')
         if (!liveKeys.has(key)) {
             orphans.push({
                 rowId: r.id,
