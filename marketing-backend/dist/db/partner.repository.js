@@ -6,6 +6,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.partnerSubmissionRepo = exports.customerKeyRepo = void 0;
 const uuid_1 = require("uuid");
+const crypto_1 = require("crypto");
 const database_1 = require("./database");
 // ─── Customer Keys ────────────────────────────────────────────────────────────
 exports.customerKeyRepo = {
@@ -45,12 +46,19 @@ exports.customerKeyRepo = {
         (0, database_1.getDb)().prepare('UPDATE customer_keys SET revoked = 1 WHERE id = ?').run(id);
     },
 };
-/** Random VV-XXXXXX key (6 chars, A-Z+0-9, unambiguous). */
+/** Random VV-XXXXXX key (6 chars, A-Z+0-9, unambiguous).
+ *  Uses crypto.randomBytes for a cryptographically secure source. */
 function generateKey() {
     const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // skip ambiguous chars (I,O,0,1)
+    const len = alphabet.length; // 32 — power of 2, so no rejection bias
     let s = '';
-    for (let i = 0; i < 6; i++)
-        s += alphabet[Math.floor(Math.random() * alphabet.length)];
+    while (s.length < 6) {
+        const buf = (0, crypto_1.randomBytes)(12);
+        for (let i = 0; i < buf.length && s.length < 6; i++) {
+            // 256 % 32 === 0, so every byte maps to the alphabet without bias
+            s += alphabet[buf[i] % len];
+        }
+    }
     return `VV-${s}`;
 }
 // ─── Partner Submissions ──────────────────────────────────────────────────────

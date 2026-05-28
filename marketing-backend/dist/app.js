@@ -78,6 +78,14 @@ app.use('/api/auth', (0, express_rate_limit_1.default)({
     legacyHeaders: false,
     message: { error: { code: 'RATE_LIMITED', message: 'Too many auth requests, please try again later.' } },
 }));
+// Stricter limit on customer key auth (prevents key enumeration / brute-force)
+app.use('/api/customer/auth', (0, express_rate_limit_1.default)({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: { code: 'RATE_LIMITED', message: 'Too many auth requests, please try again later.' } },
+}));
 // Stricter limit on AI chat endpoints (cost protection)
 app.use('/api/chat', (0, express_rate_limit_1.default)({
     windowMs: 60 * 1000,
