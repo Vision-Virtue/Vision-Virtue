@@ -13,20 +13,22 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.pivotEntryToCells = pivotEntryToCells;
 exports.validateAndPivotSalaries = validateAndPivotSalaries;
 const EPSILON = 0.001; // small tolerance for FP comparisons
-/** Compute period cell amounts for one pivot entry given the budget granularity. */
+/** Compute period cell amounts for one pivot entry given the budget granularity.
+ *  Rounds to the nearest integer — Budget Structure does not store decimals. */
 function pivotEntryToCells(allocatedMonthly, granularity) {
+    const m = Math.round(allocatedMonthly);
     if (granularity === 'monthly') {
         const out = {};
         for (let i = 1; i <= 12; i++) {
-            out[`M${String(i).padStart(2, '0')}`] = allocatedMonthly;
+            out[`M${String(i).padStart(2, '0')}`] = m;
         }
         return out;
     }
     if (granularity === 'quarterly') {
-        return { Q1: allocatedMonthly * 3, Q2: allocatedMonthly * 3, Q3: allocatedMonthly * 3, Q4: allocatedMonthly * 3 };
+        return { Q1: m * 3, Q2: m * 3, Q3: m * 3, Q4: m * 3 };
     }
     // yearly
-    return { FY: allocatedMonthly * 12 };
+    return { FY: m * 12 };
 }
 function validateAndPivotSalaries(rows) {
     const errors = [];
