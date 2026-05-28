@@ -1135,12 +1135,12 @@ function fmtCellDisplay(raw, scale) {
 }
 
 /** Format an amount for display in read-only cells.
- *  Negative values render as (1,234.56) per accounting convention.
- *  Zero / empty → '—'. */
+ *  Negative values render as (1,234) per accounting convention.
+ *  Zero / empty → '—'. No decimals — Budget Structure is integers only. */
 function fmtAmountAccounting(raw, scale) {
   if (!Number.isFinite(raw) || raw === 0) return '—';
   const abs = Math.abs(raw / scaleFactor(scale));
-  const s = abs.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  const s = abs.toLocaleString('en-US', { maximumFractionDigits: 0 });
   return raw < 0 ? `(${s})` : s;
 }
 
@@ -1149,7 +1149,7 @@ function fmtAmountAccounting(raw, scale) {
  *  Underlying signed value is preserved in the data + export. */
 function fmtAmountAbsDisplay(raw, scale) {
   if (!Number.isFinite(raw) || raw === 0) return '—';
-  return Math.abs(raw / scaleFactor(scale)).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return Math.abs(raw / scaleFactor(scale)).toLocaleString('en-US', { maximumFractionDigits: 0 });
 }
 
 /** Format a percentage. Negative → (xx.xx%). */

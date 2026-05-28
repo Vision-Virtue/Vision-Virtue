@@ -1129,10 +1129,13 @@
 
 /* KPI tiles — larger amount text to fill the cube */
 .vis-cube-kpi .vis-cube-value {
-  font-size: 2.6rem;
+  font-size: 3.4rem !important;
+  line-height: 1.1;
 }
-/* Salaries & benefits / OPEX % — slightly smaller so the longer label doesn't crowd */
-#dashSalariesPct { font-size: 2.2rem; }
+/* Salaries & benefits / OPEX % — slightly smaller so the longer label fits */
+#dashSalariesPct {
+  font-size: 2.8rem !important;
+}
 
 .vis-cube-chart {
   min-height: 230px;
