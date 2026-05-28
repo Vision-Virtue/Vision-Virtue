@@ -878,7 +878,7 @@ function renderBudgetList() {
     li.innerHTML = `
       <div class="vis-budget-list-info">
         <div class="vis-budget-list-name">${htmlEsc(name)}</div>
-        <div class="vis-budget-list-meta">FY ${b.year} · ${b.granularity} · ${sym}${b.currency} · ${b.scale}${b.sbEnabled ? ' · S&B' : ''}</div>
+        <div class="vis-budget-list-meta">FY ${b.year} · ${b.granularity} · ${sym}${b.currency} · ${b.scale}${b.sbEnabled ? ' · S&B' : ''}${b.rcEnabled ? ' · R&C' : ''}</div>
       </div>
       ${statusBadge}
       <div class="vis-budget-list-actions">
@@ -981,6 +981,8 @@ function renderEditor() {
   renderFooterSummary();
   refreshSBSectionVisibility();
   if (currentBudget.budget.sbEnabled) void loadSalaries();
+  refreshRCSectionVisibility();
+  if (currentBudget.budget.rcEnabled) void loadRC();
 }
 
 function renderStatusPill() {
@@ -1012,6 +1014,7 @@ function renderSetupPills() {
     currency: setup.currency,
     scale: setup.scale,
     sbEnabled: String(setup.sbEnabled),
+    rcEnabled: String(setup.rcEnabled),
   };
   for (const group of document.querySelectorAll('.vis-pillgroup')) {
     const key = group.dataset.setup;
@@ -1031,7 +1034,7 @@ document.querySelectorAll('.vis-pillgroup').forEach(group => {
     if (!key || raw == null) return;
     let value;
     if (key === 'year') value = parseInt(raw, 10);
-    else if (key === 'sbEnabled') value = raw === 'true';
+    else if (key === 'sbEnabled' || key === 'rcEnabled') value = raw === 'true';
     else value = raw;
     const payload = { [key]: value };
     try {
@@ -1064,6 +1067,11 @@ document.querySelectorAll('.vis-pillgroup').forEach(group => {
       if (key === 'sbEnabled') {
         refreshSBSectionVisibility();
         if (currentBudget.budget.sbEnabled) void loadSalaries();
+      }
+      // Toggling R&C reveals or hides the Revenues & COGS panel.
+      if (key === 'rcEnabled') {
+        refreshRCSectionVisibility();
+        if (currentBudget.budget.rcEnabled) void loadRC();
       }
     } catch (err) {
       showBanner(bgEditorError, htmlEsc(`Save failed: ${(err && err.message) || err}`));
@@ -2002,6 +2010,357 @@ sbDeleteRowBtn?.addEventListener('click', async () => {
     await loadSalaries();
   } catch (err) {
     showBanner(sbErrorBanner, htmlEsc(`Remove failed: ${(err && err.message) || err}`));
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+//  PHASE 3c-RC — Revenues & COGS module
+// ─────────────────────────────────────────────────────────────
+
+const rcSection     = document.getElementById('rcSection');
+const rcStatusPill  = document.getElementById('rcStatusPill');
+const rcTableHead   = document.getElementById('rcTableHead');
+const rcTableBody   = document.getElementById('rcTableBody');
+const rcEmpty       = document.getElementById('rcEmpty');
+const rcErrorBanner = document.getElementById('rcErrorBanner');
+const rcInfoBanner  = document.getElementById('rcInfoBanner');
+const rcSummary     = document.getElementById('rcSummary');
+const rcAddRowBtn   = document.getElementById('rcAddRowBtn');
+const rcDeleteRowBtn = document.getElementById('rcDeleteRowBtn');
+const rcFinalizeBtn = document.getElementById('rcFinalizeBtn');
+const rcEditBtn     = document.getElementById('rcEditBtn');
+
+let rcState = { status: 'editing', rows: [] };
+
+// Month keys in RC table are always monthly (12 columns) regardless of
+// budget granularity — the service aggregates when populating budget lines.
+const RC_MONTHS = ['M01','M02','M03','M04','M05','M06','M07','M08','M09','M10','M11','M12'];
+const RC_MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function refreshRCSectionVisibility() {
+  if (!rcSection || !currentBudget) return;
+  rcSection.hidden = !currentBudget.budget.rcEnabled;
+}
+
+function buildRCTableHead() {
+  if (!rcTableHead) return;
+  const year = currentBudget?.budget?.year || new Date().getFullYear();
+  const yy = String(year).slice(2);
+  const monthThs = RC_MONTH_LABELS.map((m, i) =>
+    `<th class="is-number vis-rc-qty-col">${m}-${yy}</th>`
+  ).join('');
+  rcTableHead.innerHTML = `<tr>
+    <th class="vis-col-num">#</th>
+    <th>Company</th>
+    <th>Division</th>
+    <th>Department</th>
+    <th>Product</th>
+    <th>Activity</th>
+    <th>Revenues GL</th>
+    <th class="is-number">Price</th>
+    <th>COGS GL</th>
+    <th class="is-number">Cost</th>
+    ${monthThs}
+    <th></th>
+  </tr>`;
+}
+
+async function loadRC() {
+  if (!currentBudget || !currentBudget.budget.rcEnabled) return;
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/rc`);
+    if (!res.ok) {
+      showBanner(rcErrorBanner, `Could not load Revenues & COGS (${res.status}).`);
+      return;
+    }
+    const data = await res.json();
+    rcState.status = data.status || 'editing';
+    rcState.rows   = data.rows   || [];
+    buildRCTableHead();
+    renderRCTable();
+    refreshRCStatus();
+    refreshRCValidation();
+  } catch (err) {
+    showBanner(rcErrorBanner, htmlEsc(`Could not load Revenues & COGS: ${(err && err.message) || err}`));
+  }
+}
+
+function refreshRCStatus() {
+  if (!rcStatusPill) return;
+  rcStatusPill.dataset.status = rcState.status;
+  rcStatusPill.textContent    = rcState.status === 'finalized' ? 'Finalized' : 'Editing';
+  document.body.classList.toggle('is-rc-finalized', rcState.status === 'finalized');
+  rcEditBtn.hidden     = rcState.status !== 'finalized';
+  rcFinalizeBtn.hidden = rcState.status === 'finalized';
+}
+
+function refreshRCValidation() {
+  const rows = rcState.rows || [];
+  const missingRevGl = rows.filter(r => !r.revGlId);
+  const hasMissingQty = rows.some(r =>
+    RC_MONTHS.every(m => !(Number(r.cells?.[m]) > 0))
+  );
+  let msg = '';
+  if (rows.length > 0 && missingRevGl.length > 0)
+    msg = `${missingRevGl.length} row${missingRevGl.length === 1 ? '' : 's'} need a Revenues GL before finalizing.`;
+  showBanner(rcErrorBanner, msg);
+  const canFinalize = rows.length > 0 && missingRevGl.length === 0;
+  rcFinalizeBtn.disabled = !canFinalize;
+  if (rows.length === 0) {
+    rcSummary.textContent = '';
+    rcSummary.className = 'vis-validation-summary';
+  } else if (missingRevGl.length > 0) {
+    rcSummary.textContent = `${rows.length} row${rows.length === 1 ? '' : 's'} · ${missingRevGl.length} missing Revenue GL`;
+    rcSummary.className = 'vis-validation-summary is-error';
+  } else {
+    rcSummary.textContent = `${rows.length} row${rows.length === 1 ? '' : 's'} · Ready to finalize`;
+    rcSummary.className = 'vis-validation-summary is-ready';
+  }
+}
+
+function buildRCGLOptions(selectedId, filter) {
+  // filter: 'revenues' → only GLs in Revenues section
+  //         'cogs'     → only GLs in COGS section
+  //         falsy      → all GLs
+  const all = (glRows || []);
+  const list = filter
+    ? all.filter(g => g.plSection === (filter === 'revenues' ? 'Revenues' : 'COGS'))
+    : all;
+  let html = '<option value="">— Select GL —</option>';
+  for (const g of list) {
+    const sel = g.id === selectedId ? ' selected' : '';
+    html += `<option value="${htmlEsc(g.id)}"${sel}>${htmlEsc(g.glName)}</option>`;
+  }
+  return html;
+}
+
+function renderRCTable() {
+  if (!rcTableBody) return;
+  clearRowSelection(rcTableBody, rcDeleteRowBtn);
+  rcTableBody.innerHTML = '';
+  const rows = rcState.rows || [];
+  rcEmpty.hidden = rows.length > 0;
+
+  const scale = currentBudget?.budget?.scale || 'standard';
+  const finalized = rcState.status === 'finalized';
+
+  rows.forEach((r, idx) => {
+    const tr = document.createElement('tr');
+    tr.dataset.id = r.id;
+
+    const monthCells = RC_MONTHS.map(m => {
+      const val = Number(r.cells?.[m]) || 0;
+      const disp = val === 0 ? '' : fmtCellDisplay(val, 'standard');
+      if (finalized) return `<td class="is-number is-readonly">${disp || '—'}</td>`;
+      return `<td class="is-number"><input type="text" inputmode="decimal" data-field="qty" data-month="${m}" value="${htmlEsc(disp)}" /></td>`;
+    }).join('');
+
+    const orgSelOrVal = (dim, id) => finalized
+      ? `<td>${htmlEsc(orgById(id) || '—')}</td>`
+      : `<td><select data-field="${dim}Id">${buildOrgOptions(dim, id)}</select></td>`;
+
+    const glSelOrVal = (field, id, filter) => finalized
+      ? `<td>${htmlEsc((glRows || []).find(g => g.id === id)?.glName || '—')}</td>`
+      : `<td><select data-field="${field}">${buildRCGLOptions(id, filter)}</select></td>`;
+
+    const numInputOrVal = (field, val) => finalized
+      ? `<td class="is-number is-readonly">${val ? fmtCellDisplay(val, 'standard') : '—'}</td>`
+      : `<td class="is-number"><input type="text" inputmode="decimal" data-field="${field}" value="${val ? htmlEsc(fmtCellDisplay(val, 'standard')) : ''}" /></td>`;
+
+    tr.innerHTML = `
+      <td>${idx + 1}</td>
+      ${orgSelOrVal('company',    r.companyId)}
+      ${orgSelOrVal('division',   r.divisionId)}
+      ${orgSelOrVal('department', r.departmentId)}
+      ${orgSelOrVal('product',    r.productId)}
+      ${orgSelOrVal('activity',   r.activityId)}
+      ${glSelOrVal('revGlId',  r.revGlId,  'revenues')}
+      ${numInputOrVal('price', r.price)}
+      ${glSelOrVal('cogsGlId', r.cogsGlId, 'cogs')}
+      ${numInputOrVal('cost',  r.cost)}
+      ${monthCells}
+      <td class="is-actions">${finalized ? '' : '<button type="button" class="vis-budget-line-rm" data-action="rc-remove" aria-label="Remove">×</button>'}</td>
+    `;
+    rcTableBody.appendChild(tr);
+  });
+}
+
+// Helper: name of org entity by id
+function orgById(id) {
+  if (!id) return null;
+  for (const dim of ORG_DIMENSIONS) {
+    const found = (osEntities[dim] || []).find(e => e.id === id);
+    if (found) return found.name;
+  }
+  return null;
+}
+
+async function rcPatch(rowId, fields) {
+  try {
+    const res = await api(
+      `/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/rc/${encodeURIComponent(rowId)}`,
+      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) },
+    );
+    if (!res.ok) {
+      const er = await res.json().catch(() => ({}));
+      showBanner(rcErrorBanner, htmlEsc(er?.error?.message || `Save failed (${res.status}).`));
+    }
+  } catch (err) {
+    showBanner(rcErrorBanner, htmlEsc(`Save failed: ${(err && err.message) || err}`));
+  }
+}
+
+// Add row
+rcAddRowBtn?.addEventListener('click', async () => {
+  if (!currentBudget || rcState.status === 'finalized') return;
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/rc`, { method: 'POST' });
+    if (!res.ok) { showBanner(rcErrorBanner, `Could not add row (${res.status}).`); return; }
+    const data = await res.json();
+    rcState.rows.push(data.row);
+    renderRCTable();
+    refreshRCValidation();
+  } catch (err) {
+    showBanner(rcErrorBanner, htmlEsc(`Could not add row: ${(err && err.message) || err}`));
+  }
+});
+
+// Delete selected rows
+rcDeleteRowBtn?.addEventListener('click', async () => {
+  if (!currentBudget || rcState.status === 'finalized') return;
+  const selectedIds = [...rcTableBody.querySelectorAll('tr.is-selected')].map(tr => tr.dataset.id);
+  if (selectedIds.length === 0) return;
+  try {
+    await Promise.all(selectedIds.map(id =>
+      api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/rc/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    ));
+    rcState.rows = rcState.rows.filter(r => !selectedIds.includes(r.id));
+    clearRowSelection(rcTableBody, rcDeleteRowBtn);
+    renderRCTable();
+    refreshRCValidation();
+  } catch (err) {
+    showBanner(rcErrorBanner, htmlEsc(`Delete failed: ${(err && err.message) || err}`));
+  }
+});
+
+// Row selection (uses the same clearRowSelection / toggle as budget/salaries tables)
+rcTableBody?.addEventListener('click', (ev) => {
+  if (rcState.status === 'finalized') return;
+  const tr = ev.target.closest('tr');
+  if (!tr || ev.target.closest('select') || ev.target.closest('input') || ev.target.closest('button')) return;
+  tr.classList.toggle('is-selected');
+  const count = rcTableBody.querySelectorAll('tr.is-selected').length;
+  if (rcDeleteRowBtn) rcDeleteRowBtn.disabled = count === 0;
+});
+
+// Remove icon inside a row
+rcTableBody?.addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('[data-action="rc-remove"]');
+  if (!btn || !currentBudget || rcState.status === 'finalized') return;
+  const tr = btn.closest('tr');
+  if (!tr) return;
+  const id = tr.dataset.id;
+  try {
+    const res = await api(
+      `/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/rc/${encodeURIComponent(id)}`,
+      { method: 'DELETE' }
+    );
+    if (res.ok) {
+      rcState.rows = rcState.rows.filter(r => r.id !== id);
+      renderRCTable();
+      refreshRCValidation();
+    }
+  } catch (err) {
+    showBanner(rcErrorBanner, htmlEsc(`Remove failed: ${(err && err.message) || err}`));
+  }
+});
+
+// Field changes → PATCH
+rcTableBody?.addEventListener('change', async (ev) => {
+  if (rcState.status === 'finalized') return;
+  const target = ev.target;
+  if (!(target instanceof HTMLElement)) return;
+  const tr = target.closest('tr');
+  if (!tr) return;
+  const id = tr.dataset.id;
+  const row = rcState.rows.find(r => r.id === id);
+  if (!row) return;
+  const field = target.dataset.field;
+  if (!field) return;
+
+  if (field === 'qty') {
+    // Monthly quantity cell
+    const month = target.dataset.month;
+    if (!month) return;
+    const val = parseCellInput(target.value, 'standard');
+    if (!row.cells) row.cells = {};
+    row.cells[month] = val;
+    target.value = val === 0 ? '' : fmtCellDisplay(val, 'standard');
+    // Build full cells from current DOM to save all 12 months at once
+    const allCells = {};
+    RC_MONTHS.forEach(m => {
+      const inp = tr.querySelector(`input[data-month="${m}"]`);
+      const v = inp ? parseCellInput(inp.value, 'standard') : (row.cells?.[m] || 0);
+      allCells[m] = v;
+    });
+    await rcPatch(id, { cells: allCells });
+  } else if (field === 'price' || field === 'cost') {
+    const val = parseCellInput(target.value, 'standard');
+    row[field] = val;
+    target.value = val === 0 ? '' : fmtCellDisplay(val, 'standard');
+    await rcPatch(id, { [field]: val });
+  } else if (field === 'revGlId' || field === 'cogsGlId') {
+    const val = target.value || null;
+    row[field] = val;
+    await rcPatch(id, { [field]: val });
+    refreshRCValidation();
+  } else if (['companyId','divisionId','departmentId','productId','activityId'].includes(field)) {
+    const val = target.value || null;
+    row[field] = val;
+    await rcPatch(id, { [field]: val });
+  }
+});
+
+// Finalize
+rcFinalizeBtn?.addEventListener('click', async () => {
+  if (!currentBudget || rcState.status === 'finalized') return;
+  try {
+    const res = await api(
+      `/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/rc/finalize`,
+      { method: 'POST' }
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      showBanner(rcErrorBanner, htmlEsc(data?.error?.message || `Finalize failed (${res.status}).`));
+      return;
+    }
+    rcState.status = 'finalized';
+    refreshRCStatus();
+    renderRCTable();
+    showBanner(rcInfoBanner, `Revenues & COGS finalized — ${data.pivotCount} budget line${data.pivotCount === 1 ? '' : 's'} created.`);
+    // Reload budget lines to show the newly created RC lines in the Budget Structure
+    await openBudget(currentBudget.budget.id);
+  } catch (err) {
+    showBanner(rcErrorBanner, htmlEsc(`Finalize failed: ${(err && err.message) || err}`));
+  }
+});
+
+// Edit (re-open finalized RC)
+rcEditBtn?.addEventListener('click', async () => {
+  if (!currentBudget) return;
+  try {
+    const res = await api(
+      `/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/rc/edit`,
+      { method: 'POST' }
+    );
+    if (res.ok) {
+      rcState.status = 'editing';
+      refreshRCStatus();
+      renderRCTable();
+      showBanner(rcInfoBanner, '');
+    }
+  } catch (err) {
+    showBanner(rcErrorBanner, htmlEsc(`Edit failed: ${(err && err.message) || err}`));
   }
 });
 

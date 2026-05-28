@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0" />
   <title>Vision &amp; Virtue | Visibility</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="visibility.css?v=20" />
+  <link rel="stylesheet" href="visibility.css?v=21" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
@@ -312,12 +312,52 @@
                   <button type="button" data-value="false">No</button>
                 </div>
               </div>
+              <div class="vis-budget-setup-field">
+                <label>6. Connect Revenues &amp; COGS module?</label>
+                <div class="vis-pillgroup" data-setup="rcEnabled">
+                  <button type="button" data-value="true">Yes</button>
+                  <button type="button" data-value="false">No</button>
+                </div>
+              </div>
             </div>
             <p class="vis-budget-setup-note">Changing granularity will auto-aggregate or evenly split your entered amounts (spec §6).</p>
           </section>
 
           <div class="vis-banner vis-banner-error" id="bgEditorErrorBanner" hidden></div>
           <div class="vis-banner vis-banner-info"  id="bgEditorInfoBanner"  hidden></div>
+
+          <!-- Revenues & COGS sub-panel (shown only when budget.rcEnabled) -->
+          <section class="vis-sb-section" id="rcSection" hidden>
+            <header class="vis-sb-header">
+              <div>
+                <h3 class="vis-sb-title">Revenues &amp; COGS</h3>
+                <p class="vis-sb-sub">Enter each product/service with its Revenue GL, Price, COGS GL, Cost, and monthly quantities sold. On Finalize, rows are pivot-aggregated into your Budget Structure (Price × Qty → Revenue lines, Cost × Qty → COGS lines).</p>
+              </div>
+              <span class="vis-status-pill" id="rcStatusPill" data-status="editing">Editing</span>
+            </header>
+
+            <div class="vis-sb-toolbar">
+              <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="rcAddRowBtn">+ Add row</button>
+              <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="rcDeleteRowBtn" disabled>Delete row</button>
+            </div>
+
+            <div class="vis-banner vis-banner-error" id="rcErrorBanner" hidden></div>
+            <div class="vis-banner vis-banner-info"  id="rcInfoBanner"  hidden></div>
+
+            <div class="vis-table-wrap vis-rc-table-wrap">
+              <table class="vis-table vis-rc-table" id="rcTable">
+                <thead id="rcTableHead"></thead>
+                <tbody id="rcTableBody"></tbody>
+              </table>
+            </div>
+            <div class="vis-empty" id="rcEmpty">No rows yet. Click <strong>+ Add row</strong> to begin.</div>
+
+            <footer class="vis-sb-actions">
+              <span class="vis-validation-summary" id="rcSummary"></span>
+              <button type="button" class="vis-btn vis-btn-ghost"   id="rcEditBtn"     hidden>Edit</button>
+              <button type="button" class="vis-btn vis-btn-primary" id="rcFinalizeBtn" disabled>Finalize Revenues &amp; COGS</button>
+            </footer>
+          </section>
 
           <!-- Salaries & Benefits sub-panel (shown only when budget.sbEnabled) -->
           <section class="vis-sb-section" id="sbSection" hidden>
@@ -1048,6 +1088,6 @@
   <!-- Backdrop (click to close) -->
   <div class="cfo-backdrop" id="cfoBackdrop" aria-hidden="true"></div>
 
-  <script src="visibility.js?v=42" defer></script>
+  <script src="visibility.js?v=43" defer></script>
 </body>
 </html>
