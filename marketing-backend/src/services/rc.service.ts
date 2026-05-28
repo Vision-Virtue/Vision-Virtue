@@ -83,7 +83,10 @@ export function pivotRcRows(rows: RcRow[], granularity: Granularity): RcPivotEnt
           cells:        emptyPeriodCells(granularity),
         });
       }
-      addAmountsFromQty(revMap.get(key)!.cells, qty, row.price, granularity);
+      // Revenues are credit movements in accounting → stored as negative amounts
+      // so they display correctly in the P&L pivot (Revenues entered negative,
+      // absCell() is used for display, matching manually-entered revenue lines).
+      addAmountsFromQty(revMap.get(key)!.cells, qty, -row.price, granularity);
     }
 
     // COGS pivot

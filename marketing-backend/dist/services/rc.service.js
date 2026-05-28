@@ -41,7 +41,8 @@ function pivotRcRows(rows, granularity) {
                     cells: emptyPeriodCells(granularity),
                 });
             }
-            addAmountsFromQty(revMap.get(key).cells, qty, row.price, granularity);
+            // Revenues are credit movements in accounting → stored as negative amounts
+        addAmountsFromQty(revMap.get(key).cells, qty, -row.price, granularity);
         }
         if (row.cogsGlId) {
             const key = [row.companyId ?? '', row.divisionId ?? '', row.departmentId ?? '',
