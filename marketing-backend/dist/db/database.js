@@ -359,6 +359,35 @@ function initializeSchema(database) {
       FOREIGN KEY (cash_flow_id) REFERENCES cash_flows(id) ON DELETE CASCADE
     );
 
+    -- Visibility — Revenues & COGS (Phase 3c).
+    CREATE TABLE IF NOT EXISTS rc_rows (
+      id              TEXT PRIMARY KEY,
+      budget_id       TEXT NOT NULL,
+      company_id      TEXT,
+      division_id     TEXT,
+      department_id   TEXT,
+      product_id      TEXT,
+      activity_id     TEXT,
+      rev_gl_id       TEXT,
+      price           REAL NOT NULL DEFAULT 0,
+      cogs_gl_id      TEXT,
+      cost            REAL NOT NULL DEFAULT 0,
+      cells           TEXT NOT NULL DEFAULT '{}',
+      order_index     INTEGER NOT NULL DEFAULT 0,
+      created_at      TEXT NOT NULL,
+      updated_at      TEXT NOT NULL,
+      FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_rc_rows_budget_id ON rc_rows(budget_id);
+
+    CREATE TABLE IF NOT EXISTS rc_state (
+      budget_id   TEXT PRIMARY KEY,
+      status      TEXT NOT NULL DEFAULT 'editing',
+      updated_at  TEXT NOT NULL,
+      FOREIGN KEY (budget_id) REFERENCES budgets(id) ON DELETE CASCADE
+    );
+
     -- Manual sections: Other Adjustments / Financing / Capex (§7, §8, §9).
     -- Rows are free-form (description + per-period amounts).
     CREATE TABLE IF NOT EXISTS cf_manual_rows (
@@ -403,6 +432,11 @@ function initializeSchema(database) {
     // synthetic "Inventory Purchases" row) instead of regular Payables.
     try {
         database.exec(`ALTER TABLE gl_accounts ADD COLUMN inventory_related INTEGER NOT NULL DEFAULT 0`);
+    }
+    catch { /* already exists */ }
+    // Budgets: rc_enabled flag for the Revenues & COGS module (Phase 3c).
+    try {
+        database.exec(`ALTER TABLE budgets ADD COLUMN rc_enabled INTEGER NOT NULL DEFAULT 0`);
     }
     catch { /* already exists */ }
     // Seed the VV-TEST123 customer key (idempotent)
