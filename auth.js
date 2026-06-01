@@ -134,7 +134,7 @@ async function tryAuth() {
     closeGate();
     // Pass the verified PIN as a one-shot query param so the Podcast app can
     // exchange it for its own session cookie on first load.
-    const PODCAST_URL = 'https://vv-podcast.onrender.com';
+    const PODCAST_URL = 'https://podcast.visionvirtuepartnership.com';
     const podcastHref = `${PODCAST_URL}/?pin=${encodeURIComponent(pin)}`;
     window.location.href =
       target === 'marketing' ? 'marketing.html'
