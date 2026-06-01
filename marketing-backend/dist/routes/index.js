@@ -115,6 +115,13 @@ router.delete('/visibility/budgets/:id/salaries/:rowId', (req, res) => visibilit
 router.post('/visibility/budgets/:id/salaries/upload', (0, express_1.raw)({ type: '*/*', limit: '5mb' }), asyncHandler(async (req, res) => { await visibility_controller_1.salariesController.upload(req, res); }));
 router.post('/visibility/budgets/:id/salaries/finalize', (req, res) => visibility_controller_1.salariesController.finalize(req, res));
 router.post('/visibility/budgets/:id/salaries/edit', (req, res) => visibility_controller_1.salariesController.edit(req, res));
+// Phase 3c — Revenues & COGS (per budget).
+router.get('/visibility/budgets/:id/rc', (req, res) => visibility_controller_1.rcController.list(req, res));
+router.post('/visibility/budgets/:id/rc', (req, res) => visibility_controller_1.rcController.createRow(req, res));
+router.patch('/visibility/budgets/:id/rc/:rowId', (req, res) => visibility_controller_1.rcController.patchRow(req, res));
+router.delete('/visibility/budgets/:id/rc/:rowId', (req, res) => visibility_controller_1.rcController.removeRow(req, res));
+router.post('/visibility/budgets/:id/rc/finalize', (req, res) => visibility_controller_1.rcController.finalize(req, res));
+router.post('/visibility/budgets/:id/rc/edit', (req, res) => visibility_controller_1.rcController.edit(req, res));
 // ─── CF (Cash Flow) — spec §15 ──────────────────────────────────────────────
 router.get('/visibility/budgets/:id/cf', (req, res) => visibility_controller_1.cashFlowController.getOrCreate(req, res));
 router.patch('/visibility/budgets/:id/cf', (req, res) => visibility_controller_1.cashFlowController.patch(req, res));

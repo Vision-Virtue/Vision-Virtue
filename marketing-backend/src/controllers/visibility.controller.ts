@@ -30,6 +30,9 @@ import {
   salariesRowRepo,
   salariesStateRepo,
   SalariesRow,
+  rcRowRepo,
+  rcStateRepo,
+  RcRow,
   cashFlowRepo,
   CashFlowRow,
   cfPayablesSectionRepo,
@@ -49,6 +52,7 @@ import {
 } from '../db/visibility.repository';
 import { parseGLBuffer, parseSBBuffer, ParseError } from '../services/gl-parser.service';
 import { validateAndPivotSalaries, pivotEntryToCells } from '../services/salaries.service';
+import { pivotRcRows } from '../services/rc.service';
 import {
   computePivot,
   rollUpCells,
@@ -478,6 +482,7 @@ function serializeBudget(row: BudgetRow): Record<string, unknown> {
     currency:     row.currency,
     scale:        row.scale,
     sbEnabled:    row.sbEnabled,
+    rcEnabled:    row.rcEnabled,
     status:       row.status,
     createdAt:    row.createdAt,
     updatedAt:    row.updatedAt,
@@ -508,6 +513,7 @@ const SetupSchema = z.object({
   currency:    z.enum(CURRENCIES),
   scale:       z.enum(SCALES),
   sbEnabled:   z.boolean(),
+  rcEnabled:   z.boolean().optional().default(false),
 });
 
 export const budgetsController = {
@@ -548,6 +554,7 @@ export const budgetsController = {
       currency:    parsed.data.currency,
       scale:       parsed.data.scale,
       sbEnabled:   parsed.data.sbEnabled,
+      rcEnabled:   parsed.data.rcEnabled ?? false,
     });
     res.status(201).json({ budget: serializeBudget(created) });
   },
@@ -586,6 +593,7 @@ export const budgetsController = {
       currency:    z.enum(CURRENCIES).optional(),
       scale:       z.enum(SCALES).optional(),
       sbEnabled:   z.boolean().optional(),
+      rcEnabled:   z.boolean().optional(),
     });
     const parsed = Schema.safeParse(req.body);
     if (!parsed.success) {
@@ -1135,6 +1143,163 @@ export const salariesController = {
   edit(req: Request, res: Response): void {
     const ctx = requireBudget(req, res); if (!ctx) return;
     salariesStateRepo.setStatus(ctx.budget.id, 'editing');
+    res.json({ status: 'editing' });
+  },
+};
+
+/* ============================================================
+   Revenues & COGS controller (Phase 3c).
+   ============================================================ */
+
+function serializeRc(r: RcRow): Record<string, unknown> {
+  return {
+    id:           r.id,
+    companyId:    r.companyId,
+    divisionId:   r.divisionId,
+    departmentId: r.departmentId,
+    productId:    r.productId,
+    activityId:   r.activityId,
+    revGlId:      r.revGlId,
+    price:        r.price,
+    cogsGlId:     r.cogsGlId,
+    cost:         r.cost,
+    cells:        r.cells,
+    orderIndex:   r.orderIndex,
+  };
+}
+
+export const rcController = {
+  /** GET /api/visibility/budgets/:id/rc */
+  list(req: Request, res: Response): void {
+    const ctx = requireBudget(req, res); if (!ctx) return;
+    const rows = rcRowRepo.listByBudget(ctx.budget.id);
+    res.json({
+      status:    rcStateRepo.getStatus(ctx.budget.id),
+      rcEnabled: ctx.budget.rcEnabled,
+      rows:      rows.map(serializeRc),
+    });
+  },
+
+  /** POST /api/visibility/budgets/:id/rc */
+  createRow(req: Request, res: Response): void {
+    const ctx = requireBudget(req, res); if (!ctx) return;
+    const created = rcRowRepo.create(ctx.budget.id);
+    res.status(201).json({ row: serializeRc(created) });
+  },
+
+  /** PATCH /api/visibility/budgets/:id/rc/:rowId */
+  patchRow(req: Request, res: Response): void {
+    const ctx = requireBudget(req, res); if (!ctx) return;
+    const row = rcRowRepo.getById(req.params.rowId);
+    if (!row || row.budgetId !== ctx.budget.id) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'RC row not found.' } });
+      return;
+    }
+    const Schema = z.object({
+      companyId:    z.string().nullable().optional(),
+      divisionId:   z.string().nullable().optional(),
+      departmentId: z.string().nullable().optional(),
+      productId:    z.string().nullable().optional(),
+      activityId:   z.string().nullable().optional(),
+      revGlId:      z.string().nullable().optional(),
+      price:        z.number().min(0).optional(),
+      cogsGlId:     z.string().nullable().optional(),
+      cost:         z.number().min(0).optional(),
+      cells:        z.record(z.string(), z.number()).optional(),
+    });
+    const parsed = Schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid RC patch.' } });
+      return;
+    }
+    // Validate FK org IDs
+    const checkOrgId = (id: string | null | undefined): boolean => {
+      if (id == null || id === '') return true;
+      const e = orgEntityRepo.getById(id);
+      return !!e && e.customerKeyId === ctx.customerKeyId;
+    };
+    for (const k of ['companyId','divisionId','departmentId','productId','activityId'] as const) {
+      if (parsed.data[k] !== undefined && !checkOrgId(parsed.data[k] as string | null | undefined)) {
+        res.status(400).json({ error: { code: 'BAD_ORG_REF', message: `${k} does not exist for this customer.` } });
+        return;
+      }
+    }
+    // Validate GL IDs
+    for (const k of ['revGlId','cogsGlId'] as const) {
+      const glId = parsed.data[k];
+      if (glId !== undefined && glId) {
+        const gl = glAccountRepo.getById(glId);
+        if (!gl || gl.customerKeyId !== ctx.customerKeyId) {
+          res.status(400).json({ error: { code: 'BAD_GL_REF', message: `Unknown GL account for ${k}.` } });
+          return;
+        }
+      }
+    }
+    const updated = rcRowRepo.update(row.id, parsed.data);
+    res.json({ row: updated ? serializeRc(updated) : null });
+  },
+
+  /** DELETE /api/visibility/budgets/:id/rc/:rowId */
+  removeRow(req: Request, res: Response): void {
+    const ctx = requireBudget(req, res); if (!ctx) return;
+    const row = rcRowRepo.getById(req.params.rowId);
+    if (!row || row.budgetId !== ctx.budget.id) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'RC row not found.' } });
+      return;
+    }
+    rcRowRepo.deleteById(row.id);
+    res.json({ ok: true });
+  },
+
+  /**
+   * POST /api/visibility/budgets/:id/rc/finalize
+   * Pivot-aggregates RC rows → Revenue & COGS budget lines, flips status.
+   */
+  finalize(req: Request, res: Response): void {
+    const ctx = requireBudget(req, res); if (!ctx) return;
+    const rows = rcRowRepo.listByBudget(ctx.budget.id);
+    if (rows.length === 0) {
+      res.status(400).json({ error: { code: 'EMPTY_RC', message: 'Add at least one row before finalizing.' } });
+      return;
+    }
+    // Every row must have a Revenue GL (COGS GL is optional)
+    const missingRevGl = rows.filter(r => !r.revGlId);
+    if (missingRevGl.length > 0) {
+      res.status(400).json({
+        error: {
+          code: 'MISSING_REV_GL',
+          message: `${missingRevGl.length} row${missingRevGl.length === 1 ? '' : 's'} need a Revenues GL account before finalizing.`,
+        },
+      });
+      return;
+    }
+
+    // Replace existing source='rc' budget lines
+    const existingLines = budgetLineRepo.listByBudget(ctx.budget.id).filter(l => l.source === 'rc');
+    for (const l of existingLines) budgetLineRepo.deleteById(l.id);
+
+    const pivoted = pivotRcRows(rows, ctx.budget.granularity);
+    for (const p of pivoted) {
+      const line = budgetLineRepo.create(ctx.budget.id, 'rc');
+      budgetLineRepo.update(line.id, {
+        companyId:    p.companyId,
+        divisionId:   p.divisionId,
+        departmentId: p.departmentId,
+        productId:    p.productId,
+        activityId:   p.activityId,
+        glAccountId:  p.glAccountId,
+      });
+      budgetCellRepo.setAllForLine(line.id, p.cells);
+    }
+
+    rcStateRepo.setStatus(ctx.budget.id, 'finalized');
+    res.json({ status: 'finalized', pivotCount: pivoted.length });
+  },
+
+  /** POST /api/visibility/budgets/:id/rc/edit */
+  edit(req: Request, res: Response): void {
+    const ctx = requireBudget(req, res); if (!ctx) return;
+    rcStateRepo.setStatus(ctx.budget.id, 'editing');
     res.json({ status: 'editing' });
   },
 };

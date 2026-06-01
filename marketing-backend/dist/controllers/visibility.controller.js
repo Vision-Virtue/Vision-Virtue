@@ -3,7 +3,7 @@
    Visibility offering — Controller (Phase 1: Financial Structure)
    ============================================================ */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cfoChatController = exports.cfForecastController = exports.cfManualController = exports.cfSalariesController = exports.cfInventoryController = exports.cfReceivablesController = exports.cfPayablesController = exports.cashFlowController = exports.salariesController = exports.budgetsController = exports.visibilityController = exports.BUDGET_CATEGORIES_BY_SECTION = exports.PL_SECTIONS = void 0;
+exports.cfoChatController = exports.cfForecastController = exports.cfManualController = exports.cfSalariesController = exports.cfInventoryController = exports.cfReceivablesController = exports.cfPayablesController = exports.cashFlowController = exports.rcController = exports.salariesController = exports.budgetsController = exports.visibilityController = exports.BUDGET_CATEGORIES_BY_SECTION = exports.PL_SECTIONS = void 0;
 const zod_1 = require("zod");
 const sdk_1 = require("@anthropic-ai/sdk");
 const ai_service_1 = require("../services/ai.service");
@@ -11,6 +11,7 @@ const partner_repository_1 = require("../db/partner.repository");
 const visibility_repository_1 = require("../db/visibility.repository");
 const gl_parser_service_1 = require("../services/gl-parser.service");
 const salaries_service_1 = require("../services/salaries.service");
+const rc_service_1 = require("../services/rc.service");
 const pivot_service_1 = require("../services/pivot.service");
 const budget_export_service_1 = require("../services/budget-export.service");
 const cf_payables_service_1 = require("../services/cf-payables.service");
@@ -439,6 +440,7 @@ function serializeBudget(row) {
         currency: row.currency,
         scale: row.scale,
         sbEnabled: row.sbEnabled,
+        rcEnabled: row.rcEnabled,
         status: row.status,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
@@ -467,6 +469,7 @@ const SetupSchema = zod_1.z.object({
     currency: zod_1.z.enum(visibility_repository_1.CURRENCIES),
     scale: zod_1.z.enum(visibility_repository_1.SCALES),
     sbEnabled: zod_1.z.boolean(),
+    rcEnabled: zod_1.z.boolean().optional().default(false),
 });
 exports.budgetsController = {
     /** GET /api/visibility/budgets */
@@ -553,6 +556,7 @@ exports.budgetsController = {
             currency: zod_1.z.enum(visibility_repository_1.CURRENCIES).optional(),
             scale: zod_1.z.enum(visibility_repository_1.SCALES).optional(),
             sbEnabled: zod_1.z.boolean().optional(),
+            rcEnabled: zod_1.z.boolean().optional(),
         });
         const parsed = Schema.safeParse(req.body);
         if (!parsed.success) {
@@ -1097,6 +1101,98 @@ exports.salariesController = {
         if (!ctx)
             return;
         visibility_repository_1.salariesStateRepo.setStatus(ctx.budget.id, 'editing');
+        res.json({ status: 'editing' });
+    },
+};
+/* ============================================================
+   Revenues & COGS controller (Phase 3c).
+   ============================================================ */
+function serializeRc(r) {
+    return {
+        id: r.id,
+        companyId: r.companyId,
+        divisionId: r.divisionId,
+        departmentId: r.departmentId,
+        productId: r.productId,
+        activityId: r.activityId,
+        revGlId: r.revGlId,
+        price: r.price,
+        cogsGlId: r.cogsGlId,
+        cost: r.cost,
+        cells: r.cells,
+        orderIndex: r.orderIndex,
+    };
+}
+exports.rcController = {
+    list(req, res) {
+        const ctx = requireBudget(req, res); if (!ctx) return;
+        const rows = visibility_repository_1.rcRowRepo.listByBudget(ctx.budget.id);
+        res.json({ status: visibility_repository_1.rcStateRepo.getStatus(ctx.budget.id), rcEnabled: ctx.budget.rcEnabled, rows: rows.map(serializeRc) });
+    },
+    createRow(req, res) {
+        const ctx = requireBudget(req, res); if (!ctx) return;
+        const created = visibility_repository_1.rcRowRepo.create(ctx.budget.id);
+        res.status(201).json({ row: serializeRc(created) });
+    },
+    patchRow(req, res) {
+        const ctx = requireBudget(req, res); if (!ctx) return;
+        const row = visibility_repository_1.rcRowRepo.getById(req.params.rowId);
+        if (!row || row.budgetId !== ctx.budget.id) { res.status(404).json({ error: { code: 'NOT_FOUND', message: 'RC row not found.' } }); return; }
+        const Schema = zod_1.z.object({
+            companyId: zod_1.z.string().nullable().optional(),
+            divisionId: zod_1.z.string().nullable().optional(),
+            departmentId: zod_1.z.string().nullable().optional(),
+            productId: zod_1.z.string().nullable().optional(),
+            activityId: zod_1.z.string().nullable().optional(),
+            revGlId: zod_1.z.string().nullable().optional(),
+            price: zod_1.z.number().min(0).optional(),
+            cogsGlId: zod_1.z.string().nullable().optional(),
+            cost: zod_1.z.number().min(0).optional(),
+            cells: zod_1.z.record(zod_1.z.string(), zod_1.z.number()).optional(),
+        });
+        const parsed = Schema.safeParse(req.body);
+        if (!parsed.success) { res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid RC patch.' } }); return; }
+        const checkOrgId = (id) => { if (id == null || id === '') return true; const e = visibility_repository_1.orgEntityRepo.getById(id); return !!e && e.customerKeyId === ctx.customerKeyId; };
+        for (const k of ['companyId','divisionId','departmentId','productId','activityId']) {
+            if (parsed.data[k] !== undefined && !checkOrgId(parsed.data[k])) { res.status(400).json({ error: { code: 'BAD_ORG_REF', message: `${k} does not exist for this customer.` } }); return; }
+        }
+        for (const k of ['revGlId','cogsGlId']) {
+            const glId = parsed.data[k];
+            if (glId !== undefined && glId) {
+                const gl = visibility_repository_1.glAccountRepo.getById(glId);
+                if (!gl || gl.customerKeyId !== ctx.customerKeyId) { res.status(400).json({ error: { code: 'BAD_GL_REF', message: `Unknown GL account for ${k}.` } }); return; }
+            }
+        }
+        const updated = visibility_repository_1.rcRowRepo.update(row.id, parsed.data);
+        res.json({ row: updated ? serializeRc(updated) : null });
+    },
+    removeRow(req, res) {
+        const ctx = requireBudget(req, res); if (!ctx) return;
+        const row = visibility_repository_1.rcRowRepo.getById(req.params.rowId);
+        if (!row || row.budgetId !== ctx.budget.id) { res.status(404).json({ error: { code: 'NOT_FOUND', message: 'RC row not found.' } }); return; }
+        visibility_repository_1.rcRowRepo.deleteById(row.id);
+        res.json({ ok: true });
+    },
+    finalize(req, res) {
+        const ctx = requireBudget(req, res); if (!ctx) return;
+        const rows = visibility_repository_1.rcRowRepo.listByBudget(ctx.budget.id);
+        if (rows.length === 0) { res.status(400).json({ error: { code: 'EMPTY_RC', message: 'Add at least one row before finalizing.' } }); return; }
+        const missingRevGl = rows.filter(r => !r.revGlId);
+        if (missingRevGl.length > 0) { res.status(400).json({ error: { code: 'MISSING_REV_GL', message: `${missingRevGl.length} row${missingRevGl.length === 1 ? '' : 's'} need a Revenues GL account before finalizing.` } }); return; }
+        const existingLines = visibility_repository_1.budgetLineRepo.listByBudget(ctx.budget.id).filter(l => l.source === 'rc');
+        for (const l of existingLines) visibility_repository_1.budgetLineRepo.deleteById(l.id);
+        const pivoted = (0, rc_service_1.pivotRcRows)(rows, ctx.budget.granularity);
+        for (const p of pivoted) {
+            const line = visibility_repository_1.budgetLineRepo.create(ctx.budget.id, 'rc');
+            visibility_repository_1.budgetLineRepo.update(line.id, { companyId: p.companyId, divisionId: p.divisionId, departmentId: p.departmentId, productId: p.productId, activityId: p.activityId, glAccountId: p.glAccountId });
+            visibility_repository_1.budgetCellRepo.setAllForLine(line.id, p.cells);
+        }
+        visibility_repository_1.rcStateRepo.setStatus(ctx.budget.id, 'finalized');
+        res.json({ status: 'finalized', pivotCount: pivoted.length });
+    },
+    edit(req, res) {
+        const ctx = requireBudget(req, res); if (!ctx) return;
+        visibility_repository_1.rcStateRepo.setStatus(ctx.budget.id, 'editing');
         res.json({ status: 'editing' });
     },
 };

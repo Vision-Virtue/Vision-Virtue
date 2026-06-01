@@ -248,6 +248,7 @@ function toBudgetDomain(r) {
         currency: r.currency,
         scale: r.scale,
         sbEnabled: r.sb_enabled === 1,
+        rcEnabled: (r.rc_enabled ?? 0) === 1,
         status: r.status,
         createdAt: r.created_at,
         updatedAt: r.updated_at,
@@ -295,9 +296,9 @@ exports.budgetRepo = {
         (0, database_1.getDb)()
             .prepare(`INSERT INTO budgets
            (id, customer_key_id, name, year, granularity, currency, scale,
-            sb_enabled, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`)
-            .run(id, customerKeyId, setup.name ?? '', setup.year, setup.granularity, setup.currency, setup.scale, setup.sbEnabled ? 1 : 0, now, now);
+            sb_enabled, rc_enabled, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`)
+            .run(id, customerKeyId, setup.name ?? '', setup.year, setup.granularity, setup.currency, setup.scale, setup.sbEnabled ? 1 : 0, setup.rcEnabled ? 1 : 0, now, now);
         return this.getById(id);
     },
     /** Partial update — pass only fields you want to change. */
@@ -327,6 +328,10 @@ exports.budgetRepo = {
         if (fields.sbEnabled !== undefined) {
             sets.push('sb_enabled = ?');
             vals.push(fields.sbEnabled ? 1 : 0);
+        }
+        if (fields.rcEnabled !== undefined) {
+            sets.push('rc_enabled = ?');
+            vals.push(fields.rcEnabled ? 1 : 0);
         }
         if (fields.status !== undefined) {
             sets.push('status = ?');
@@ -652,6 +657,88 @@ exports.salariesStateRepo = {
             .prepare(`INSERT INTO salaries_state (budget_id, status, updated_at)
          VALUES (?, ?, ?)
          ON CONFLICT(budget_id) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at`)
+            .run(budgetId, status, now);
+    },
+};
+// ─── Revenues & COGS (Phase 3c) ─────────────────────────────────────────────
+function toRcDomain(r) {
+    let cells = {};
+    try { cells = JSON.parse(r.cells || '{}'); } catch (e) { /* */ }
+    return {
+        id: r.id,
+        budgetId: r.budget_id,
+        companyId: r.company_id,
+        divisionId: r.division_id,
+        departmentId: r.department_id,
+        productId: r.product_id,
+        activityId: r.activity_id,
+        revGlId: r.rev_gl_id,
+        price: r.price,
+        cogsGlId: r.cogs_gl_id,
+        cost: r.cost,
+        cells,
+        orderIndex: r.order_index,
+    };
+}
+exports.rcRowRepo = {
+    listByBudget(budgetId) {
+        const rows = (0, database_1.getDb)()
+            .prepare(`SELECT * FROM rc_rows WHERE budget_id = ? ORDER BY order_index ASC, created_at ASC`)
+            .all(budgetId);
+        return rows.map(toRcDomain);
+    },
+    getById(id) {
+        const row = (0, database_1.getDb)().prepare(`SELECT * FROM rc_rows WHERE id = ?`).get(id);
+        return row ? toRcDomain(row) : null;
+    },
+    create(budgetId) {
+        const { v4: uuidv4 } = require('uuid');
+        const id = uuidv4();
+        const now = new Date().toISOString();
+        const insertAt = ((0, database_1.getDb)()
+            .prepare(`SELECT COALESCE(MAX(order_index), -1) AS m FROM rc_rows WHERE budget_id = ?`)
+            .get(budgetId)).m + 1;
+        (0, database_1.getDb)()
+            .prepare(`INSERT INTO rc_rows (id, budget_id, company_id, division_id, department_id, product_id, activity_id, rev_gl_id, price, cogs_gl_id, cost, cells, order_index, created_at, updated_at) VALUES (?, ?, null, null, null, null, null, null, 0, null, 0, '{}', ?, ?, ?)`)
+            .run(id, budgetId, insertAt, now, now);
+        return this.getById(id);
+    },
+    update(id, fields) {
+        const norm = (v) => (v === '' || v == null ? null : v);
+        const sets = [];
+        const vals = [];
+        if (fields.companyId    !== undefined) { sets.push('company_id = ?');    vals.push(norm(fields.companyId)); }
+        if (fields.divisionId   !== undefined) { sets.push('division_id = ?');   vals.push(norm(fields.divisionId)); }
+        if (fields.departmentId !== undefined) { sets.push('department_id = ?'); vals.push(norm(fields.departmentId)); }
+        if (fields.productId    !== undefined) { sets.push('product_id = ?');    vals.push(norm(fields.productId)); }
+        if (fields.activityId   !== undefined) { sets.push('activity_id = ?');   vals.push(norm(fields.activityId)); }
+        if (fields.revGlId      !== undefined) { sets.push('rev_gl_id = ?');     vals.push(norm(fields.revGlId)); }
+        if (fields.price        !== undefined) { sets.push('price = ?');         vals.push(fields.price); }
+        if (fields.cogsGlId     !== undefined) { sets.push('cogs_gl_id = ?');    vals.push(norm(fields.cogsGlId)); }
+        if (fields.cost         !== undefined) { sets.push('cost = ?');          vals.push(fields.cost); }
+        if (fields.cells        !== undefined) { sets.push('cells = ?');         vals.push(JSON.stringify(fields.cells)); }
+        if (sets.length === 0) return this.getById(id);
+        sets.push('updated_at = ?');
+        vals.push(new Date().toISOString());
+        vals.push(id);
+        (0, database_1.getDb)().prepare(`UPDATE rc_rows SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+        return this.getById(id);
+    },
+    deleteById(id) {
+        (0, database_1.getDb)().prepare(`DELETE FROM rc_rows WHERE id = ?`).run(id);
+    },
+};
+exports.rcStateRepo = {
+    getStatus(budgetId) {
+        const row = (0, database_1.getDb)()
+            .prepare(`SELECT status FROM rc_state WHERE budget_id = ?`)
+            .get(budgetId);
+        return row?.status ?? 'editing';
+    },
+    setStatus(budgetId, status) {
+        const now = new Date().toISOString();
+        (0, database_1.getDb)()
+            .prepare(`INSERT INTO rc_state (budget_id, status, updated_at) VALUES (?, ?, ?) ON CONFLICT(budget_id) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at`)
             .run(budgetId, status, now);
     },
 };

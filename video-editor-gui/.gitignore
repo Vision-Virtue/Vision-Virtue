@@ -1,0 +1,41 @@
+# User-generated runtime data — never commit
+uploads/
+broll/
+exports/
+thumbs/
+backgrounds/
+models/
+
+# Intro & Outro folder contains brand assets that ARE committed
+# (vv_brand_frame.png, vv_visibility_audio.m4a) AND user uploads that aren't.
+# Whitelist approach: ignore everything inside, then unignore the two assets.
+Intro & Outro/*
+!Intro & Outro/vv_brand_frame.png
+!Intro & Outro/vv_visibility_audio.m4a
+
+# Scratch / experimental test scripts
+test_whisper*.py
+
+# Python build artefacts
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Server logs
+*.log
+server_err.txt
+server_out.txt
+compose_error.log
+
+# Local env / venv
+.env
+.venv/
+venv/
+
+# Editor scratch
+.vscode/
+.idea/
+
+# Pexels key file (api key lives in env, not committed)
+pexels API KEY.txt

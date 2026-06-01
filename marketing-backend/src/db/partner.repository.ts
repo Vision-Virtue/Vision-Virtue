@@ -4,6 +4,7 @@
    ============================================================ */
 
 import { v4 as uuidv4 } from 'uuid';
+import { randomBytes } from 'crypto';
 import { getDb } from './database';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -86,11 +87,22 @@ export const customerKeyRepo = {
   },
 };
 
-/** Random VV-XXXXXX key (6 chars, A-Z+0-9, unambiguous). */
+/** Random VV-XXXXXX key (6 chars, A-Z+0-9, unambiguous).
+ *  Uses crypto.randomBytes for a cryptographically secure source. */
 function generateKey(): string {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // skip ambiguous chars (I,O,0,1)
+  const len = alphabet.length; // 32
   let s = '';
-  for (let i = 0; i < 6; i++) s += alphabet[Math.floor(Math.random() * alphabet.length)];
+  // Rejection-sampling: draw bytes until we fill 6 unbiased chars.
+  while (s.length < 6) {
+    const buf = randomBytes(12);
+    for (let i = 0; i < buf.length && s.length < 6; i++) {
+      // Only use bytes below the largest multiple of `len` that fits in a byte,
+      // so each position in the alphabet is equally likely.
+      const cutoff = 256 - (256 % len); // = 256 - (256 % 32) = 256 (no rejection needed for power-of-2)
+      if (buf[i] < cutoff) s += alphabet[buf[i] % len];
+    }
+  }
   return `VV-${s}`;
 }
 

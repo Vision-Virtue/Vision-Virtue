@@ -346,6 +346,7 @@ export interface BudgetRow {
   currency: Currency;
   scale: Scale;
   sbEnabled: boolean;
+  rcEnabled: boolean;
   status: BudgetStatus;
   createdAt: string;
   updatedAt: string;
@@ -360,6 +361,7 @@ interface DbBudgetRow {
   currency: Currency;
   scale: Scale;
   sb_enabled: number;
+  rc_enabled: number;
   status: BudgetStatus;
   created_at: string;
   updated_at: string;
@@ -375,6 +377,7 @@ function toBudgetDomain(r: DbBudgetRow): BudgetRow {
     currency:      r.currency,
     scale:         r.scale,
     sbEnabled:     r.sb_enabled === 1,
+    rcEnabled:     (r.rc_enabled ?? 0) === 1,
     status:        r.status,
     createdAt:     r.created_at,
     updatedAt:     r.updated_at,
@@ -392,7 +395,7 @@ export interface BudgetLineRow {
   productId: string | null;
   activityId: string | null;
   glAccountId: string | null;
-  source: 'manual' | 'salaries';
+  source: 'manual' | 'salaries' | 'rc';
   orderIndex: number;
 }
 
@@ -407,7 +410,7 @@ interface DbBudgetLineRow {
   product_id: string | null;
   activity_id: string | null;
   gl_account_id: string | null;
-  source: 'manual' | 'salaries';
+  source: 'manual' | 'salaries' | 'rc';
   order_index: number;
 }
 
@@ -460,6 +463,7 @@ export const budgetRepo = {
       currency: Currency;
       scale: Scale;
       sbEnabled: boolean;
+      rcEnabled?: boolean;
     },
   ): BudgetRow {
     const id = uuidv4();
@@ -468,12 +472,13 @@ export const budgetRepo = {
       .prepare(
         `INSERT INTO budgets
            (id, customer_key_id, name, year, granularity, currency, scale,
-            sb_enabled, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
+            sb_enabled, rc_enabled, status, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?)`,
       )
       .run(
         id, customerKeyId, setup.name ?? '', setup.year, setup.granularity,
-        setup.currency, setup.scale, setup.sbEnabled ? 1 : 0, now, now,
+        setup.currency, setup.scale, setup.sbEnabled ? 1 : 0,
+        setup.rcEnabled ? 1 : 0, now, now,
       );
     return this.getById(id)!;
   },
@@ -483,7 +488,7 @@ export const budgetRepo = {
     id: string,
     fields: Partial<{
       name: string; year: number; granularity: Granularity;
-      currency: Currency; scale: Scale; sbEnabled: boolean;
+      currency: Currency; scale: Scale; sbEnabled: boolean; rcEnabled: boolean;
       status: BudgetStatus;
     }>,
   ): BudgetRow | null {
@@ -495,6 +500,7 @@ export const budgetRepo = {
     if (fields.currency    !== undefined) { sets.push('currency = ?');     vals.push(fields.currency); }
     if (fields.scale       !== undefined) { sets.push('scale = ?');        vals.push(fields.scale); }
     if (fields.sbEnabled   !== undefined) { sets.push('sb_enabled = ?');   vals.push(fields.sbEnabled ? 1 : 0); }
+    if (fields.rcEnabled   !== undefined) { sets.push('rc_enabled = ?');   vals.push(fields.rcEnabled ? 1 : 0); }
     if (fields.status      !== undefined) { sets.push('status = ?');       vals.push(fields.status); }
     if (sets.length === 0) return this.getById(id);
     sets.push('updated_at = ?');
@@ -527,7 +533,7 @@ export const budgetLineRepo = {
     return row ? toBudgetLineDomain(row) : null;
   },
 
-  create(budgetId: string, source: 'manual' | 'salaries' = 'manual', afterId?: string): BudgetLineRow {
+  create(budgetId: string, source: 'manual' | 'salaries' | 'rc' = 'manual', afterId?: string): BudgetLineRow {
     const id = uuidv4();
     const now = new Date().toISOString();
     let insertAt: number;
@@ -846,6 +852,147 @@ export const salariesStateRepo = {
     getDb()
       .prepare(
         `INSERT INTO salaries_state (budget_id, status, updated_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(budget_id) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at`,
+      )
+      .run(budgetId, status, now);
+  },
+};
+
+// ─── Revenues & COGS (Phase 3c) ─────────────────────────────────────────────
+
+export interface RcRow {
+  id: string;
+  budgetId: string;
+  companyId: string | null;
+  divisionId: string | null;
+  departmentId: string | null;
+  productId: string | null;
+  activityId: string | null;
+  revGlId: string | null;
+  price: number;
+  cogsGlId: string | null;
+  cost: number;
+  cells: Record<string, number>; // { M01: qty, M02: qty, … }
+  orderIndex: number;
+}
+
+interface DbRcRow {
+  id: string;
+  budget_id: string;
+  company_id: string | null;
+  division_id: string | null;
+  department_id: string | null;
+  product_id: string | null;
+  activity_id: string | null;
+  rev_gl_id: string | null;
+  price: number;
+  cogs_gl_id: string | null;
+  cost: number;
+  cells: string;
+  order_index: number;
+}
+
+function toRcDomain(r: DbRcRow): RcRow {
+  let cells: Record<string, number> = {};
+  try { cells = JSON.parse(r.cells || '{}'); } catch { /* */ }
+  return {
+    id:           r.id,
+    budgetId:     r.budget_id,
+    companyId:    r.company_id,
+    divisionId:   r.division_id,
+    departmentId: r.department_id,
+    productId:    r.product_id,
+    activityId:   r.activity_id,
+    revGlId:      r.rev_gl_id,
+    price:        r.price,
+    cogsGlId:     r.cogs_gl_id,
+    cost:         r.cost,
+    cells,
+    orderIndex:   r.order_index,
+  };
+}
+
+export const rcRowRepo = {
+  listByBudget(budgetId: string): RcRow[] {
+    const rows = getDb()
+      .prepare(`SELECT * FROM rc_rows WHERE budget_id = ? ORDER BY order_index ASC, created_at ASC`)
+      .all(budgetId) as DbRcRow[];
+    return rows.map(toRcDomain);
+  },
+
+  getById(id: string): RcRow | null {
+    const row = getDb().prepare(`SELECT * FROM rc_rows WHERE id = ?`).get(id) as DbRcRow | undefined;
+    return row ? toRcDomain(row) : null;
+  },
+
+  create(budgetId: string): RcRow {
+    const id = uuidv4();
+    const now = new Date().toISOString();
+    const insertAt = ((getDb()
+      .prepare(`SELECT COALESCE(MAX(order_index), -1) AS m FROM rc_rows WHERE budget_id = ?`)
+      .get(budgetId) as { m: number }).m) + 1;
+    getDb()
+      .prepare(
+        `INSERT INTO rc_rows
+           (id, budget_id, company_id, division_id, department_id, product_id,
+            activity_id, rev_gl_id, price, cogs_gl_id, cost, cells,
+            order_index, created_at, updated_at)
+         VALUES (?, ?, null, null, null, null, null, null, 0, null, 0, '{}', ?, ?, ?)`,
+      )
+      .run(id, budgetId, insertAt, now, now);
+    return this.getById(id)!;
+  },
+
+  update(
+    id: string,
+    fields: Partial<{
+      companyId: string | null; divisionId: string | null; departmentId: string | null;
+      productId: string | null; activityId: string | null; revGlId: string | null;
+      price: number; cogsGlId: string | null; cost: number;
+      cells: Record<string, number>;
+    }>,
+  ): RcRow | null {
+    const norm = (v: string | null | undefined): string | null => (v === '' || v == null ? null : v);
+    const sets: string[] = [];
+    const vals: Array<string | number | null> = [];
+    if (fields.companyId    !== undefined) { sets.push('company_id = ?');    vals.push(norm(fields.companyId)); }
+    if (fields.divisionId   !== undefined) { sets.push('division_id = ?');   vals.push(norm(fields.divisionId)); }
+    if (fields.departmentId !== undefined) { sets.push('department_id = ?'); vals.push(norm(fields.departmentId)); }
+    if (fields.productId    !== undefined) { sets.push('product_id = ?');    vals.push(norm(fields.productId)); }
+    if (fields.activityId   !== undefined) { sets.push('activity_id = ?');   vals.push(norm(fields.activityId)); }
+    if (fields.revGlId      !== undefined) { sets.push('rev_gl_id = ?');     vals.push(norm(fields.revGlId)); }
+    if (fields.price        !== undefined) { sets.push('price = ?');         vals.push(fields.price); }
+    if (fields.cogsGlId     !== undefined) { sets.push('cogs_gl_id = ?');    vals.push(norm(fields.cogsGlId)); }
+    if (fields.cost         !== undefined) { sets.push('cost = ?');          vals.push(fields.cost); }
+    if (fields.cells        !== undefined) { sets.push('cells = ?');         vals.push(JSON.stringify(fields.cells)); }
+    if (sets.length === 0) return this.getById(id);
+    sets.push('updated_at = ?');
+    vals.push(new Date().toISOString());
+    vals.push(id);
+    getDb().prepare(`UPDATE rc_rows SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+    return this.getById(id);
+  },
+
+  deleteById(id: string): void {
+    getDb().prepare(`DELETE FROM rc_rows WHERE id = ?`).run(id);
+  },
+};
+
+export type RCStatus = 'editing' | 'finalized';
+
+export const rcStateRepo = {
+  getStatus(budgetId: string): RCStatus {
+    const row = getDb()
+      .prepare(`SELECT status FROM rc_state WHERE budget_id = ?`)
+      .get(budgetId) as { status: RCStatus } | undefined;
+    return row?.status ?? 'editing';
+  },
+  setStatus(budgetId: string, status: RCStatus): void {
+    const now = new Date().toISOString();
+    getDb()
+      .prepare(
+        `INSERT INTO rc_state (budget_id, status, updated_at)
          VALUES (?, ?, ?)
          ON CONFLICT(budget_id) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at`,
       )

@@ -40,3 +40,28 @@ services:
         sync: false
       - key: BRAVE_SEARCH_API_KEY
         sync: false
+
+  # ── Podcast (V&V Video Editor) ──────────────────────────────────────────────
+  # Containerised Flask app + ffmpeg + mediapipe. Requires the `video-editor-gui`
+  # folder to live inside this repo (move it next to `marketing-backend/`).
+  # The 10 GB disk holds uploads/, broll/, exports/, models/, backgrounds/.
+  - type: web
+    name: vv-podcast
+    runtime: docker
+    rootDir: video-editor-gui
+    dockerfilePath: Dockerfile
+    plan: standard          # 2 GB RAM — required by Whisper + MediaPipe
+    healthCheckPath: /__health
+    disk:
+      name: vv-podcast-data
+      mountPath: /data
+      sizeGB: 10
+    envVars:
+      - key: VV_ACCESS_CODE
+        sync: false         # set in Render dashboard — same code as Marketing-API
+      - key: SECRET_KEY
+        generateValue: true
+      - key: FFMPEG_PATH
+        value: /usr/bin/ffmpeg
+      - key: PYTHONUNBUFFERED
+        value: "1"

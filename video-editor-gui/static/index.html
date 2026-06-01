@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>V&amp;V Video Editor</title>
+  <link rel="stylesheet" href="style.css?v=25">
+  <!-- ── PANEL SPLIT — CSS Grid, dynamic height ── -->
+  <style>
+    /* preview-zone fills center-top */
+    .preview-zone { flex: 1 !important; min-height: 0 !important; overflow: hidden !important; }
+    /* preview-screen fills preview-zone (minus playbar) */
+    #previewScreen {
+      display: grid !important;
+      grid-template-rows: 1fr 1fr !important;
+      flex: 1 !important;
+      min-height: 0 !important;
+      width: var(--preview-w) !important;
+      overflow: hidden !important;
+      position: relative !important;   /* anchor for sub-overlay + tov-layer */
+    }
+    /* both panels: equal grid rows, no fixed px */
+    #panelUpper, #panelLower {
+      min-height: 0 !important;
+      overflow: hidden !important;
+      position: relative !important;
+      width: 100% !important;
+    }
+    /* background blur videos */
+    .panel-bg-video {
+      position: absolute !important; inset: -12% !important;
+      width: 124% !important; height: 124% !important;
+      object-fit: cover !important;
+      filter: blur(22px) brightness(0.7) !important;
+      z-index: 0 !important; display: block !important;
+    }
+    /* foreground: full frame, no cropping */
+    #mainVideo {
+      position: absolute !important; inset: 0 !important;
+      width: 100% !important; height: 100% !important;
+      object-fit: contain !important; z-index: 1 !important;
+      display: block !important;
+    }
+    #brollVideo {
+      position: absolute !important; inset: 0 !important;
+      width: 100% !important; height: 100% !important;
+      object-fit: contain !important; z-index: 1 !important;
+      display: block !important;
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ═══ Top Bar ═══ -->
+  <header class="topbar">
+    <span class="logo">▶ V&amp;V Video Editor</span>
+    <div class="topbar-center" id="uploadHint">Drop a video file or click Upload</div>
+    <div class="topbar-actions">
+      <button id="uploadBtn" class="btn btn-primary">⬆ Upload Video</button>
+      <button id="addClipBtn" class="btn btn-accent" hidden title="Append another clip to Main track">+ Add Clip</button>
+      <button id="cutMainBtn" class="btn btn-accent" hidden title="Split the current Main clip at the playhead">✂ Cut</button>
+      <button id="transcribeBtn" class="btn btn-accent" disabled>✦ Transcribe</button>
+      <button id="settingsBtn" class="btn btn-icon" title="Settings">⚙</button>
+    </div>
+    <input type="file" id="fileInput" accept="video/*" hidden>
+    <input type="file" id="addClipInput" accept="video/*" hidden>
+  </header>
+
+  <!-- ═══ Workspace ═══ -->
+  <div class="workspace">
+
+    <!-- ── Left Sidebar ── -->
+    <aside class="sidebar">
+      <div class="sidebar-head">B-Roll Library</div>
+      <div class="search-row">
+        <input id="searchInput" type="text" class="search-input" placeholder="Search Pexels…">
+        <button id="searchBtn" class="btn btn-sm">🔍</button>
+      </div>
+      <div class="cat-pills" id="categoryPills"></div>
+      <div class="broll-upload-row">
+        <button id="brollUploadBtn" class="btn btn-ghost btn-sm w100" title="Upload your own video or image">
+          ⬆ Upload my video / image
+        </button>
+        <input type="file" id="brollUploadInput" accept="video/*,image/*" hidden>
+        <div id="brollUploadStatus" class="broll-upload-status"></div>
+      </div>
+
+      <!-- Intro / Outro Section -->
+      <div class="intro-outro-section">
+        <div class="io-title">V&amp;V Intro / Outro</div>
+        <div class="io-buttons">
+          <div class="io-card" id="introCard" draggable="true" title="Drag to Main track or click to generate V&amp;V Intro (2 sec)">
+            <div class="io-card-placeholder" id="introThumb">🎬</div>
+            <div class="io-card-label">Intro</div>
+          </div>
+          <div class="io-card" id="outroCard" draggable="true" title="Drag to Main track or click to generate V&amp;V Outro (2 sec)">
+            <div class="io-card-placeholder" id="outroThumb">🎬</div>
+            <div class="io-card-label">Outro</div>
+          </div>
+        </div>
+        <div class="io-status" id="ioStatus"></div>
+      </div>
+
+      <div class="clip-grid" id="clipGrid">
+        <div class="lib-hint">Pexels key is configured — search above</div>
+      </div>
+    </aside>
+
+    <!-- ── Center: Preview + Timeline ── -->
+    <div class="center">
+      <div class="center-top">
+
+        <!-- Preview Zone -->
+        <div class="preview-zone">
+          <div class="preview-screen" id="previewScreen">
+
+            <!-- Upper: main video -->
+            <div class="panel-upper" id="panelUpper">
+              <!-- blurred background fill (same source, blurred + cover) -->
+              <video id="mainVideoBg" class="panel-bg-video" muted playsinline preload="none"></video>
+              <video id="mainVideo" preload="auto"></video>
+              <!-- Hidden preloader: primes the next clip's source into HTTP cache + decoder before boundary -->
+              <video id="preloadVideo" preload="auto" muted style="display:none;width:1px;height:1px"></video>
+              <div class="play-overlay" id="playOverlay">
+                <div class="play-circle" id="playCircle">
+                  <svg viewBox="0 0 24 24" fill="currentColor" width="26" height="26">
+                    <polygon id="playTriangle" points="7,4 20,12 7,20"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <!-- Lower: B-roll preview -->
+            <div class="panel-lower" id="panelLower">
+              <!-- blurred background fill -->
+              <video id="brollVideoBg" class="panel-bg-video" muted loop playsinline preload="none"></video>
+              <video id="brollVideo" muted loop playsinline></video>
+              <div class="broll-hint" id="brollHint">
+                <div class="bh-icon">🎬</div>
+                <div class="bh-label">B-Roll</div>
+                <div class="bh-sub">Drop clip on timeline</div>
+              </div>
+            </div>
+
+            <!-- ── Subtitle + Text overlays — float over BOTH panels ── -->
+            <div class="sub-overlay" id="subOverlay">
+              <div class="sub-drag-handle" id="subDragHandle" title="Drag to move subtitle">⠿</div>
+              <div class="sub-text" id="subText"></div>
+            </div>
+            <div class="tov-layer" id="tovLayer"></div>
+
+          </div><!-- /preview-screen -->
+
+          <!-- Playback controls -->
+          <div class="playbar">
+            <button id="playPauseBtn" class="pp-btn" title="Play / Pause (Space)">
+              <svg viewBox="0 0 24 24" fill="currentColor" width="16" height="16">
+                <polygon id="ppTriangle" points="6,4 20,12 6,20"/>
+              </svg>
+            </button>
+            <span class="time-display" id="timeDisplay">0:00 / 0:00</span>
+            <div class="scrubber-wrap">
+              <div class="scrubber-track" id="scrubberTrack">
+                <div class="scrubber-fill" id="scrubberFill"></div>
+                <div class="scrubber-head" id="scrubberHead"></div>
+              </div>
+            </div>
+            <button id="fullscreenBtn" class="fs-btn" title="Fullscreen (F)">⛶</button>
+          </div>
+        </div><!-- /preview-zone -->
+
+        <!-- Properties Panel -->
+        <aside class="props-panel">
+          <div class="ptabs">
+            <button class="ptab active" data-tab="transcript" title="Transcript">📝</button>
+            <button class="ptab" data-tab="text"      title="Text Overlays">🔡</button>
+            <button class="ptab" data-tab="style"     title="Subtitles / Karaoke">🎨</button>
+            <button class="ptab" data-tab="intro-outro" title="Intro &amp; Outro">🎬</button>
+            <button class="ptab" data-tab="export"    title="Export">📤</button>
+            <button class="ptab" data-tab="timeframe"   title="Timeframe Scale">⏱</button>
+            <button class="ptab" data-tab="background" title="Background Replacement">🖼</button>
+          </div>
+          <div class="ptab-title" id="ptabTitle">Transcript</div>
+
+          <!-- Transcript -->
+          <div class="ptab-body active" id="ptab-transcript">
+            <div id="transcribeStatus" class="status-msg info">No video loaded</div>
+            <div class="seg-list" id="segmentList"></div>
+          </div>
+
+          <!-- Text Overlays -->
+          <div class="ptab-body" id="ptab-text">
+            <button id="addTextOverlayBtn" class="btn btn-primary w100">+ Add Text Overlay</button>
+            <div class="ov-list" id="textOverlayList"><div class="ov-empty">No overlays yet</div></div>
+          </div>
+
+          <!-- Style / Karaoke -->
+          <div class="ptab-body" id="ptab-style">
+            <div class="prop-section">
+              <div class="prop-sec-title">Karaoke Subtitles</div>
+              <div class="prop-row">
+                <label>Words per group</label>
+                <div class="prop-ctrl">
+                  <input type="range" id="karaokeWords" min="2" max="7" value="4">
+                  <span class="range-val" id="karaokeWordsVal">4</span>
+                </div>
+              </div>
+              <div class="prop-row">
+                <label>Text color</label>
+                <div class="prop-ctrl"><input type="color" id="subColor" value="#ffffff"></div>
+              </div>
+              <div class="prop-row">
+                <label>Highlight color</label>
+                <div class="prop-ctrl"><input type="color" id="subHlColor" value="#ffe050"></div>
+              </div>
+              <div class="prop-row">
+                <label>Font size (px)</label>
+                <div class="prop-ctrl"><input type="number" id="subFontSize" min="10" max="60" value="20" class="num-input"></div>
+              </div>
+            </div>
+            <div class="prop-section">
+              <div class="prop-sec-title">Burned-in Subtitles</div>
+              <div class="prop-row">
+                <label>Font size</label>
+                <div class="prop-ctrl"><input type="number" id="expSubSize" min="10" max="48" value="18" class="num-input"></div>
+              </div>
+              <div class="prop-row">
+                <label>Outline width</label>
+                <div class="prop-ctrl"><input type="number" id="expSubOutline" min="0" max="8" value="4" class="num-input"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Intro & Outro -->
+          <div class="ptab-body" id="ptab-intro-outro">
+            <div class="prop-section">
+              <div class="prop-sec-title">◀ Intro</div>
+              <div class="prop-row">
+                <label>Length (sec)</label>
+                <div class="prop-ctrl">
+                  <input type="range" id="introDur" min="1" max="15" step="0.5" value="5">
+                  <span class="range-val" id="introDurVal">5</span>
+                </div>
+              </div>
+              <div class="prop-row">
+                <label>Fade in (sec)</label>
+                <div class="prop-ctrl">
+                  <input type="range" id="introFadeIn" min="0" max="3" step="0.1" value="0.6">
+                  <span class="range-val" id="introFadeInVal">0.6</span>
+                </div>
+              </div>
+              <div class="prop-row">
+                <label>Fade out (sec)</label>
+                <div class="prop-ctrl">
+                  <input type="range" id="introFadeOut" min="0" max="3" step="0.1" value="0.6">
+                  <span class="range-val" id="introFadeOutVal">0.6</span>
+                </div>
+              </div>
+              <div class="prop-row">
+                <label>Media</label>
+                <div class="prop-ctrl io-media-ctrl">
+                  <span id="introMediaName" class="io-media-name">V&amp;V default brand</span>
+                </div>
+              </div>
+              <div class="io-action-row">
+                <button id="introUploadBtn" class="btn btn-ghost btn-sm">⬆ Upload image/video</button>
+                <button id="introResetBtn"  class="btn btn-ghost btn-sm">↺ Reset to default</button>
+              </div>
+              <div class="prop-row">
+                <label>Audio</label>
+                <div class="prop-ctrl io-media-ctrl">
+                  <span id="introAudioName" class="io-media-name">Visibility default</span>
+                </div>
+              </div>
+              <div class="prop-row">
+                <label>Audio volume</label>
+                <div class="prop-ctrl">
+                  <input type="range" id="introAudioVol" min="0" max="1.5" step="0.05" value="0.8">
+                  <span class="range-val" id="introAudioVolVal">0.8</span>
+                </div>
+              </div>
+              <div class="io-action-row">
+                <button id="introAudioUploadBtn" class="btn btn-ghost btn-sm">⬆ Upload audio</button>
+                <button id="introAudioResetBtn"  class="btn btn-ghost btn-sm">↺ Visibility audio</button>
+              </div>
+              <button id="introRegenBtn" class="btn btn-primary w100 mt8">↻ Regenerate Intro</button>
+              <input type="file" id="introFileInput"      accept="image/*,video/*" hidden>
+              <input type="file" id="introAudioFileInput" accept="audio/*" hidden>
+            </div>
+
+            <div class="prop-section">
+              <div class="prop-sec-title">▶ Outro</div>
+              <div class="prop-row">
+                <label>Length (sec)</label>
+                <div class="prop-ctrl">
+                  <input type="range" id="outroDur" min="1" max="15" step="0.5" value="5">
+                  <span class="range-val" id="outroDurVal">5</span>
+                </div>
+              </div>
+              <div class="prop-row">
+                <label>Fade in (sec)</label>
+                <div class="prop-ctrl">
+                  <input type="range" id="outroFadeIn" min="0" max="3" step="0.1" value="0.6">
+                  <span class="range-val" id="outroFadeInVal">0.6</span>
+                </div>
+              </div>
+              <div class="prop-row">
+                <label>Fade out (sec)</label>
+                <div class="prop-ctrl">
+                  <input type="range" id="outroFadeOut" min="0" max="3" step="0.1" value="0.6">
+                  <span class="range-val" id="outroFadeOutVal">0.6</span>
+                </div>
+              </div>
+              <div class="prop-row">
+                <label>Media</label>
+                <div class="prop-ctrl io-media-ctrl">
+                  <span id="outroMediaName" class="io-media-name">V&amp;V default brand</span>
+                </div>
+              </div>
+              <div class="io-action-row">
+                <button id="outroUploadBtn" class="btn btn-ghost btn-sm">⬆ Upload image/video</button>
+                <button id="outroResetBtn"  class="btn btn-ghost btn-sm">↺ Reset to default</button>
+              </div>
+              <div class="prop-row">
+                <label>Audio</label>
+                <div class="prop-ctrl io-media-ctrl">
+                  <span id="outroAudioName" class="io-media-name">Visibility default</span>
+                </div>
+              </div>
+              <div class="prop-row">
+                <label>Audio volume</label>
+                <div class="prop-ctrl">
+                  <input type="range" id="outroAudioVol" min="0" max="1.5" step="0.05" value="0.8">
+                  <span class="range-val" id="outroAudioVolVal">0.8</span>
+                </div>
+              </div>
+              <div class="io-action-row">
+                <button id="outroAudioUploadBtn" class="btn btn-ghost btn-sm">⬆ Upload audio</button>
+                <button id="outroAudioResetBtn"  class="btn btn-ghost btn-sm">↺ Visibility audio</button>
+              </div>
+              <button id="outroRegenBtn" class="btn btn-primary w100 mt8">↻ Regenerate Outro</button>
+              <input type="file" id="outroFileInput"      accept="image/*,video/*" hidden>
+              <input type="file" id="outroAudioFileInput" accept="audio/*" hidden>
+            </div>
+
+            <div id="ioPropStatus" class="status-msg info" style="font-size:11px"></div>
+          </div>
+
+          <!-- Timeframe -->
+          <div class="ptab-body" id="ptab-timeframe">
+            <div class="prop-section">
+              <div class="prop-sec-title">Timeline Canvas</div>
+              <div class="prop-row">
+                <label>Canvas length</label>
+                <div class="prop-ctrl">
+                  <select id="tlDurPreset" class="sel-input">
+                    <option value="120">2 min</option>
+                    <option value="300">5 min</option>
+                    <option value="600" selected>10 min</option>
+                    <option value="1800">30 min</option>
+                    <option value="3600">60 min</option>
+                    <option value="custom">Custom…</option>
+                  </select>
+                </div>
+              </div>
+              <div class="prop-row" id="tlDurCustomRow" style="display:none">
+                <label>Minutes</label>
+                <div class="prop-ctrl">
+                  <input type="number" id="tlDurCustom" class="num-input" min="1" max="120" value="10">
+                </div>
+              </div>
+            </div>
+            <div class="status-msg info" style="font-size:11px">
+              Ruler always spans this length. Clips shorter than the canvas leave empty space — normal NLE behavior. Use zoom (+ / −) to adjust view scale.
+            </div>
+          </div>
+
+          <!-- Background -->
+          <div class="ptab-body" id="ptab-background">
+            <div class="prop-section">
+              <div class="prop-sec-title">Background Replacement</div>
+              <div class="prop-row">
+                <label>Enable</label>
+                <div class="prop-ctrl">
+                  <label class="cb-lbl">
+                    <input type="checkbox" id="bgEnabled"> Replace background on export
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="prop-section">
+              <div class="prop-sec-title">Background Image</div>
+              <div id="bgPreviewWrap" style="width:100%;aspect-ratio:16/9;background:var(--bg4);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;display:flex;align-items:center;justify-content:center;margin-bottom:8px">
+                <span id="bgPreviewHint" style="color:var(--text3);font-size:11px">No image selected</span>
+                <img id="bgPreviewImg" style="display:none;width:100%;height:100%;object-fit:cover">
+              </div>
+              <div class="io-action-row">
+                <button id="bgUploadBtn" class="btn btn-primary btn-sm w100">⬆ Upload background image</button>
+                <input type="file" id="bgFileInput" accept="image/*" hidden>
+              </div>
+              <div id="bgUploadStatus" class="status-msg info" style="font-size:11px;margin-top:6px"></div>
+            </div>
+            <div class="prop-section">
+              <div class="prop-sec-title">Segmentation</div>
+              <div class="prop-row">
+                <label>Edge softness</label>
+                <div class="prop-ctrl">
+                  <input type="range" id="bgSoftness" min="0" max="1" step="0.05" value="0.3">
+                  <span class="range-val" id="bgSoftnessVal">0.3</span>
+                </div>
+              </div>
+              <div id="bgCheckStatus" class="status-msg info" style="font-size:11px;margin-top:6px">
+                Requires: <code>pip install mediapipe opencv-python</code>
+              </div>
+            </div>
+          </div>
+
+          <!-- Export -->
+          <div class="ptab-body" id="ptab-export">
+            <div class="prop-section">
+              <div class="prop-row">
+                <label>Output format</label>
+                <div class="prop-ctrl">
+                  <select id="expOrientation" class="sel-input">
+                    <option value="vertical">Vertical 9:16</option>
+                    <option value="horizontal">Horizontal 16:9</option>
+                  </select>
+                </div>
+              </div>
+              <div class="io-export-row">
+                <label><input type="checkbox" id="expAddIntro"> Prepend V&amp;V Intro</label>
+                <label><input type="checkbox" id="expAddOutro"> Append V&amp;V Outro</label>
+              </div>
+              <button id="doExportBtn" class="btn btn-success w100 mt8" disabled>▶ Export Video</button>
+              <div id="exportStatus" class="status-msg mt8"></div>
+              <a id="exportLink" class="export-link" hidden>⬇ Download exported video</a>
+            </div>
+          </div>
+        </aside><!-- /props-panel -->
+
+      </div><!-- /center-top -->
+
+      <!-- ── Timeline ── -->
+      <div class="timeline-area">
+        <div class="tl-ruler-row">
+          <div class="tl-lbl-spacer"></div>
+          <div class="tl-ruler" id="tlRuler"></div>
+        </div>
+        <div class="tl-rows" id="tlRows">
+          <div class="tl-row-wrap">
+            <div class="tl-lbl">Main</div>
+            <div class="tl-track tl-main" id="mainTrack"></div>
+          </div>
+          <div id="brollContainer"></div>
+        </div>
+        <div class="tl-footer">
+          <button id="addTrackBtn" class="btn btn-sm btn-ghost">+ Add B-Roll Track</button>
+          <div class="tl-zoom-controls">
+            <button id="tlScrollLeftBtn"  class="btn btn-sm btn-ghost" title="Scroll left">◀</button>
+            <button id="tlZoomOutBtn"     class="btn btn-sm btn-ghost" title="Zoom out (−)">−</button>
+            <button id="tlZoomFitBtn"     class="btn btn-sm btn-ghost" title="Fit to width">⤢</button>
+            <button id="tlZoomInBtn"      class="btn btn-sm btn-ghost" title="Zoom in (+)">+</button>
+            <button id="tlScrollRightBtn" class="btn btn-sm btn-ghost" title="Scroll right">▶</button>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /center -->
+  </div><!-- /workspace -->
+</div><!-- /app -->
+
+<!-- ═══ Settings Modal ═══ -->
+<div id="settingsModal" class="modal-bg" hidden>
+  <div class="modal-box">
+    <div class="modal-title">Settings</div>
+    <div class="modal-body">
+      <label class="field-lbl">Pexels API Key
+        <input type="password" id="cfgPexels" class="field-input" placeholder="Key is pre-configured">
+      </label>
+      <label class="field-lbl">Whisper Model
+        <select id="cfgModel" class="field-input">
+          <option value="tiny">Tiny — fastest</option>
+          <option value="base">Base</option>
+          <option value="small" selected>Small — recommended</option>
+          <option value="medium">Medium — most accurate</option>
+        </select>
+      </label>
+    </div>
+    <div class="modal-foot">
+      <button id="saveCfgBtn" class="btn btn-primary">Save</button>
+      <button id="closeCfgBtn" class="btn btn-ghost">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ Text Overlay Edit Modal ═══ -->
+<div id="textEditModal" class="modal-bg" hidden>
+  <div class="modal-box">
+    <div class="modal-title">Text Overlay</div>
+    <div class="modal-body">
+      <!-- Live preview box — updates as you change settings -->
+      <div class="te-preview-box">
+        <div id="tePreviewInner">Vision &amp; Virtue</div>
+      </div>
+      <input type="hidden" id="teId">
+      <label class="field-lbl">Text
+        <textarea id="teText" class="field-input" rows="2" placeholder="Vision &amp; Virtue"></textarea>
+      </label>
+      <div class="form-row-2">
+        <label class="field-lbl">Font family
+          <select id="teFontFamily" class="field-input">
+            <option>Arial</option>
+            <option>Arial Black</option>
+            <option>Impact</option>
+            <option>Times New Roman</option>
+            <option>Georgia</option>
+            <option>Verdana</option>
+            <option>Trebuchet MS</option>
+            <option>Comic Sans MS</option>
+            <option>Calibri</option>
+            <option>Segoe UI</option>
+          </select>
+        </label>
+        <label class="field-lbl">Font size (px)
+          <input type="number" id="teFontSize" class="field-input" min="12" max="120" value="36">
+        </label>
+      </div>
+      <div class="form-row-2">
+        <label class="field-lbl">Text color
+          <input type="color" id="teColor" value="#ffffff" class="color-lg">
+        </label>
+        <label class="field-lbl">Background color
+          <input type="color" id="teBgColor" value="#000000" class="color-lg">
+        </label>
+      </div>
+      <div class="form-row-3">
+        <label class="cb-lbl"><input type="checkbox" id="teBold" checked> Bold</label>
+        <label class="cb-lbl"><input type="checkbox" id="teItalic"> Italic</label>
+        <label class="cb-lbl"><input type="checkbox" id="teShadow" checked> Shadow</label>
+        <label class="cb-lbl"><input type="checkbox" id="teBgOn"> Use bg</label>
+      </div>
+      <label class="field-lbl">Outline width (0 = none)
+        <input type="number" id="teOutline" class="field-input" min="0" max="8" value="2">
+      </label>
+      <label class="field-lbl">Clickable link URL (optional)
+        <input type="url" id="teUrl" class="field-input" placeholder="https://visionvirtuepartnership.com">
+      </label>
+      <div class="field-lbl">Animation style
+        <div class="anim-grid" id="animGrid">
+          <div class="anim-opt selected" data-anim="none">None</div>
+          <div class="anim-opt" data-anim="fade">Fade In</div>
+          <div class="anim-opt" data-anim="slideLeft">← Slide</div>
+          <div class="anim-opt" data-anim="slideRight">Slide →</div>
+          <div class="anim-opt" data-anim="slideUp">Slide ↑</div>
+          <div class="anim-opt" data-anim="zoom">Zoom</div>
+          <div class="anim-opt" data-anim="bounce">Bounce</div>
+          <div class="anim-opt" data-anim="flash">Flash</div>
+          <div class="anim-opt" data-anim="periodic">Periodic</div>
+        </div>
+      </div>
+      <div class="anim-period-row" id="animPeriodRow" style="display:none">
+        <label>Period (sec)</label>
+        <input type="number" id="teAnimPeriod" class="num-input" min="0.5" max="30" value="3" step="0.5">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button id="saveTeBtn" class="btn btn-primary">Save</button>
+      <button id="closeTeBtn" class="btn btn-ghost">Cancel</button>
+      <button id="deleteTeBtn" class="btn btn-danger" hidden>Delete</button>
+    </div>
+  </div>
+</div>
+
+<script src="editor.js?v=25"></script>
+</body>
+</html>
