@@ -62,6 +62,17 @@ if (marketingAiCard) {
   });
 }
 
+// ── Podcast card → open gate then redirect to the hosted video editor ──
+const podcastCard = document.getElementById('podcastCard');
+if (podcastCard) {
+  podcastCard.addEventListener('click', () => {
+    authDropdown.classList.remove('open');
+    authMenuBtn.setAttribute('aria-expanded', 'false');
+    apEnterBtn.dataset.target = 'podcast';
+    openGate();
+  });
+}
+
 // Mobile: tap Authorized Personnel → open gate directly
 if (mobileAuthBtn) {
   mobileAuthBtn.addEventListener('click', openGate);
@@ -121,7 +132,14 @@ async function tryAuth() {
     // panel) can include it in the X-Admin-Pin header without re-prompting.
     sessionStorage.setItem('vv_admin_pin', pin);
     closeGate();
-    window.location.href = target === 'marketing' ? 'marketing.html' : 'agents.html';
+    // Pass the verified PIN as a one-shot query param so the Podcast app can
+    // exchange it for its own session cookie on first load.
+    const PODCAST_URL = 'https://vv-podcast.onrender.com';
+    const podcastHref = `${PODCAST_URL}/?pin=${encodeURIComponent(pin)}`;
+    window.location.href =
+      target === 'marketing' ? 'marketing.html'
+      : target === 'podcast' ? podcastHref
+      : 'agents.html';
   } catch {
     apError.textContent = 'Could not reach server. Please try again.';
   } finally {
