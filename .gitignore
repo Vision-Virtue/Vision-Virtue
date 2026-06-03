@@ -3,3 +3,8 @@ node_modules/
 .env.local
 *.log
 .DS_Store
+
+# Smoke-test output produced by marketing-backend/scripts/smoke-*.js
+smoke-deck-output.xlsx
+smoke-pptx-xlsx.xlsx
+smoke-pptx-output.pptx

@@ -9,6 +9,15 @@ import { Request, Response } from 'express';
 import path from 'path';
 import { customerKeyRepo, partnerSubmissionRepo, CustomerKeyRow } from '../db/partner.repository';
 import { generateFinalizedXlsx, resolveStoredXlsx, storeUploadedXlsx } from '../services/partner-xlsx.service';
+import {
+  storeAsset, resolveAsset, contentTypeForFilename, MAX_ASSET_BYTES,
+} from '../services/deck-asset.service';
+import {
+  generatePopulatedPptx, pptxTemplatePath, customerPptxDir,
+  buildPptxFileName, resolveStoredPptx,
+} from '../services/pptx-generator.service';
+import { INVESTOR_DECK_FIELDS, SECTIONS, InvestorDeckField } from '../data/investor-deck-schema';
+import fs from 'fs';
 import { z } from 'zod';
 
 // ─── Request validation schemas ──────────────────────────────────────────────
@@ -99,6 +108,15 @@ export const partnerController = {
     try {
       const result = await generateFinalizedXlsx(sub.id, sub.customerName, sub.formData as never);
       partnerSubmissionRepo.setXlsxPath(sub.id, result.fileName);
+      // Best-effort pptx populate. Values pulled from Investor_Deck_Calculations
+      // will be "MISSING INPUT" until an admin opens + saves the xlsx in Excel,
+      // so on submit we generate a draft and the admin can regenerate later.
+      try {
+        const pptxOut = generateDeckForSubmission(sub.id, sub.customerName, result.filePath);
+        await pptxOut;
+      } catch (pptxErr) {
+        console.error('[partner] pptx generation on submit failed:', pptxErr);
+      }
     } catch (err) {
       console.error('[partner] xlsx generation on submit failed:', err);
     }
@@ -108,6 +126,156 @@ export const partnerController = {
       status:       sub.status,
       submittedAt:  sub.submittedAt,
       customerName: sub.customerName,
+    });
+  },
+
+  /**
+   * GET /api/customer/deck-schema
+   * Returns the investor-deck questionnaire schema so the frontend can
+   * render the form sections from a single source of truth. Public —
+   * the schema itself isn't sensitive and the actual answers are still
+   * gated by the customer key on submission.
+   */
+  deckSchema(_req: Request, res: Response): void {
+    res.json({
+      sections: SECTIONS,
+      fields: INVESTOR_DECK_FIELDS,
+      total: INVESTOR_DECK_FIELDS.length,
+    });
+  },
+
+  /**
+   * POST /api/customer/deck-asset?placeholder=<NAME>
+   * Header: X-Customer-Key, Content-Type: image/<type>
+   * Body:   raw image bytes
+   *
+   * Stores the file under <data>/customer-assets/<customerKeyId>/ and
+   * returns the URL the questionnaire stores in formData.investorDeck.
+   */
+  deckAssetUpload(req: Request, res: Response): void {
+    const keyRow = resolveCustomerKey(req);
+    if (!keyRow) { send401(res, 'Missing or invalid customer key.'); return; }
+
+    const placeholder = String(req.query.placeholder || '').trim();
+    if (!placeholder) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'placeholder query param required.' } });
+      return;
+    }
+
+    // Express's raw-body middleware (registered with a per-route mime list)
+    // delivers a Buffer here. Reject anything else to be explicit.
+    const buf = req.body;
+    if (!Buffer.isBuffer(buf)) {
+      res.status(400).json({ error: { code: 'BAD_BODY', message: 'Body must be raw image bytes.' } });
+      return;
+    }
+    const contentType = req.header('content-type') || 'application/octet-stream';
+
+    try {
+      const stored = storeAsset({
+        customerKeyId:   keyRow.id,
+        placeholderName: placeholder,
+        contentType,
+        buffer:          buf,
+      });
+      res.status(201).json({
+        url:      stored.url,
+        fileName: stored.fileName,
+        sizeBytes: buf.length,
+      });
+    } catch (err) {
+      res.status(400).json({
+        error: {
+          code: 'ASSET_REJECTED',
+          message: err instanceof Error ? err.message : 'Asset rejected.',
+        },
+      });
+    }
+  },
+
+  /**
+   * GET /api/customer/deck-asset/:fileName
+   * Header: X-Customer-Key
+   * Streams the customer's own asset back. The customer key in the header
+   * picks which customer-assets/<customerKeyId>/ directory to read from —
+   * customers can only see their own files.
+   */
+  deckAssetServe(req: Request, res: Response): void {
+    const keyRow = resolveCustomerKey(req);
+    if (!keyRow) { send401(res, 'Missing or invalid customer key.'); return; }
+
+    const fileName = req.params.fileName || '';
+    const abs = resolveAsset(keyRow.id, fileName);
+    if (!abs) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Asset not found.' } });
+      return;
+    }
+    res.setHeader('Content-Type', contentTypeForFilename(fileName));
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.sendFile(abs);
+  },
+
+  /**
+   * GET /api/customer/me/submissions/:id/deck-validation
+   * Header: X-Customer-Key
+   *
+   * Walks the investor-deck schema and reports:
+   *   - missingRequired: required placeholders without an answer
+   *   - missingImages:   image placeholders that the customer left blank
+   *                      (even if optional — UI may want to nag)
+   *   - filled:          count of placeholders with a non-empty answer
+   *   - complete:        true ⇔ no missingRequired entries
+   */
+  deckValidation(req: Request, res: Response): void {
+    const keyRow = resolveCustomerKey(req);
+    if (!keyRow) { send401(res, 'Missing or invalid customer key.'); return; }
+
+    const sub = partnerSubmissionRepo.getById(req.params.id);
+    if (!sub || sub.customerKeyId !== keyRow.id) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
+      return;
+    }
+
+    const fd = (sub.formData || {}) as { investorDeck?: Record<string, unknown> };
+    const answers = fd.investorDeck || {};
+
+    const missingRequired: Array<{ placeholder: string; section: string; slideNumbers: number[]; question: string }> = [];
+    const missingImages:   Array<{ placeholder: string; section: string; required: boolean; question: string }> = [];
+    let filled = 0;
+
+    for (const f of INVESTOR_DECK_FIELDS as InvestorDeckField[]) {
+      const v = answers[f.fieldKey];
+      const hasValue = v !== undefined && v !== null && String(v).trim() !== '';
+      if (hasValue) filled += 1;
+      if (f.required && !hasValue) {
+        missingRequired.push({
+          placeholder:  f.placeholder,
+          section:      f.section,
+          slideNumbers: f.slideNumbers,
+          question:     f.question,
+        });
+      }
+      if (f.inputType === 'image' && !hasValue) {
+        missingImages.push({
+          placeholder: f.placeholder,
+          section:     f.section,
+          required:    f.required,
+          question:    f.question,
+        });
+      }
+    }
+
+    res.json({
+      submissionId:  sub.id,
+      customerName:  sub.customerName,
+      total:         INVESTOR_DECK_FIELDS.length,
+      filled,
+      complete:      missingRequired.length === 0,
+      missingRequired,
+      missingImages,
+      // Reminder: Investor_Deck_Calculations is built by a separate Part-1
+      // pipeline. We only check that the questionnaire side is complete.
+      note: 'Calculated placeholders are validated separately against Investor_Deck_Calculations.',
     });
   },
 
@@ -398,7 +566,130 @@ export const partnerController = {
       })),
     });
   },
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Investor Deck PPTX endpoints
+  // ────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * POST /api/admin/submissions/:id/generate-pptx
+   * Regenerates the investor-deck pptx for this submission by re-reading the
+   * customer's xlsx (which the admin may have edited in Excel to refresh
+   * the calculations sheet) and replacing every {{PLACEHOLDER}} in the
+   * template.
+   */
+  async adminGeneratePptx(req: Request, res: Response): Promise<void> {
+    const sub = partnerSubmissionRepo.getById(req.params.id);
+    if (!sub) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
+      return;
+    }
+    if (!sub.finalizedXlsxPath) {
+      res.status(409).json({
+        error: { code: 'NO_XLSX', message: 'The xlsx has not been generated yet.' },
+      });
+      return;
+    }
+    const xlsxAbs = resolveStoredXlsx(sub.finalizedXlsxPath);
+    if (!xlsxAbs) {
+      res.status(410).json({ error: { code: 'XLSX_GONE', message: 'Stored xlsx file is missing on disk.' } });
+      return;
+    }
+    try {
+      const stats = await generateDeckForSubmission(sub.id, sub.customerName, xlsxAbs);
+      res.json({
+        submissionId:    sub.id,
+        replaced:        stats.replaced,
+        slidesProcessed: stats.slidesProcessed,
+        unmatchedCount:  stats.unmatched.length,
+        unmatched:       stats.unmatched.slice(0, 25),
+      });
+    } catch (err) {
+      console.error('[partner] adminGeneratePptx failed:', err);
+      res.status(500).json({
+        error: {
+          code: 'PPTX_GENERATION_FAILED',
+          message: err instanceof Error ? err.message : 'pptx generation failed.',
+        },
+      });
+    }
+  },
+
+  /**
+   * GET /api/admin/submissions/:id/pptx
+   * Streams the populated investor-deck pptx (admin view).
+   */
+  adminDownloadPptx(req: Request, res: Response): void {
+    const sub = partnerSubmissionRepo.getById(req.params.id);
+    if (!sub) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
+      return;
+    }
+    const fileName = buildPptxFileName(sub.customerName, sub.id);
+    const abs = resolveStoredPptx(fileName);
+    if (!abs) {
+      res.status(409).json({
+        error: { code: 'PPTX_NOT_READY', message: 'pptx has not been generated yet — call POST /api/admin/submissions/:id/generate-pptx first.' },
+      });
+      return;
+    }
+    const downloadName = `${sub.customerName || 'Customer'} - Investor Deck.pptx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName.replace(/"/g, '')}"`);
+    res.sendFile(abs);
+  },
+
+  /**
+   * GET /api/customer/me/submissions/:id/pptx
+   * Header: X-Customer-Key
+   * Customer downloads their populated deck. Only available once the
+   * submission is finalized (mirrors the xlsx flow).
+   */
+  downloadMyPptx(req: Request, res: Response): void {
+    const keyRow = resolveCustomerKey(req);
+    if (!keyRow) { send401(res, 'Missing or invalid customer key.'); return; }
+    const sub = partnerSubmissionRepo.getById(req.params.id);
+    if (!sub || sub.customerKeyId !== keyRow.id) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
+      return;
+    }
+    if (sub.status !== 'finalized') {
+      res.status(409).json({ error: { code: 'NOT_FINALIZED', message: 'Submission has not been finalized yet.' } });
+      return;
+    }
+    const fileName = buildPptxFileName(sub.customerName, sub.id);
+    const abs = resolveStoredPptx(fileName);
+    if (!abs) {
+      res.status(410).json({ error: { code: 'PPTX_GONE', message: 'The populated pptx is not available on disk.' } });
+      return;
+    }
+    const downloadName = `${sub.customerName || 'Customer'} - Investor Deck.pptx`;
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    res.setHeader('Content-Disposition', `attachment; filename="${downloadName.replace(/"/g, '')}"`);
+    res.sendFile(abs);
+  },
 };
+
+// ─── Helpers used by multiple controller methods ──────────────────────────────
+
+/**
+ * Generate (or regenerate) the populated pptx for a submission. Returns
+ * the stats from the replacer. Throws if the template or xlsx is missing.
+ */
+async function generateDeckForSubmission(
+  submissionId: string,
+  customerName: string,
+  xlsxAbsPath: string,
+) {
+  const outDir = customerPptxDir();
+  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+  const outFile = `${outDir}/${buildPptxFileName(customerName, submissionId)}`.replace(/\\/g, '/');
+  return generatePopulatedPptx({
+    templatePptxPath: pptxTemplatePath(),
+    customerXlsxPath: xlsxAbsPath,
+    outputPptxPath:   outFile,
+  });
+}
 
 // Silence unused-import warning when path lib isn't used anywhere else.
 void path;

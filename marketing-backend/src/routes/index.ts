@@ -148,6 +148,30 @@ router.post(
 // Validate a customer key and return basic info
 router.post('/customer/auth', (req, res) => partnerController.auth(req, res));
 
+// Investor-deck placeholder schema — used by the customer questionnaire UI
+// to render the deck-specific sections. Single source of truth shared with
+// the xlsx writer.
+router.get('/customer/deck-schema', (req, res) => partnerController.deckSchema(req, res));
+
+// Investor-deck asset upload — raw image bytes. Each image MIME we accept
+// is registered with the raw-body parser; multipart isn't used here.
+const DECK_ASSET_MIMES = [
+  'image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml', 'image/gif',
+];
+router.post(
+  '/customer/deck-asset',
+  raw({ type: DECK_ASSET_MIMES, limit: '10mb' }),
+  (req, res) => partnerController.deckAssetUpload(req, res),
+);
+router.get('/customer/deck-asset/:fileName', (req, res) => partnerController.deckAssetServe(req, res));
+
+// Investor-deck validation — checks the customer's questionnaire side
+// (required fields, image uploads). Calculations side validated separately.
+router.get(
+  '/customer/me/submissions/:id/deck-validation',
+  (req, res) => partnerController.deckValidation(req, res),
+);
+
 // Submit a Customer's Questionnaire (header X-Customer-Key required)
 router.post('/submissions', asyncHandler(async (req, res) => { await partnerController.createSubmission(req, res); }));
 
@@ -156,6 +180,9 @@ router.get('/customer/me/submissions', (req, res) => partnerController.listMySub
 
 // Customer downloads their own finalized xlsx
 router.get('/customer/me/submissions/:id/xlsx', (req, res) => partnerController.downloadMyXlsx(req, res));
+
+// Customer downloads their own populated investor-deck pptx
+router.get('/customer/me/submissions/:id/pptx', (req, res) => partnerController.downloadMyPptx(req, res));
 
 // Public count of pending submissions — used by the homepage notification
 // badge on the Authorized Personnel button. Returns just `{ pending: N }`,
@@ -339,6 +366,17 @@ router.post(
   '/admin/submissions/:id/generate-xlsx',
   requireAdminPin,
   asyncHandler(async (req, res) => { await partnerController.adminGenerateXlsx(req, res); }),
+);
+// (Re)generate the populated investor-deck pptx from the current xlsx.
+router.post(
+  '/admin/submissions/:id/generate-pptx',
+  requireAdminPin,
+  asyncHandler(async (req, res) => { await partnerController.adminGeneratePptx(req, res); }),
+);
+router.get(
+  '/admin/submissions/:id/pptx',
+  requireAdminPin,
+  (req, res) => partnerController.adminDownloadPptx(req, res),
 );
 // Reupload — admin overwrites the stored xlsx with a manually-edited file.
 // raw() takes the place of express.json() for this one route so we can
