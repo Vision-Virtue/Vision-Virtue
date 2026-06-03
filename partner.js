@@ -529,6 +529,7 @@ qForm?.addEventListener('submit', async e => {
     letsScale: collectLetsScale(),
     unitCosts: collectUnitCosts(),
     fte,
+    investorDeck: collectInvestorDeck(),
   };
 
   const submitBtn = qForm.querySelector('.partner-q-submit');
@@ -552,3 +553,245 @@ qForm?.addEventListener('submit', async e => {
 // Clean up any leftover localStorage from Phase 1 (now backend-backed).
 try { localStorage.removeItem('vv_partner_submission'); } catch { /* ignore */ }
 renderTileState();
+
+// ════════════════════════════════════════════════════════════════════════════
+//  INVESTOR DECK — schema-driven section renderer
+//
+//  Fetches the placeholder schema from /api/customer/deck-schema and renders
+//  one collapsible section per InvestorDeckField.section. Image inputs upload
+//  to /api/customer/deck-asset and store the returned URL as the field value.
+//  Everything else is captured into a flat {fieldKey: value} map on submit.
+// ════════════════════════════════════════════════════════════════════════════
+
+const DECK_STATE = {
+  schema:    null,                 // { sections, fields, total }
+  values:    new Map(),            // fieldKey -> string (or URL for images)
+  loaded:    false,
+};
+
+function deckEscapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+async function loadDeckSchema() {
+  if (DECK_STATE.loaded) return DECK_STATE.schema;
+  try {
+    const res = await fetch(`${PARTNER_API}/api/customer/deck-schema`);
+    if (!res.ok) throw new Error(`schema fetch failed (${res.status})`);
+    DECK_STATE.schema = await res.json();
+    DECK_STATE.loaded = true;
+    return DECK_STATE.schema;
+  } catch (e) {
+    DECK_STATE.loaded = false;
+    throw e;
+  }
+}
+
+function deckGroupBySection(fields) {
+  const map = new Map();
+  for (const f of fields) {
+    if (!map.has(f.section)) map.set(f.section, []);
+    map.get(f.section).push(f);
+  }
+  return map;
+}
+
+function deckFieldId(fieldKey) { return `deck-${fieldKey}`; }
+
+function deckRenderField(f) {
+  const id  = deckFieldId(f.fieldKey);
+  const req = f.required ? '<span class="partner-q-req">*</span>' : '';
+  const guide = f.guidance ? `<p class="partner-q-help">${deckEscapeHtml(f.guidance)}</p>` : '';
+  switch (f.inputType) {
+    case 'shortText':
+      return `<div class="partner-q-field">
+        <label class="partner-q-label" for="${id}">${deckEscapeHtml(f.question)} ${req}</label>
+        <input id="${id}" type="text" class="partner-q-input" data-deck-key="${f.fieldKey}" ${f.required ? 'data-deck-required="1"' : ''} autocomplete="off" />
+        ${guide}
+      </div>`;
+    case 'longText':
+      return `<div class="partner-q-field partner-q-field-wide">
+        <label class="partner-q-label" for="${id}">${deckEscapeHtml(f.question)} ${req}</label>
+        <textarea id="${id}" class="partner-q-input partner-q-textarea" rows="3" data-deck-key="${f.fieldKey}" ${f.required ? 'data-deck-required="1"' : ''}></textarea>
+        ${guide}
+      </div>`;
+    case 'number':
+    case 'year':
+      return `<div class="partner-q-field">
+        <label class="partner-q-label" for="${id}">${deckEscapeHtml(f.question)} ${req}</label>
+        <input id="${id}" type="number" class="partner-q-input" data-deck-key="${f.fieldKey}" ${f.required ? 'data-deck-required="1"' : ''} ${f.inputType === 'year' ? 'min="1900" max="2100" step="1"' : ''} />
+        ${guide}
+      </div>`;
+    case 'date':
+      return `<div class="partner-q-field">
+        <label class="partner-q-label" for="${id}">${deckEscapeHtml(f.question)} ${req}</label>
+        <input id="${id}" type="date" class="partner-q-input" data-deck-key="${f.fieldKey}" ${f.required ? 'data-deck-required="1"' : ''} />
+        ${guide}
+      </div>`;
+    case 'email':
+      return `<div class="partner-q-field">
+        <label class="partner-q-label" for="${id}">${deckEscapeHtml(f.question)} ${req}</label>
+        <input id="${id}" type="email" class="partner-q-input" data-deck-key="${f.fieldKey}" ${f.required ? 'data-deck-required="1"' : ''} autocomplete="off" />
+        ${guide}
+      </div>`;
+    case 'image':
+      return `<div class="partner-q-field partner-q-field-wide" data-deck-image="${f.fieldKey}">
+        <label class="partner-q-label">${deckEscapeHtml(f.question)} ${req}</label>
+        <div class="partner-q-image-row">
+          <input id="${id}" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" data-deck-key="${f.fieldKey}" data-deck-placeholder="${deckEscapeHtml(f.placeholder)}" />
+          <span class="partner-q-image-status" data-deck-image-status="${f.fieldKey}"></span>
+        </div>
+        <input type="text" class="partner-q-input partner-q-image-url" placeholder="…or paste a public image URL" data-deck-url-key="${f.fieldKey}" />
+        ${guide}
+      </div>`;
+    case 'table':
+      // For now, a structured longText. We'll upgrade to a real grid in a
+      // follow-up; the placeholder name is preserved so V&V can fill it
+      // manually in Excel if needed.
+      return `<div class="partner-q-field partner-q-field-wide">
+        <label class="partner-q-label" for="${id}">${deckEscapeHtml(f.question)} ${req}</label>
+        <textarea id="${id}" class="partner-q-input partner-q-textarea" rows="4" data-deck-key="${f.fieldKey}" ${f.required ? 'data-deck-required="1"' : ''} placeholder='e.g. Speed: Us=F, CompA=P, CompB=N'></textarea>
+        ${guide}
+      </div>`;
+    default:
+      return '';
+  }
+}
+
+function deckRenderSections() {
+  const root = document.getElementById('deckSections');
+  const summary = document.getElementById('deckSummary');
+  if (!root || !DECK_STATE.schema) return;
+  const grouped = deckGroupBySection(DECK_STATE.schema.fields);
+
+  const html = [];
+  for (const sectionName of DECK_STATE.schema.sections) {
+    const fields = grouped.get(sectionName) || [];
+    if (!fields.length) continue;
+    const requiredCount = fields.filter(f => f.required).length;
+    html.push(`
+      <details class="partner-q-deck-section">
+        <summary>
+          <span class="partner-q-deck-section-name">${deckEscapeHtml(sectionName)}</span>
+          <span class="partner-q-deck-section-meta">${fields.length} fields · ${requiredCount} required</span>
+        </summary>
+        <div class="partner-q-grid">
+          ${fields.map(deckRenderField).join('')}
+        </div>
+      </details>
+    `);
+  }
+  root.innerHTML = html.join('');
+  if (summary) {
+    summary.textContent = `${DECK_STATE.schema.total} placeholders across ${DECK_STATE.schema.sections.length} sections.`;
+  }
+
+  wireDeckImageUploads(root);
+}
+
+function wireDeckImageUploads(root) {
+  const inputs = root.querySelectorAll('input[type="file"][data-deck-key]');
+  inputs.forEach((inp) => {
+    inp.addEventListener('change', async (e) => {
+      const file = inp.files && inp.files[0];
+      if (!file) return;
+      const fieldKey = inp.getAttribute('data-deck-key');
+      const placeholder = inp.getAttribute('data-deck-placeholder');
+      const status = root.querySelector(`[data-deck-image-status="${fieldKey}"]`);
+      if (status) status.textContent = `Uploading ${file.name}…`;
+      try {
+        const key = customerKey();
+        if (!key) throw new Error('Missing customer key — sign in again.');
+        const url = await apiUploadDeckAsset(file, placeholder, key);
+        DECK_STATE.values.set(fieldKey, url);
+        // Sync the visible URL field too so the user sees what was stored.
+        const urlInput = root.querySelector(`[data-deck-url-key="${fieldKey}"]`);
+        if (urlInput) urlInput.value = url;
+        if (status) status.textContent = '✓ uploaded';
+      } catch (err) {
+        if (status) status.textContent = `✗ ${err.message || 'upload failed'}`;
+      } finally {
+        // Allow re-selecting the same file later.
+        inp.value = '';
+      }
+    });
+  });
+  // Also let the user paste a URL directly (no upload).
+  root.querySelectorAll('input[data-deck-url-key]').forEach((urlInput) => {
+    urlInput.addEventListener('input', () => {
+      const fieldKey = urlInput.getAttribute('data-deck-url-key');
+      const v = urlInput.value.trim();
+      if (v) DECK_STATE.values.set(fieldKey, v);
+      else   DECK_STATE.values.delete(fieldKey);
+    });
+  });
+}
+
+async function apiUploadDeckAsset(file, placeholderName, key) {
+  const buf = await file.arrayBuffer();
+  const res = await fetch(
+    `${PARTNER_API}/api/customer/deck-asset?placeholder=${encodeURIComponent(placeholderName)}`,
+    {
+      method:  'POST',
+      headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-Customer-Key': key },
+      body:    buf,
+    },
+  );
+  if (!res.ok) {
+    let msg = `upload failed (${res.status})`;
+    try {
+      const body = await res.json();
+      if (body?.error?.message) msg = body.error.message;
+    } catch { /* ignore */ }
+    throw new Error(msg);
+  }
+  const data = await res.json();
+  return data.url;
+}
+
+// Called on submit — grabs every text/number/longText/email/date/year input
+// plus the values cached from image uploads.
+function collectInvestorDeck() {
+  const root = document.getElementById('deckSections');
+  if (!root || !DECK_STATE.schema) return {};
+  const out = {};
+  for (const f of DECK_STATE.schema.fields) {
+    if (f.inputType === 'image') {
+      const v = DECK_STATE.values.get(f.fieldKey);
+      if (v) out[f.fieldKey] = v;
+      continue;
+    }
+    const el = root.querySelector(`[data-deck-key="${f.fieldKey}"]`);
+    if (!el) continue;
+    const v = String(el.value || '').trim();
+    if (v) out[f.fieldKey] = (f.inputType === 'number' || f.inputType === 'year')
+      ? (Number.isFinite(+v) ? +v : v)
+      : v;
+  }
+  return out;
+}
+
+// Kick off schema load when the questionnaire panel becomes visible.
+// The existing flow shows it via `questionnaireSection.hidden = false`.
+const _qSection = document.getElementById('questionnaireSection');
+const _summary  = document.getElementById('deckSummary');
+async function tryLoadDeckSchema() {
+  try {
+    await loadDeckSchema();
+    deckRenderSections();
+  } catch (e) {
+    if (_summary) _summary.textContent = `Could not load investor-deck sections — refresh to retry. (${e.message || e})`;
+  }
+}
+if (_qSection) {
+  // MutationObserver fires as soon as the section is un-hidden, even on the
+  // first user click. Cheap, no polling.
+  const obs = new MutationObserver(() => {
+    if (!_qSection.hidden && !DECK_STATE.loaded) tryLoadDeckSchema();
+  });
+  obs.observe(_qSection, { attributes: true, attributeFilter: ['hidden'] });
+  // If the section is already visible at page load (e.g. deep link), load now.
+  if (!_qSection.hidden) tryLoadDeckSchema();
+}

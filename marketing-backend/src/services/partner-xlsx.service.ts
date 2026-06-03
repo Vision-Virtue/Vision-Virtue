@@ -28,7 +28,11 @@ function ensureDir(p: string): void {
 }
 
 function templatePath(): string {
-  return path.resolve(process.cwd(), 'templates', 'Financial Model v7.xlsx');
+  // Bumped v7 → v8 (2026-06-02). v8 ships with the Investor_Deck_Calculations
+  // sheet pre-built — the customer's questionnaire inputs flow into the
+  // existing "Customer's Questionnaire" sheet, and the deck-questionnaire
+  // sheet is added by our xlsx-worker on submit.
+  return path.resolve(process.cwd(), 'templates', 'Financial Model v8.xlsx');
 }
 
 function workerPath(): string {
@@ -62,6 +66,8 @@ interface SubmissionFormData {
     sm_y1?: string;   sm_y2?: string;
     ga_y1?: string;   ga_y2?: string;
   };
+  /** Investor-deck answers — keys match InvestorDeckField.fieldKey. */
+  investorDeck?: Record<string, string | number | null | undefined>;
 }
 
 export interface PopulateResult {

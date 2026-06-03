@@ -1,1 +1,6 @@
-data/
+# Persistent disk's data dir at runtime — never commit
+/data/
+
+# But DO commit src/data/ — that's source code, not runtime state
+!src/data/
+!src/data/**
