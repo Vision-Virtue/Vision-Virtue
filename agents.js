@@ -2839,7 +2839,7 @@ async function generatePptxDeck(d) {
           </div>
           <div class="partner-subs-deliverable-actions">${excelActions}</div>
         </div>
-        <div class="partner-subs-deliverable is-coming-soon">
+        <div class="partner-subs-deliverable">
           <div class="partner-subs-deliverable-icon partner-subs-deliverable-icon-ppt">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
               <rect x="2" y="3" width="20" height="14" rx="2"/>
@@ -2847,11 +2847,14 @@ async function generatePptxDeck(d) {
             </svg>
           </div>
           <div class="partner-subs-deliverable-meta">
-            <div class="partner-subs-deliverable-title">Business Model Presentation</div>
-            <div class="partner-subs-deliverable-sub">PowerPoint deck (under construction)</div>
+            <div class="partner-subs-deliverable-title">Investor Deck</div>
+            <div class="partner-subs-deliverable-sub">PowerPoint populated from xlsx · regenerate after refreshing calculations in Excel</div>
           </div>
           <div class="partner-subs-deliverable-actions">
-            <span class="partner-status-pill partner-status-soon">Coming Soon</span>
+            ${sub.hasPptx === true
+              ? `<button type="button" class="partner-subs-action partner-subs-download" data-action="download" data-product="pptx">⬇ Download</button>
+                 <button type="button" class="partner-subs-action partner-subs-generate" data-action="generate" data-product="pptx">↻ Regenerate</button>`
+              : `<button type="button" class="partner-subs-action partner-subs-generate" data-action="generate" data-product="pptx" ${xlsxReady ? '' : 'disabled'}>${xlsxReady ? 'Generate pptx' : 'Generate xlsx first'}</button>`}
           </div>
         </div>
       </div>
@@ -2913,33 +2916,49 @@ async function generatePptxDeck(d) {
       }
     });
 
-    card.querySelector('[data-action="generate"]')?.addEventListener('click', async (ev) => {
+    card.querySelectorAll('[data-action="generate"]').forEach((btn) => {
+      btn.addEventListener('click', async (ev) => {
       ev.stopPropagation();
-      const btn = ev.currentTarget;
-      if (xlsxGenerating) {
+      const product = btn.getAttribute('data-product') || 'excel';
+      const isPptx  = product === 'pptx';
+      if (!isPptx && xlsxGenerating) {
         alert('Another xlsx is being generated. Please wait for it to finish.');
         return;
       }
       const original = btn.textContent;
-      xlsxGenerating = true;
+      if (!isPptx) xlsxGenerating = true;
       btn.disabled = true;
       btn.textContent = original.includes('Regenerate') ? 'Regenerating…' : 'Generating…';
       try {
-        const res = await fetch(adminUrl(`/api/admin/submissions/${encodeURIComponent(sub.id)}/generate-xlsx`), {
+        const endpoint = isPptx ? 'generate-pptx' : 'generate-xlsx';
+        const res = await fetch(adminUrl(`/api/admin/submissions/${encodeURIComponent(sub.id)}/${endpoint}`), {
           method: 'POST',
         });
         if (!res.ok) {
           const text = await res.text().catch(() => '');
           throw new Error(`HTTP ${res.status} ${text.slice(0, 200)}`);
         }
+        // The pptx endpoint also returns replacement stats — surface a brief summary.
+        if (isPptx) {
+          const stats = await res.json().catch(() => null);
+          if (stats && typeof stats.replaced === 'number') {
+            const more = stats.unmatchedCount > 0 ? ` · ${stats.unmatchedCount} placeholder(s) unmatched` : '';
+            // Use a non-blocking flash on the button rather than an alert so
+            // it doesn't interrupt the admin's flow on every regenerate.
+            btn.textContent = `✓ ${stats.replaced} replaced${more}`;
+            setTimeout(() => loadSubmissions(), 1200);
+            return;
+          }
+        }
         await loadSubmissions();
       } catch (err) {
         btn.disabled = false;
         btn.textContent = original;
-        alert('Generate xlsx failed.\n\n' + (err && err.message ? err.message : ''));
+        alert(`Generate ${isPptx ? 'pptx' : 'xlsx'} failed.\n\n` + (err && err.message ? err.message : ''));
       } finally {
-        xlsxGenerating = false;
+        if (!isPptx) xlsxGenerating = false;
       }
+      });
     });
 
     card.querySelector('[data-action="reupload"]')?.addEventListener('click', (ev) => {
@@ -2979,14 +2998,17 @@ async function generatePptxDeck(d) {
       setTimeout(() => input.remove(), 0);
     });
 
-    card.querySelector('[data-action="download"]')?.addEventListener('click', async (ev) => {
+    card.querySelectorAll('[data-action="download"]').forEach((btn) => {
+      btn.addEventListener('click', async (ev) => {
       ev.stopPropagation();
-      const btn = ev.currentTarget;
+      const product = btn.getAttribute('data-product') || 'excel';
+      const isPptx  = product === 'pptx';
       const original = btn.textContent;
       btn.disabled = true;
       btn.textContent = 'Downloading…';
       try {
-        const res = await fetch(adminUrl(`/api/admin/submissions/${encodeURIComponent(sub.id)}/xlsx`));
+        const endpoint = isPptx ? 'pptx' : 'xlsx';
+        const res = await fetch(adminUrl(`/api/admin/submissions/${encodeURIComponent(sub.id)}/${endpoint}`));
         if (!res.ok) {
           const text = await res.text().catch(() => '');
           throw new Error(`HTTP ${res.status} ${text.slice(0, 160)}`);
@@ -2995,7 +3017,9 @@ async function generatePptxDeck(d) {
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement('a');
         a.href = url;
-        a.download = `${sub.customerName || 'Customer'} - Financial Model.xlsx`;
+        a.download = isPptx
+          ? `${sub.customerName || 'Customer'} - Investor Deck.pptx`
+          : `${sub.customerName || 'Customer'} - Financial Model.xlsx`;
         document.body.appendChild(a); a.click(); document.body.removeChild(a);
         URL.revokeObjectURL(url);
       } catch (err) {
@@ -3004,6 +3028,7 @@ async function generatePptxDeck(d) {
         btn.disabled = false;
         btn.textContent = original;
       }
+      });
     });
 
     return card;

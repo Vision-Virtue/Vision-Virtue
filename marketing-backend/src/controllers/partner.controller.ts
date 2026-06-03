@@ -337,6 +337,10 @@ export const partnerController = {
   /**
    * GET /api/admin/submissions
    * List every submission with its full form data (newest first).
+   *
+   * `hasPptx` reflects on-disk presence: filename is derived from
+   * customerName + submissionId via buildPptxFileName(), and we look
+   * it up in customer-pptx/ on the persistent disk.
    */
   adminListSubmissions(_req: Request, res: Response): void {
     const subs = partnerSubmissionRepo.listAll();
@@ -349,6 +353,7 @@ export const partnerController = {
         submittedAt:   s.submittedAt,
         finalizedAt:   s.finalizedAt,
         hasXlsx:       !!s.finalizedXlsxPath,
+        hasPptx:       !!resolveStoredPptx(buildPptxFileName(s.customerName, s.id)),
         formData:      s.formData,
       })),
     });
