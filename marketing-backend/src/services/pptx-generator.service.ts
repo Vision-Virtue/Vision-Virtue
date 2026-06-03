@@ -341,15 +341,161 @@ export interface PptxGenStats {
   replaced: number;
   unmatched: string[];
   slidesProcessed: number;
+  slidesDeleted?: number;
+  emptyRunsStripped?: number;
+}
+
+// ─── Smart cleanup: strip empty {{X}} + empty runs, mark sparse slides ───────
+
+/**
+ * Per-slide statistics gathered during cleanup. `originalPlaceholders` is
+ * how many {{X}} tokens existed in the slide BEFORE replacement; `unfilled`
+ * is how many remain AFTER. If unfilled / originalPlaceholders > threshold,
+ * the caller deletes the slide entirely.
+ */
+interface SlideCleanupStats {
+  originalPlaceholders: number;
+  unfilledPlaceholders: number;
+  emptyRunsStripped:    number;
+}
+
+/**
+ * After main replacement passes, walk the slide XML and:
+ *   1. Replace any remaining {{X}} tokens with empty strings.
+ *   2. Remove every <a:r>...</a:r> whose <a:t> is now empty or whitespace,
+ *      so we don't leave ghost bullets / floating commas / "We have  customers".
+ *   3. Remove any <a:p>...</a:p> whose paragraph body lost ALL of its runs
+ *      (the paragraph becomes content-less and would otherwise show as a
+ *      blank line on the rendered slide).
+ *
+ * Returns the cleaned XML and per-slide stats.
+ */
+function cleanupSlideXml(slideXml: string, originalCount: number): { xml: string; stats: SlideCleanupStats } {
+  let stats: SlideCleanupStats = {
+    originalPlaceholders: originalCount,
+    unfilledPlaceholders: 0,
+    emptyRunsStripped:    0,
+  };
+
+  // (1) Strip remaining {{X}} tokens, counting how many we erased.
+  let xml = slideXml.replace(/<a:t([^>]*)>([\s\S]*?)<\/a:t>/g, (_m, attrs: string, text: string) => {
+    const decoded = decodeXmlEntities(text);
+    const cleaned = decoded.replace(/\{\{([A-Z0-9_]+)\}\}/g, () => {
+      stats.unfilledPlaceholders += 1;
+      return '';
+    });
+    return cleaned === decoded
+      ? `<a:t${attrs}>${text}</a:t>`
+      : `<a:t${attrs}>${encodeXmlEntities(cleaned)}</a:t>`;
+  });
+
+  // (2) Drop <a:r> runs whose <a:t> is empty/whitespace.
+  xml = xml.replace(/<a:r\b[^>]*>([\s\S]*?)<\/a:r>/g, (match, inner: string) => {
+    const tMatch = /<a:t\b[^>]*>([\s\S]*?)<\/a:t>/.exec(inner);
+    if (!tMatch) return match;
+    if (decodeXmlEntities(tMatch[1]).trim() === '') {
+      stats.emptyRunsStripped += 1;
+      return '';
+    }
+    return match;
+  });
+
+  // (3) Drop paragraphs that lost all their text runs. Keep paragraphs that
+  //     still have a non-empty <a:r>, or that have <a:fld> (placeholder
+  //     fields like page numbers), to avoid pruning slide footers.
+  xml = xml.replace(/<a:p\b[^>]*>([\s\S]*?)<\/a:p>/g, (match, inner: string) => {
+    const hasContent = /<a:r\b/.test(inner) || /<a:fld\b/.test(inner) || /<a:t\b[^>]*>[\S]/.test(inner);
+    return hasContent ? match : '';
+  });
+
+  return { xml, stats };
+}
+
+/** Count placeholder occurrences before any replacement happens. */
+function countOriginalPlaceholders(xml: string): number {
+  const matches = xml.match(/\{\{[A-Z0-9_]+\}\}/g);
+  return matches ? matches.length : 0;
+}
+
+// ─── Slide deletion: remove a slide from the package atomically ──────────────
+
+/**
+ * Remove one slide from the pptx package. Touches:
+ *   - ppt/slides/slideN.xml                  (and its _rels file)
+ *   - ppt/_rels/presentation.xml.rels        (drop the rId entry)
+ *   - ppt/presentation.xml                   (drop the matching <p:sldId/>)
+ *   - [Content_Types].xml                    (drop the Override for the part)
+ *
+ * Safe to call multiple times in one pass; later deletions don't shift
+ * the surviving slide filenames, so the rels keep resolving.
+ */
+async function deleteSlideFromPackage(zip: JSZip, slidePath: string): Promise<void> {
+  // 1. Find which rId in presentation rels points at this slide.
+  const presRelsFile = zip.file('ppt/_rels/presentation.xml.rels');
+  const presFile     = zip.file('ppt/presentation.xml');
+  const ctFile       = zip.file('[Content_Types].xml');
+  if (!presRelsFile || !presFile || !ctFile) return;
+
+  let presRelsXml = await presRelsFile.async('string');
+  let presXml     = await presFile.async('string');
+  let ctXml       = await ctFile.async('string');
+
+  // Slide rels reference is relative to ppt/, so "slides/slideN.xml".
+  const relativeTarget = slidePath.replace(/^ppt\//, '');
+
+  // Resolve rId by Target. Attribute order isn't guaranteed; use indexOf.
+  const targetMarker = `Target="${relativeTarget}"`;
+  const tIdx = presRelsXml.indexOf(targetMarker);
+  if (tIdx < 0) return;
+  const tagStart = presRelsXml.lastIndexOf('<Relationship', tIdx);
+  const tagEnd   = presRelsXml.indexOf('/>', tIdx);
+  if (tagStart < 0 || tagEnd < 0) return;
+  const relFullTag = presRelsXml.slice(tagStart, tagEnd + 2);
+  const rid = /Id="([^"]+)"/.exec(relFullTag)?.[1];
+
+  // 2. Remove the <p:sldId/> from presentation.xml.
+  if (rid) {
+    presXml = presXml.replace(
+      new RegExp(`<p:sldId\\b[^/>]*r:id="${rid}"[^/>]*/>`, 'g'),
+      '',
+    );
+    zip.file('ppt/presentation.xml', presXml);
+  }
+
+  // 3. Remove the Relationship from presentation rels.
+  presRelsXml = presRelsXml.slice(0, tagStart) + presRelsXml.slice(tagEnd + 2);
+  zip.file('ppt/_rels/presentation.xml.rels', presRelsXml);
+
+  // 4. Drop the slide's content-types override.
+  ctXml = ctXml.replace(
+    new RegExp(`<Override\\b[^/>]*PartName="/${slidePath}"[^/>]*/>`, 'g'),
+    '',
+  );
+  zip.file('[Content_Types].xml', ctXml);
+
+  // 5. Remove the slide xml + its rels file from the zip.
+  zip.remove(slidePath);
+  const slideRelsPath = slidePath.replace(/slides\/(slide\d+\.xml)$/, 'slides/_rels/$1.rels');
+  if (zip.file(slideRelsPath)) zip.remove(slideRelsPath);
 }
 
 /**
  * Generate a populated pptx for a given customer's xlsx.
+ *
+ * Optionally takes an extraValues map (e.g. AI-extracted values from
+ * the customer's uploads). Excel sheet values take precedence over
+ * extraValues — calculations + admin-edited questionnaire inputs are
+ * always more trusted than AI-extracted text.
  */
 export async function generatePopulatedPptx(opts: {
   templatePptxPath: string;
   customerXlsxPath: string;
   outputPptxPath: string;
+  /**
+   * Additional placeholder→value pairs (e.g. from AI extraction of
+   * customer uploads). Merged into the final map; xlsx values win.
+   */
+  extraValues?: Map<string, string>;
 }): Promise<PptxGenStats> {
   if (!fs.existsSync(opts.templatePptxPath)) {
     throw new Error(`PPTX template not found at ${opts.templatePptxPath}`);
@@ -360,32 +506,70 @@ export async function generatePopulatedPptx(opts: {
 
   const { map } = await extractPlaceholdersFromXlsx(opts.customerXlsxPath);
 
-  // Normalize values: trim, treat "MISSING INPUT" / empty as "" so the
-  // resulting pptx doesn't shout "MISSING INPUT" all over. The downstream
-  // V&V workflow already has a separate "missing fields" report.
+  // Start with AI-extracted values (if any), then overlay xlsx values
+  // — xlsx wins on collisions because formula-computed and admin-edited
+  // values are more trusted than AI inference from uploaded text.
   const valueMap = new Map<string, string>();
+  if (opts.extraValues) {
+    for (const [k, v] of opts.extraValues) {
+      const trimmed = (v == null ? '' : String(v)).trim();
+      if (trimmed) valueMap.set(k, trimmed);
+    }
+  }
   for (const [k, v] of map) {
     const trimmed = (v == null ? '' : String(v)).trim();
     const isMissing = /^MISSING INPUT/i.test(trimmed);
-    valueMap.set(k, isMissing ? '' : trimmed);
+    if (trimmed && !isMissing) valueMap.set(k, trimmed);
   }
 
   const pptxBuf = await fs.promises.readFile(opts.templatePptxPath);
   const zip = await JSZip.loadAsync(pptxBuf);
 
-  const stats: PptxGenStats = { replaced: 0, unmatched: [], slidesProcessed: 0 };
+  const stats: PptxGenStats = {
+    replaced: 0, unmatched: [], slidesProcessed: 0,
+    slidesDeleted: 0, emptyRunsStripped: 0,
+  };
   const unmatchedSet = new Set<string>();
   const mut = { replaced: 0, unmatched: unmatchedSet };
 
-  // Process every slide file in the pptx.
+  // ── PHASE 1: per-slide replace → cleanup → mark for deletion ─────────────
+  // We tally placeholder fill-rates per slide and remember which slides
+  // ended up with >70% unfilled placeholders. Those get pruned from the
+  // package in Phase 2 (a second pass that touches presentation.xml
+  // metadata, which we can't safely mutate inside the file loop).
+  const SLIDE_DELETE_THRESHOLD = 0.7;
   const slideEntries = Object.keys(zip.files).filter(
     (k) => /^ppt\/slides\/slide\d+\.xml$/.test(k),
   );
+  const slidesToDelete: string[] = [];
+
   for (const key of slideEntries) {
     const xml = await zip.file(key)!.async('string');
-    const updated = applyReplacementsToSlideXml(xml, valueMap, mut);
-    zip.file(key, updated);
+    const originalCount = countOriginalPlaceholders(xml);
+
+    // (a) replace what we can
+    const afterReplace = applyReplacementsToSlideXml(xml, valueMap, mut);
+    // (b) strip leftover {{X}}, collapse empty runs/paragraphs
+    const { xml: cleaned, stats: slideStats } = cleanupSlideXml(afterReplace, originalCount);
+    zip.file(key, cleaned);
     stats.slidesProcessed += 1;
+    stats.emptyRunsStripped = (stats.emptyRunsStripped || 0) + slideStats.emptyRunsStripped;
+
+    // (c) mark for deletion if the slide ended up mostly empty
+    if (originalCount > 0) {
+      const unfilledRatio = slideStats.unfilledPlaceholders / originalCount;
+      if (unfilledRatio > SLIDE_DELETE_THRESHOLD) {
+        slidesToDelete.push(key);
+      }
+    }
+  }
+
+  // ── PHASE 2: delete sparse slides ────────────────────────────────────────
+  // Done after all in-place edits so presentation.xml / rels / content-types
+  // are only touched once per deletion.
+  for (const slidePath of slidesToDelete) {
+    await deleteSlideFromPackage(zip, slidePath);
+    stats.slidesDeleted = (stats.slidesDeleted || 0) + 1;
   }
 
   stats.replaced = mut.replaced;

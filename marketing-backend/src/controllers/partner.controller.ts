@@ -20,6 +20,7 @@ import {
   generatePopulatedPptx, pptxTemplatePath, customerPptxDir,
   buildPptxFileName, resolveStoredPptx,
 } from '../services/pptx-generator.service';
+import { runDeckExtraction } from '../services/deck-extractor.service';
 import { INVESTOR_DECK_FIELDS, SECTIONS, InvestorDeckField } from '../data/investor-deck-schema';
 import fs from 'fs';
 import { z } from 'zod';
@@ -115,9 +116,10 @@ export const partnerController = {
       // Best-effort pptx populate. Values pulled from Investor_Deck_Calculations
       // will be "MISSING INPUT" until an admin opens + saves the xlsx in Excel,
       // so on submit we generate a draft and the admin can regenerate later.
+      // We pass the customerKeyId so AI extraction also runs against any
+      // files the customer dropped into Section 10.
       try {
-        const pptxOut = generateDeckForSubmission(sub.id, sub.customerName, result.filePath);
-        await pptxOut;
+        await generateDeckForSubmission(sub.id, sub.customerName, result.filePath, keyRow.id);
       } catch (pptxErr) {
         console.error('[partner] pptx generation on submit failed:', pptxErr);
       }
@@ -746,13 +748,16 @@ export const partnerController = {
       return;
     }
     try {
-      const stats = await generateDeckForSubmission(sub.id, sub.customerName, xlsxAbs);
+      const stats = await generateDeckForSubmission(sub.id, sub.customerName, xlsxAbs, sub.customerKeyId);
       res.json({
-        submissionId:    sub.id,
-        replaced:        stats.replaced,
-        slidesProcessed: stats.slidesProcessed,
-        unmatchedCount:  stats.unmatched.length,
-        unmatched:       stats.unmatched.slice(0, 25),
+        submissionId:      sub.id,
+        replaced:          stats.replaced,
+        slidesProcessed:   stats.slidesProcessed,
+        slidesDeleted:     stats.slidesDeleted ?? 0,
+        emptyRunsStripped: stats.emptyRunsStripped ?? 0,
+        unmatchedCount:    stats.unmatched.length,
+        unmatched:         stats.unmatched.slice(0, 25),
+        ai:                stats.ai,
       });
     } catch (err) {
       console.error('[partner] adminGeneratePptx failed:', err);
@@ -825,20 +830,51 @@ export const partnerController = {
 /**
  * Generate (or regenerate) the populated pptx for a submission. Returns
  * the stats from the replacer. Throws if the template or xlsx is missing.
+ *
+ * When customerKeyId is supplied AND the customer has at least one
+ * extracted upload, the function also calls Claude to fill the
+ * questionnaire-style placeholders from the uploaded source text and
+ * merges the results into the replacer's value map (xlsx values win
+ * on collisions).
+ *
+ * AI extraction is best-effort — a failure does NOT block the xlsx-only
+ * path, the error is logged and the deck is still produced.
  */
 async function generateDeckForSubmission(
   submissionId: string,
   customerName: string,
   xlsxAbsPath: string,
+  customerKeyId?: string,
 ) {
   const outDir = customerPptxDir();
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
   const outFile = `${outDir}/${buildPptxFileName(customerName, submissionId)}`.replace(/\\/g, '/');
-  return generatePopulatedPptx({
+
+  let extraValues: Map<string, string> | undefined;
+  let aiStats: { filledCount: number; candidateCount: number; sourceChars: number } | null = null;
+  if (customerKeyId) {
+    try {
+      const r = await runDeckExtraction(customerKeyId);
+      extraValues = r.values;
+      aiStats = {
+        filledCount:    r.filledCount,
+        candidateCount: r.candidateCount,
+        sourceChars:    r.sourceChars,
+      };
+      console.log(`[partner] AI extraction: ${r.filledCount}/${r.candidateCount} ` +
+                  `placeholders filled from ${r.sourceChars} chars of source material`);
+    } catch (err) {
+      console.error('[partner] AI extraction failed (continuing with xlsx-only):', err);
+    }
+  }
+
+  const pptxStats = await generatePopulatedPptx({
     templatePptxPath: pptxTemplatePath(),
     customerXlsxPath: xlsxAbsPath,
     outputPptxPath:   outFile,
+    extraValues,
   });
+  return { ...pptxStats, ai: aiStats };
 }
 
 // Silence unused-import warning when path lib isn't used anywhere else.
