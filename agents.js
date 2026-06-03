@@ -590,94 +590,25 @@ function generatePptTemplate_UNUSED() {
   pptx.writeFile({ fileName: 'VisionVirtue_Presentation_Template.pptx' });
 }
 
-// ── File Drop Zone ────────────────────────────────────────────
-const dropzone    = document.getElementById('finDropzone');
-const browseBtn   = document.getElementById('finBrowseBtn');
-const fileInput   = document.getElementById('finFileInput');
-const fileList    = document.getElementById('finFileList');
+// ── File Drop Zone removed in the 2026-06 pivot ──────────────
+//
+// Customers now upload their PDF/DOCX/PPTX/XLSX files directly from
+// section 10 of the partner portal questionnaire. Admins review the
+// uploads inside each submission's folder under "Customer Submissions"
+// further down this page.
+//
+// `uploadedFiles` is kept as an empty array so older references that
+// haven't been refactored (e.g. the legacy Finance Workflow engine and
+// utilities below) continue to compile and behave as no-ops.
+const uploadedFiles = [];
+const fileList      = null;
+const startWorkflowBtn = document.getElementById('startWorkflowBtn');
 
-let uploadedFiles = [];
-
-dropzone.addEventListener('click', (e) => { if (e.target !== fileInput) fileInput.click(); });
-
-fileInput.addEventListener('change', () => {
-  addFiles(Array.from(fileInput.files));
-  fileInput.value = '';
-});
-
-dropzone.addEventListener('dragover', (e) => {
-  e.preventDefault();
-  dropzone.classList.add('drag-over');
-});
-
-dropzone.addEventListener('dragleave', () => dropzone.classList.remove('drag-over'));
-
-dropzone.addEventListener('drop', (e) => {
-  e.preventDefault();
-  dropzone.classList.remove('drag-over');
-  addFiles(Array.from(e.dataTransfer.files).filter(isAccepted));
-});
-
-function isAccepted(file) {
-  return /\.(pdf|doc|docx|ppt|pptx|xls|xlsx)$/i.test(file.name);
-}
-
-function fileExtClass(name) {
-  const ext = name.split('.').pop().toLowerCase();
-  if (ext === 'pdf') return ['PDF', 'ext-pdf'];
-  if (['doc','docx'].includes(ext)) return ['DOC', 'ext-doc'];
-  if (['ppt','pptx'].includes(ext)) return ['PPT', 'ext-ppt'];
-  if (['xls','xlsx'].includes(ext)) return ['XLS', 'ext-xls'];
-  return [ext.toUpperCase(), 'ext-pdf'];
-}
-
+// Utility kept because other parts of this file still call it.
 function fmtSize(bytes) {
   if (bytes < 1024) return bytes + ' B';
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-}
-
-function addFiles(files) {
-  files.forEach(file => {
-    if (!isAccepted(file)) return;
-    if (uploadedFiles.some(f => f.name === file.name && f.size === file.size)) return; // dedupe
-    uploadedFiles.push(file);
-  });
-  renderFileList();
-  updateStartBtn();
-}
-
-// ── Start Workflow Button Enablement ──────────────────────────
-const startWorkflowBtn = document.getElementById('startWorkflowBtn');
-
-function updateStartBtn() {
-  if (!startWorkflowBtn) return;
-  startWorkflowBtn.disabled = uploadedFiles.length === 0;
-}
-
-startWorkflowBtn?.addEventListener('click', startFinanceWorkflow);
-
-function renderFileList() {
-  fileList.innerHTML = '';
-  uploadedFiles.forEach((file, idx) => {
-    const [label, cls] = fileExtClass(file.name);
-    const item = document.createElement('div');
-    item.className = 'fin-file-item';
-    item.innerHTML = `
-      <span class="fin-file-ext ${cls}">${esc(label)}</span>
-      <span class="fin-file-name" title="${esc(file.name)}">${esc(file.name)}</span>
-      <span class="fin-file-size">${esc(fmtSize(file.size))}</span>
-      <button class="fin-file-remove" data-idx="${idx}" title="Remove">&#x2715;</button>
-    `;
-    fileList.appendChild(item);
-  });
-  fileList.querySelectorAll('.fin-file-remove').forEach(btn => {
-    btn.addEventListener('click', () => {
-      uploadedFiles.splice(Number(btn.dataset.idx), 1);
-      renderFileList();
-      updateStartBtn();
-    });
-  });
 }
 
 // ══════════════════════════════════════════════════════════════════
@@ -2808,6 +2739,20 @@ async function generatePptxDeck(d) {
     const isFinal = sub.status === 'finalized';
     const xlsxReady = sub.hasXlsx === true;
 
+    // ── Customer-uploaded materials (Section 10 of the questionnaire) ──
+    // List is fetched async on folder expand; placeholder rendered here.
+    const uploadsBlock = `
+      <div class="partner-subs-uploads" data-uploads-sub="${esc(sub.id)}">
+        <div class="partner-subs-uploads-head">
+          <span class="partner-subs-uploads-title">Customer Uploads</span>
+          <span class="partner-subs-uploads-count" data-uploads-count></span>
+        </div>
+        <div class="partner-subs-uploads-list" data-uploads-list>
+          <span class="partner-subs-uploads-loading">Loading…</span>
+        </div>
+      </div>
+    `;
+
     // Excel row actions: Download + Regenerate + Reupload (when xlsx
     // exists), or Generate (when missing). Reupload lets the admin
     // replace the stored file with a manually-edited copy before
@@ -2825,6 +2770,7 @@ async function generatePptxDeck(d) {
 
     return `
       <div class="partner-subs-deliverables">
+        ${uploadsBlock}
         <div class="partner-subs-deliverable">
           <div class="partner-subs-deliverable-icon partner-subs-deliverable-icon-excel">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -2893,6 +2839,63 @@ async function generatePptxDeck(d) {
       head.setAttribute('aria-expanded', String(!isOpen));
       body.hidden = isOpen;
     });
+
+    // Fetch customer uploads for this submission and render them
+    // inside the .partner-subs-uploads block.
+    (async () => {
+      const block = card.querySelector(`[data-uploads-sub="${esc(sub.id)}"]`);
+      if (!block) return;
+      const listEl  = block.querySelector('[data-uploads-list]');
+      const countEl = block.querySelector('[data-uploads-count]');
+      try {
+        const res = await fetch(adminUrl(`/api/admin/submissions/${encodeURIComponent(sub.id)}/uploads`));
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const rows = Array.isArray(data.uploads) ? data.uploads : [];
+        if (countEl) countEl.textContent = `${rows.length} file${rows.length === 1 ? '' : 's'}`;
+        if (rows.length === 0) {
+          listEl.innerHTML = '<span class="partner-subs-uploads-empty">No supporting materials uploaded yet.</span>';
+          return;
+        }
+        listEl.innerHTML = rows.map((u) => {
+          const ext = (u.originalName.split('.').pop() || u.ext || '').toLowerCase();
+          const pill = ({
+            pdf:'PDF', doc:'DOC', docx:'DOC',
+            ppt:'PPT', pptx:'PPT', xls:'XLS', xlsx:'XLS',
+          })[ext] || ext.toUpperCase();
+          const dlUrl = adminUrl(`/api/admin/submissions/${encodeURIComponent(sub.id)}/uploads/${encodeURIComponent(u.id)}`);
+          return `
+            <div class="partner-subs-upload-row">
+              <span class="partner-subs-upload-pill">${esc(pill)}</span>
+              <a class="partner-subs-upload-name" href="${esc(dlUrl)}" target="_blank" rel="noopener" title="${esc(u.originalName)}">${esc(u.originalName)}</a>
+              <span class="partner-subs-upload-size">${esc(fmtSize(u.sizeBytes))}</span>
+              <span class="partner-subs-upload-status" data-upload-id="${esc(u.id)}">${u.hasExtractedText ? '✓ text extracted' : ''}</span>
+              <button type="button" class="partner-subs-upload-extract" data-upload-id="${esc(u.id)}" title="Re-extract text">↻ Extract</button>
+            </div>
+          `;
+        }).join('');
+        block.querySelectorAll('.partner-subs-upload-extract').forEach((btn) => {
+          btn.addEventListener('click', async () => {
+            const id = btn.getAttribute('data-upload-id');
+            const statusEl = block.querySelector(`.partner-subs-upload-status[data-upload-id="${id}"]`);
+            btn.disabled = true;
+            if (statusEl) statusEl.textContent = 'extracting…';
+            try {
+              const r = await fetch(adminUrl(`/api/admin/submissions/${encodeURIComponent(sub.id)}/uploads/${encodeURIComponent(id)}/extract`), { method: 'POST' });
+              if (!r.ok) throw new Error(`HTTP ${r.status}`);
+              const d = await r.json();
+              if (statusEl) statusEl.textContent = `✓ ${d.chars.toLocaleString()} chars`;
+            } catch (err) {
+              if (statusEl) statusEl.textContent = `✗ ${err.message || 'failed'}`;
+            } finally {
+              btn.disabled = false;
+            }
+          });
+        });
+      } catch {
+        listEl.innerHTML = '<span class="partner-subs-uploads-empty">Could not load uploads.</span>';
+      }
+    })();
 
     card.querySelector('[data-action="finalize"]')?.addEventListener('click', async (ev) => {
       ev.stopPropagation();

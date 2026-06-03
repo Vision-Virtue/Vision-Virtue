@@ -1393,6 +1393,76 @@
   color: rgba(255, 255, 255, 0.55);
 }
 
+/* ── Customer uploads block (top of folder) ─────────────────── */
+.partner-subs-uploads {
+  background: rgba(108,99,255,.05);
+  border: 1px solid rgba(108,99,255,.2);
+  border-radius: 8px;
+  padding: 0.7rem 0.85rem;
+  margin-bottom: 0.6rem;
+}
+.partner-subs-uploads-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+.partner-subs-uploads-title {
+  font-size: 0.78rem; font-weight: 700;
+  letter-spacing: 0.05em; text-transform: uppercase;
+  color: rgba(255,255,255,.85);
+}
+.partner-subs-uploads-count {
+  font-size: 0.75rem; color: rgba(255,255,255,.55);
+  font-variant-numeric: tabular-nums;
+}
+.partner-subs-uploads-empty,
+.partner-subs-uploads-loading {
+  font-size: 0.78rem; color: rgba(255,255,255,.5);
+  font-style: italic;
+}
+.partner-subs-upload-row {
+  display: flex; align-items: center; gap: 0.55rem;
+  padding: 0.35rem 0;
+  font-size: 0.82rem;
+  color: rgba(255,255,255,.9);
+  border-top: 1px solid rgba(255,255,255,.06);
+}
+.partner-subs-upload-row:first-child { border-top: 0; }
+.partner-subs-upload-pill {
+  display: inline-block; padding: 0.1rem 0.45rem;
+  font-size: 0.65rem; font-weight: 700;
+  background: rgba(108,99,255,.35);
+  color: #fff; border-radius: 3px;
+  letter-spacing: 0.04em;
+}
+.partner-subs-upload-name {
+  flex: 1; min-width: 0;
+  color: #cfd8e9;
+  text-decoration: none;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.partner-subs-upload-name:hover { color: #fff; text-decoration: underline; }
+.partner-subs-upload-size {
+  font-size: 0.72rem; color: rgba(255,255,255,.5);
+  font-variant-numeric: tabular-nums;
+}
+.partner-subs-upload-status {
+  font-size: 0.72rem; color: rgba(120,200,120,.85);
+  min-width: 6ch;
+}
+.partner-subs-upload-extract {
+  font-size: 0.72rem;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,.18);
+  color: rgba(255,255,255,.75);
+  padding: 0.2rem 0.55rem; border-radius: 4px;
+  cursor: pointer;
+}
+.partner-subs-upload-extract:hover {
+  background: rgba(108,99,255,.25);
+  border-color: rgba(108,99,255,.5);
+  color: #fff;
+}
+
 /* ── Two-row deliverables list inside each folder ───────────── */
 .partner-subs-deliverables {
   display: flex;

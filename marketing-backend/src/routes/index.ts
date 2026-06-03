@@ -172,6 +172,44 @@ router.get(
   (req, res) => partnerController.deckValidation(req, res),
 );
 
+// ─── Customer drag-and-drop uploads (PDF/DOCX/PPTX/XLSX) ──────────────────
+// Raw-body uploads — same pattern as deck-asset, no multer needed.
+const DECK_UPLOAD_MIMES = [
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/octet-stream', // browsers sometimes send this for less-common MIMEs
+];
+router.post(
+  '/customer/deck-upload',
+  raw({ type: DECK_UPLOAD_MIMES, limit: '30mb' }),
+  (req, res) => partnerController.deckUploadCreate(req, res),
+);
+router.get('/customer/deck-upload',                  (req, res) => partnerController.deckUploadList(req, res));
+router.get('/customer/deck-upload/:fileId',          (req, res) => partnerController.deckUploadDownload(req, res));
+router.delete('/customer/deck-upload/:fileId',       (req, res) => partnerController.deckUploadDelete(req, res));
+
+// Admin views of a submission's uploads
+router.get(
+  '/admin/submissions/:id/uploads',
+  requireAdminPin,
+  (req, res) => partnerController.adminListUploads(req, res),
+);
+router.get(
+  '/admin/submissions/:id/uploads/:fileId',
+  requireAdminPin,
+  (req, res) => partnerController.adminDownloadUpload(req, res),
+);
+router.post(
+  '/admin/submissions/:id/uploads/:fileId/extract',
+  requireAdminPin,
+  asyncHandler(async (req, res) => { await partnerController.adminExtractUpload(req, res); }),
+);
+
 // Submit a Customer's Questionnaire (header X-Customer-Key required)
 router.post('/submissions', asyncHandler(async (req, res) => { await partnerController.createSubmission(req, res); }));
 

@@ -13,6 +13,10 @@ import {
   storeAsset, resolveAsset, contentTypeForFilename, MAX_ASSET_BYTES,
 } from '../services/deck-asset.service';
 import {
+  storeUpload, listUploads, resolveUpload, readMeta, deleteUpload,
+  getOrExtractText, MAX_UPLOAD_BYTES,
+} from '../services/deck-upload.service';
+import {
   generatePopulatedPptx, pptxTemplatePath, customerPptxDir,
   buildPptxFileName, resolveStoredPptx,
 } from '../services/pptx-generator.service';
@@ -213,6 +217,147 @@ export const partnerController = {
     res.setHeader('Content-Type', contentTypeForFilename(fileName));
     res.setHeader('Cache-Control', 'private, max-age=300');
     res.sendFile(abs);
+  },
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Drag-and-drop deck-upload endpoints (PDF / DOCX / PPTX / XLSX)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * POST /api/customer/deck-upload?filename=<encoded>
+   * Header: X-Customer-Key, Content-Type: <mime>
+   * Body:   raw file bytes (matches the existing deck-asset pattern —
+   *         simpler than multipart, no extra deps).
+   *
+   * Returns the upload's metadata. Text extraction happens lazily on the
+   * first read (admin clicks "Extract" or generation kicks off).
+   */
+  deckUploadCreate(req: Request, res: Response): void {
+    const keyRow = resolveCustomerKey(req);
+    if (!keyRow) { send401(res, 'Missing or invalid customer key.'); return; }
+
+    const originalName = String(req.query.filename || '').trim() || 'upload';
+    const buf = req.body;
+    if (!Buffer.isBuffer(buf)) {
+      res.status(400).json({ error: { code: 'BAD_BODY', message: 'Body must be raw file bytes.' } });
+      return;
+    }
+    try {
+      const meta = storeUpload({
+        customerKeyId: keyRow.id,
+        originalName,
+        mimeType: req.header('content-type') || 'application/octet-stream',
+        buffer:   buf,
+      });
+      res.status(201).json(meta);
+    } catch (err) {
+      res.status(400).json({
+        error: {
+          code: 'UPLOAD_REJECTED',
+          message: err instanceof Error ? err.message : 'Upload rejected.',
+        },
+      });
+    }
+  },
+
+  /**
+   * GET /api/customer/deck-upload
+   * Header: X-Customer-Key
+   * List the customer's uploads (newest first).
+   */
+  deckUploadList(req: Request, res: Response): void {
+    const keyRow = resolveCustomerKey(req);
+    if (!keyRow) { send401(res, 'Missing or invalid customer key.'); return; }
+    res.json({ uploads: listUploads(keyRow.id) });
+  },
+
+  /**
+   * GET /api/customer/deck-upload/:fileId
+   * Header: X-Customer-Key
+   * Streams the file back to the customer.
+   */
+  deckUploadDownload(req: Request, res: Response): void {
+    const keyRow = resolveCustomerKey(req);
+    if (!keyRow) { send401(res, 'Missing or invalid customer key.'); return; }
+    const abs = resolveUpload(keyRow.id, req.params.fileId);
+    if (!abs) { res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Upload not found.' } }); return; }
+    const meta = readMeta(keyRow.id, req.params.fileId);
+    const downloadName = (meta?.originalName as string) || 'download';
+    res.setHeader('Content-Type', (meta?.mimeType as string) || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${String(downloadName).replace(/"/g, '')}"`);
+    res.sendFile(abs);
+  },
+
+  /**
+   * DELETE /api/customer/deck-upload/:fileId
+   * Header: X-Customer-Key
+   */
+  deckUploadDelete(req: Request, res: Response): void {
+    const keyRow = resolveCustomerKey(req);
+    if (!keyRow) { send401(res, 'Missing or invalid customer key.'); return; }
+    const ok = deleteUpload(keyRow.id, req.params.fileId);
+    if (!ok) { res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Upload not found.' } }); return; }
+    res.json({ ok: true });
+  },
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Admin-side views of customer uploads (per submission)
+  // ──────────────────────────────────────────────────────────────────────────
+
+  /**
+   * GET /api/admin/submissions/:id/uploads
+   * Lists the uploads belonging to the customer key that owns this submission.
+   */
+  adminListUploads(req: Request, res: Response): void {
+    const sub = partnerSubmissionRepo.getById(req.params.id);
+    if (!sub) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
+      return;
+    }
+    res.json({ uploads: listUploads(sub.customerKeyId) });
+  },
+
+  /**
+   * GET /api/admin/submissions/:id/uploads/:fileId
+   * Streams one customer upload to the admin.
+   */
+  adminDownloadUpload(req: Request, res: Response): void {
+    const sub = partnerSubmissionRepo.getById(req.params.id);
+    if (!sub) { res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } }); return; }
+    const abs = resolveUpload(sub.customerKeyId, req.params.fileId);
+    if (!abs) { res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Upload not found.' } }); return; }
+    const meta = readMeta(sub.customerKeyId, req.params.fileId);
+    const downloadName = (meta?.originalName as string) || 'download';
+    res.setHeader('Content-Type', (meta?.mimeType as string) || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${String(downloadName).replace(/"/g, '')}"`);
+    res.sendFile(abs);
+  },
+
+  /**
+   * POST /api/admin/submissions/:id/uploads/:fileId/extract
+   * Runs (or re-runs) text extraction on the file and returns a short
+   * preview + flags. Used by AI Finance to confirm a file is readable
+   * before generating the deck.
+   */
+  async adminExtractUpload(req: Request, res: Response): Promise<void> {
+    const sub = partnerSubmissionRepo.getById(req.params.id);
+    if (!sub) { res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } }); return; }
+    try {
+      const text = await getOrExtractText(sub.customerKeyId, req.params.fileId);
+      res.json({
+        ok:           true,
+        chars:        text.length,
+        preview:      text.slice(0, 600),
+        truncated:    text.length > 600,
+      });
+    } catch (err) {
+      res.status(400).json({
+        error: {
+          code: 'EXTRACTION_FAILED',
+          message: err instanceof Error ? err.message : 'Extraction failed.',
+        },
+      });
+    }
   },
 
   /**
