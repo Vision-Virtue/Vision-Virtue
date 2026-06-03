@@ -1,20 +1,20 @@
 /* ============================================================
-   VISION & VIRTUE — Partner Customer Area
+   VISION & VIRTUE â€” Partner Customer Area
    Phase 2: submissions live on the backend
    (vv-marketing-api.onrender.com), keyed by customer key.
    ============================================================ */
 
 const PARTNER_API = 'https://vv-marketing-api.onrender.com';
 
-// ── Auth check: must have a customer key in sessionStorage ───
+// â”€â”€ Auth check: must have a customer key in sessionStorage â”€â”€â”€
 if (sessionStorage.getItem('vv_customer_auth') !== '1') {
   window.location.replace('index.html');
 }
 
-// ── Cache the latest fetched submission to drive tile-click logic ──
+// â”€â”€ Cache the latest fetched submission to drive tile-click logic â”€â”€
 let _latestSubmission = null;
 
-// ── Sign Out ─────────────────────────────────────────────────
+// â”€â”€ Sign Out â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 document.getElementById('signOutBtn')?.addEventListener('click', () => {
   sessionStorage.removeItem('vv_customer_auth');
   sessionStorage.removeItem('vv_customer_key');
@@ -22,7 +22,7 @@ document.getElementById('signOutBtn')?.addEventListener('click', () => {
   window.location.replace('index.html');
 });
 
-// ── API helpers ──────────────────────────────────────────────
+// â”€â”€ API helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function customerKey() { return sessionStorage.getItem('vv_customer_key') || ''; }
 
 async function apiFetchMySubmissions() {
@@ -56,14 +56,14 @@ async function apiSubmitQuestionnaire(customerName, formData) {
   return res.json();
 }
 
-// ── Navbar scroll effect ─────────────────────────────────────
+// â”€â”€ Navbar scroll effect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const navbar = document.getElementById('navbar');
 window.addEventListener('scroll', () => {
   if (window.scrollY > 40) navbar.classList.add('scrolled');
   else navbar.classList.remove('scrolled');
 }, { passive: true });
 
-// ── Money input formatting (handles whole $ and decimals) ────
+// â”€â”€ Money input formatting (handles whole $ and decimals) â”€â”€â”€â”€
 function formatMoney(el) {
   let raw = el.value.replace(/[^\d.]/g, '');
   // Keep only the first dot
@@ -89,19 +89,19 @@ function bindMoneyInputs(scope) {
   });
 }
 
-// ── Render submission state on the Financial Model tile ──────
+// â”€â”€ Render submission state on the Financial Model tile â”€â”€â”€â”€â”€â”€
 async function renderTileState() {
   const statusEl = document.getElementById('statusFinancialModel');
   const tile     = document.getElementById('tileFinancialModel');
   if (!statusEl || !tile) return;
 
   // Loading placeholder while we fetch
-  statusEl.innerHTML = '<span class="partner-status-pill partner-status-new">Loading…</span>';
+  statusEl.innerHTML = '<span class="partner-status-pill partner-status-new">Loadingâ€¦</span>';
 
   let subs;
   try { subs = await apiFetchMySubmissions(); }
   catch (err) {
-    statusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Connection error — retry</span>';
+    statusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Connection error â€” retry</span>';
     return;
   }
 
@@ -133,7 +133,7 @@ async function renderTileState() {
       ev.stopPropagation();
       const btn = ev.currentTarget;
       const orig = btn.textContent;
-      btn.disabled = true; btn.textContent = 'Downloading…';
+      btn.disabled = true; btn.textContent = 'Downloadingâ€¦';
       try {
         await downloadFinalizedXlsx(sub.id, sub.customerName);
       } catch (err) {
@@ -143,7 +143,7 @@ async function renderTileState() {
       }
     });
   } else {
-    statusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Under Vision’s Review</span>';
+    statusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Under Visionâ€™s Review</span>';
     tile.classList.add('is-review');
     tile.classList.remove('is-finalized');
   }
@@ -167,7 +167,7 @@ async function downloadFinalizedXlsx(submissionId, customerName) {
   URL.revokeObjectURL(url);
 }
 
-// ── Tile click → questionnaire or status view ────────────────
+// â”€â”€ Tile click â†’ questionnaire or status view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const tile     = document.getElementById('tileFinancialModel');
 const products = document.querySelector('.partner-products-section');
 const qSection = document.getElementById('questionnaireSection');
@@ -175,7 +175,7 @@ const qForm    = document.getElementById('customerQuestionnaire');
 const qThanks  = document.getElementById('questionnaireThanks');
 
 tile?.addEventListener('click', () => {
-  // If a submission already exists, keep them on the products view —
+  // If a submission already exists, keep them on the products view â€”
   // the tile pill already shows status.
   if (_latestSubmission) return;
   showQuestionnaire();
@@ -202,18 +202,18 @@ function showProducts() {
 document.getElementById('questionnaireBack')?.addEventListener('click', showProducts);
 document.getElementById('thanksBack')?.addEventListener('click', showProducts);
 
-// ── HTML escape helper ───────────────────────────────────────
+// â”€â”€ HTML escape helper â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function escHtml(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 
-// ── ID counter for customer/product rows ─────────────────────
+// â”€â”€ ID counter for customer/product rows â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 let _idSeed = 0;
 function nextId(prefix) { return `${prefix}-${++_idSeed}`; }
 
-// ── Customer row (6.a) ───────────────────────────────────────
+// â”€â”€ Customer row (6.a) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const CUSTOMER_TYPES = ['Direct', 'CP', 'B2C', 'B2B', 'Distributor', 'Other'];
 const TERRITORIES    = ['EU', 'US', 'ROW', 'APAC', 'LATAM', 'MEA'];
 const REVENUE_TYPES  = ['HW', 'SW', 'Other'];
@@ -225,13 +225,13 @@ function makeCustomerRow() {
     <td><input type="text" class="partner-q-input partner-q-cell" data-cust-name placeholder="Customer name" /></td>
     <td>
       <select class="partner-q-select partner-q-cell" data-cust-type>
-        <option value="">— Select —</option>
+        <option value="">â€” Select â€”</option>
         ${CUSTOMER_TYPES.map(o => `<option value="${o}">${o}</option>`).join('')}
       </select>
     </td>
     <td>
       <select class="partner-q-select partner-q-cell" data-cust-territory>
-        <option value="">— Select —</option>
+        <option value="">â€” Select â€”</option>
         ${TERRITORIES.map(o => `<option value="${o}">${o}</option>`).join('')}
       </select>
     </td>
@@ -255,7 +255,7 @@ function addCustomerRow() {
   syncDerivedSections();
 }
 
-// ── Product row (6.b) ────────────────────────────────────────
+// â”€â”€ Product row (6.b) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function makeProductRow() {
   const tr = document.createElement('tr');
   tr.dataset.prodId = nextId('prod');
@@ -263,7 +263,7 @@ function makeProductRow() {
     <td><input type="text" class="partner-q-input partner-q-cell" data-prod-name placeholder="Product name" /></td>
     <td>
       <select class="partner-q-select partner-q-cell" data-prod-revtype>
-        <option value="">— Select —</option>
+        <option value="">â€” Select â€”</option>
         ${REVENUE_TYPES.map(o => `<option value="${o}">${o}</option>`).join('')}
       </select>
     </td>
@@ -288,24 +288,24 @@ function addProductRow() {
   syncDerivedSections();
 }
 
-// ── Let's Scale row (section 7) ──────────────────────────────
+// â”€â”€ Let's Scale row (section 7) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function makeLetsScaleRow() {
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td>
       <select class="partner-q-select partner-q-cell" data-ls-cust>
-        <option value="">— Select —</option>
+        <option value="">â€” Select â€”</option>
       </select>
     </td>
-    <td><span class="partner-q-readonly" data-ls-type>—</span></td>
-    <td><span class="partner-q-readonly" data-ls-territory>—</span></td>
+    <td><span class="partner-q-readonly" data-ls-type>â€”</span></td>
+    <td><span class="partner-q-readonly" data-ls-territory>â€”</span></td>
     <td>
       <select class="partner-q-select partner-q-cell" data-ls-prod>
-        <option value="">— Select —</option>
+        <option value="">â€” Select â€”</option>
       </select>
     </td>
-    <td><span class="partner-q-readonly" data-ls-revtype>—</span></td>
-    <td><span class="partner-q-readonly" data-ls-price>—</span></td>
+    <td><span class="partner-q-readonly" data-ls-revtype>â€”</span></td>
+    <td><span class="partner-q-readonly" data-ls-price>â€”</span></td>
     <td><input type="number" class="partner-q-input partner-q-cell" data-ls-q1 min="0" step="1" placeholder="0" /></td>
     <td><input type="number" class="partner-q-input partner-q-cell" data-ls-q2 min="0" step="1" placeholder="0" /></td>
     <td><input type="number" class="partner-q-input partner-q-cell" data-ls-q3 min="0" step="1" placeholder="0" /></td>
@@ -326,7 +326,7 @@ function addLetsScaleRow() {
   syncDerivedSections(); // populates the dropdowns
 }
 
-// ── Read state from the Customer/Product tables ──────────────
+// â”€â”€ Read state from the Customer/Product tables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function getCustomers() {
   return Array.from(document.querySelectorAll('tbody[data-customers-body] tr'))
     .map(tr => ({
@@ -346,29 +346,29 @@ function getProducts() {
     }));
 }
 
-// ── Refill a <select> with id-keyed options for named items ──
+// â”€â”€ Refill a <select> with id-keyed options for named items â”€â”€
 function fillIdSelect(select, items) {
   const prev = select.value;
-  const opts = ['<option value="">— Select —</option>']
+  const opts = ['<option value="">â€” Select â€”</option>']
     .concat(items.filter(i => i.name).map(i => `<option value="${i.id}">${escHtml(i.name)}</option>`));
   select.innerHTML = opts.join('');
   if (prev && items.some(i => i.id === prev && i.name)) select.value = prev;
   else select.value = '';
 }
 
-// ── Update one Let's Scale row's auto-fill cells ─────────────
+// â”€â”€ Update one Let's Scale row's auto-fill cells â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function updateLetsScaleRow(tr) {
   const customers = getCustomers();
   const products  = getProducts();
   const cust = customers.find(c => c.id === tr.querySelector('[data-ls-cust]').value);
   const prod = products.find(p => p.id === tr.querySelector('[data-ls-prod]').value);
-  tr.querySelector('[data-ls-type]').textContent      = cust?.type      || '—';
-  tr.querySelector('[data-ls-territory]').textContent = cust?.territory || '—';
-  tr.querySelector('[data-ls-revtype]').textContent   = prod?.revenueType || '—';
-  tr.querySelector('[data-ls-price]').textContent     = prod?.price ? formatPriceDisplay(prod.price) : '—';
+  tr.querySelector('[data-ls-type]').textContent      = cust?.type      || 'â€”';
+  tr.querySelector('[data-ls-territory]').textContent = cust?.territory || 'â€”';
+  tr.querySelector('[data-ls-revtype]').textContent   = prod?.revenueType || 'â€”';
+  tr.querySelector('[data-ls-price]').textContent     = prod?.price ? formatPriceDisplay(prod.price) : 'â€”';
 }
 
-// ── Reactive sync: 6.a/6.b → section 7 dropdowns + section 8 ─
+// â”€â”€ Reactive sync: 6.a/6.b â†’ section 7 dropdowns + section 8 â”€
 function syncDerivedSections() {
   const customers = getCustomers();
   const products  = getProducts();
@@ -382,16 +382,16 @@ function syncDerivedSections() {
   syncUnitCosts(products);
 }
 
-// ── Format a stored money string for read-only display ───────
+// â”€â”€ Format a stored money string for read-only display â”€â”€â”€â”€â”€â”€â”€
 function formatPriceDisplay(raw) {
   const cleaned = String(raw).replace(/[^\d.]/g, '');
-  if (!cleaned || cleaned === '.') return '—';
+  if (!cleaned || cleaned === '.') return 'â€”';
   const [intPart, decPart] = cleaned.split('.');
   const intFmt = parseInt(intPart || '0', 10).toLocaleString('en-US');
   return '$ ' + (decPart !== undefined ? `${intFmt}.${decPart}` : intFmt);
 }
 
-// ── Section 8 (Unit Costs): mirror products from 6.b ─────────
+// â”€â”€ Section 8 (Unit Costs): mirror products from 6.b â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function syncUnitCosts(products) {
   const body = document.querySelector('tbody[data-unitcost-body]');
   if (!body) return;
@@ -418,12 +418,12 @@ function syncUnitCosts(products) {
   bindMoneyInputs(body);
 }
 
-// ── Wire add-row buttons ─────────────────────────────────────
+// â”€â”€ Wire add-row buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 document.querySelector('[data-add-customer]')?.addEventListener('click', addCustomerRow);
 document.querySelector('[data-add-product]')?.addEventListener('click', addProductRow);
 document.querySelector('[data-add-letsscale]')?.addEventListener('click', addLetsScaleRow);
 
-// ── Seed initial empty rows ──────────────────────────────────
+// â”€â”€ Seed initial empty rows â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function seedQuestionnaireTables() {
   const cBody = document.querySelector('tbody[data-customers-body]');
   const pBody = document.querySelector('tbody[data-products-body]');
@@ -434,7 +434,7 @@ function seedQuestionnaireTables() {
   syncDerivedSections();
 }
 
-// ── Year labels track section 5 (First Year of Financial Model) ─
+// â”€â”€ Year labels track section 5 (First Year of Financial Model) â”€
 function syncYearLabels() {
   const firstYearEl = document.getElementById('qFirstYear');
   const fteY1 = document.getElementById('fteY1Label');
@@ -457,10 +457,10 @@ function syncYearLabels() {
 }
 document.getElementById('qFirstYear')?.addEventListener('input', syncYearLabels);
 
-// ── Bind money formatting on form fields ─────────────────────
+// â”€â”€ Bind money formatting on form fields â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 bindMoneyInputs(qForm);
 
-// ── Collect Let's Scale rows into structured records ─────────
+// â”€â”€ Collect Let's Scale rows into structured records â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function collectLetsScale() {
   const customers = getCustomers();
   const products  = getProducts();
@@ -495,7 +495,7 @@ function collectUnitCosts() {
   }));
 }
 
-// ── Submit ───────────────────────────────────────────────────
+// â”€â”€ Submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 qForm?.addEventListener('submit', async e => {
   e.preventDefault();
   const name = (document.getElementById('qName')?.value || '').trim();
@@ -529,12 +529,11 @@ qForm?.addEventListener('submit', async e => {
     letsScale: collectLetsScale(),
     unitCosts: collectUnitCosts(),
     fte,
-    investorDeck: collectInvestorDeck(),
   };
 
   const submitBtn = qForm.querySelector('.partner-q-submit');
   const originalText = submitBtn?.textContent;
-  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting…'; }
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submittingâ€¦'; }
 
   try {
     await apiSubmitQuestionnaire(name, formData);
@@ -549,249 +548,141 @@ qForm?.addEventListener('submit', async e => {
   }
 });
 
-// ── Initial render ───────────────────────────────────────────
+// ---- Initial render ------------------------------------------------------
 // Clean up any leftover localStorage from Phase 1 (now backend-backed).
 try { localStorage.removeItem('vv_partner_submission'); } catch { /* ignore */ }
 renderTileState();
 
-// ════════════════════════════════════════════════════════════════════════════
-//  INVESTOR DECK — schema-driven section renderer
-//
-//  Fetches the placeholder schema from /api/customer/deck-schema and renders
-//  one collapsible section per InvestorDeckField.section. Image inputs upload
-//  to /api/customer/deck-asset and store the returned URL as the field value.
-//  Everything else is captured into a flat {fieldKey: value} map on submit.
-// ════════════════════════════════════════════════════════════════════════════
 
-const DECK_STATE = {
-  schema:    null,                 // { sections, fields, total }
-  values:    new Map(),            // fieldKey -> string (or URL for images)
-  loaded:    false,
-};
+/* ============================================================================
+   Section 10 — Supporting Materials drag-and-drop
+   Replaces the old per-placeholder Investor Deck form. Customer drops PDF /
+   DOCX / PPTX / XLSX; we POST raw bytes to /api/customer/deck-upload with the
+   filename in the query string. Server-side text extraction happens lazily
+   when AI Finance generates the deck.
+   ========================================================================== */
 
-function deckEscapeHtml(s) {
+const DECK_UPLOAD_ACCEPT = /\.(pdf|doc|docx|ppt|pptx|xls|xlsx)$/i;
+const DECK_UPLOAD_MAX    = 30 * 1024 * 1024;
+
+function deckUpFmtSize(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1024 / 1024).toFixed(1) + ' MB';
+}
+function deckUpExtPill(name) {
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  const m = { pdf:'PDF', doc:'DOC', docx:'DOC', ppt:'PPT', pptx:'PPT', xls:'XLS', xlsx:'XLS' };
+  return m[ext] || ext.toUpperCase();
+}
+function deckUpEscape(s) {
   return String(s == null ? '' : s)
     .replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-async function loadDeckSchema() {
-  if (DECK_STATE.loaded) return DECK_STATE.schema;
+async function deckUploadsRefresh() {
+  const list = document.getElementById('deckUploadsList');
+  if (!list) return;
+  const key  = customerKey();
+  if (!key) { list.innerHTML = ''; return; }
   try {
-    const res = await fetch(`${PARTNER_API}/api/customer/deck-schema`);
-    if (!res.ok) throw new Error(`schema fetch failed (${res.status})`);
-    DECK_STATE.schema = await res.json();
-    DECK_STATE.loaded = true;
-    return DECK_STATE.schema;
-  } catch (e) {
-    DECK_STATE.loaded = false;
-    throw e;
-  }
-}
-
-function deckGroupBySection(fields) {
-  const map = new Map();
-  for (const f of fields) {
-    if (!map.has(f.section)) map.set(f.section, []);
-    map.get(f.section).push(f);
-  }
-  return map;
-}
-
-function deckFieldId(fieldKey) { return `deck-${fieldKey}`; }
-
-function deckRenderField(f) {
-  const id  = deckFieldId(f.fieldKey);
-  const req = f.required ? '<span class="partner-q-req">*</span>' : '';
-  const guide = f.guidance ? `<p class="partner-q-help">${deckEscapeHtml(f.guidance)}</p>` : '';
-  switch (f.inputType) {
-    case 'shortText':
-      return `<div class="partner-q-field">
-        <label class="partner-q-label" for="${id}">${deckEscapeHtml(f.question)} ${req}</label>
-        <input id="${id}" type="text" class="partner-q-input" data-deck-key="${f.fieldKey}" ${f.required ? 'data-deck-required="1"' : ''} autocomplete="off" />
-        ${guide}
-      </div>`;
-    case 'longText':
-      return `<div class="partner-q-field partner-q-field-wide">
-        <label class="partner-q-label" for="${id}">${deckEscapeHtml(f.question)} ${req}</label>
-        <textarea id="${id}" class="partner-q-input partner-q-textarea" rows="3" data-deck-key="${f.fieldKey}" ${f.required ? 'data-deck-required="1"' : ''}></textarea>
-        ${guide}
-      </div>`;
-    case 'number':
-    case 'year':
-      return `<div class="partner-q-field">
-        <label class="partner-q-label" for="${id}">${deckEscapeHtml(f.question)} ${req}</label>
-        <input id="${id}" type="number" class="partner-q-input" data-deck-key="${f.fieldKey}" ${f.required ? 'data-deck-required="1"' : ''} ${f.inputType === 'year' ? 'min="1900" max="2100" step="1"' : ''} />
-        ${guide}
-      </div>`;
-    case 'date':
-      return `<div class="partner-q-field">
-        <label class="partner-q-label" for="${id}">${deckEscapeHtml(f.question)} ${req}</label>
-        <input id="${id}" type="date" class="partner-q-input" data-deck-key="${f.fieldKey}" ${f.required ? 'data-deck-required="1"' : ''} />
-        ${guide}
-      </div>`;
-    case 'email':
-      return `<div class="partner-q-field">
-        <label class="partner-q-label" for="${id}">${deckEscapeHtml(f.question)} ${req}</label>
-        <input id="${id}" type="email" class="partner-q-input" data-deck-key="${f.fieldKey}" ${f.required ? 'data-deck-required="1"' : ''} autocomplete="off" />
-        ${guide}
-      </div>`;
-    case 'image':
-      return `<div class="partner-q-field partner-q-field-wide" data-deck-image="${f.fieldKey}">
-        <label class="partner-q-label">${deckEscapeHtml(f.question)} ${req}</label>
-        <div class="partner-q-image-row">
-          <input id="${id}" type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml,image/gif" data-deck-key="${f.fieldKey}" data-deck-placeholder="${deckEscapeHtml(f.placeholder)}" />
-          <span class="partner-q-image-status" data-deck-image-status="${f.fieldKey}"></span>
-        </div>
-        <input type="text" class="partner-q-input partner-q-image-url" placeholder="…or paste a public image URL" data-deck-url-key="${f.fieldKey}" />
-        ${guide}
-      </div>`;
-    case 'table':
-      // For now, a structured longText. We'll upgrade to a real grid in a
-      // follow-up; the placeholder name is preserved so V&V can fill it
-      // manually in Excel if needed.
-      return `<div class="partner-q-field partner-q-field-wide">
-        <label class="partner-q-label" for="${id}">${deckEscapeHtml(f.question)} ${req}</label>
-        <textarea id="${id}" class="partner-q-input partner-q-textarea" rows="4" data-deck-key="${f.fieldKey}" ${f.required ? 'data-deck-required="1"' : ''} placeholder='e.g. Speed: Us=F, CompA=P, CompB=N'></textarea>
-        ${guide}
-      </div>`;
-    default:
-      return '';
-  }
-}
-
-function deckRenderSections() {
-  const root = document.getElementById('deckSections');
-  const summary = document.getElementById('deckSummary');
-  if (!root || !DECK_STATE.schema) return;
-  const grouped = deckGroupBySection(DECK_STATE.schema.fields);
-
-  const html = [];
-  for (const sectionName of DECK_STATE.schema.sections) {
-    const fields = grouped.get(sectionName) || [];
-    if (!fields.length) continue;
-    const requiredCount = fields.filter(f => f.required).length;
-    html.push(`
-      <details class="partner-q-deck-section">
-        <summary>
-          <span class="partner-q-deck-section-name">${deckEscapeHtml(sectionName)}</span>
-          <span class="partner-q-deck-section-meta">${fields.length} fields · ${requiredCount} required</span>
-        </summary>
-        <div class="partner-q-grid">
-          ${fields.map(deckRenderField).join('')}
-        </div>
-      </details>
-    `);
-  }
-  root.innerHTML = html.join('');
-  if (summary) {
-    summary.textContent = `${DECK_STATE.schema.total} placeholders across ${DECK_STATE.schema.sections.length} sections.`;
-  }
-
-  wireDeckImageUploads(root);
-}
-
-function wireDeckImageUploads(root) {
-  const inputs = root.querySelectorAll('input[type="file"][data-deck-key]');
-  inputs.forEach((inp) => {
-    inp.addEventListener('change', async (e) => {
-      const file = inp.files && inp.files[0];
-      if (!file) return;
-      const fieldKey = inp.getAttribute('data-deck-key');
-      const placeholder = inp.getAttribute('data-deck-placeholder');
-      const status = root.querySelector(`[data-deck-image-status="${fieldKey}"]`);
-      if (status) status.textContent = `Uploading ${file.name}…`;
-      try {
-        const key = customerKey();
-        if (!key) throw new Error('Missing customer key — sign in again.');
-        const url = await apiUploadDeckAsset(file, placeholder, key);
-        DECK_STATE.values.set(fieldKey, url);
-        // Sync the visible URL field too so the user sees what was stored.
-        const urlInput = root.querySelector(`[data-deck-url-key="${fieldKey}"]`);
-        if (urlInput) urlInput.value = url;
-        if (status) status.textContent = '✓ uploaded';
-      } catch (err) {
-        if (status) status.textContent = `✗ ${err.message || 'upload failed'}`;
-      } finally {
-        // Allow re-selecting the same file later.
-        inp.value = '';
-      }
+    const res = await fetch(`${PARTNER_API}/api/customer/deck-upload`, {
+      headers: { 'X-Customer-Key': key },
     });
-  });
-  // Also let the user paste a URL directly (no upload).
-  root.querySelectorAll('input[data-deck-url-key]').forEach((urlInput) => {
-    urlInput.addEventListener('input', () => {
-      const fieldKey = urlInput.getAttribute('data-deck-url-key');
-      const v = urlInput.value.trim();
-      if (v) DECK_STATE.values.set(fieldKey, v);
-      else   DECK_STATE.values.delete(fieldKey);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const rows = Array.isArray(data.uploads) ? data.uploads : [];
+    list.innerHTML = rows.length === 0
+      ? '<p class="partner-q-empty">No files uploaded yet.</p>'
+      : rows.map((u) => `
+          <div class="partner-q-upload-row" data-upload-id="${deckUpEscape(u.id)}">
+            <span class="partner-q-upload-pill">${deckUpEscape(deckUpExtPill(u.originalName))}</span>
+            <span class="partner-q-upload-name" title="${deckUpEscape(u.originalName)}">${deckUpEscape(u.originalName)}</span>
+            <span class="partner-q-upload-size">${deckUpEscape(deckUpFmtSize(u.sizeBytes))}</span>
+            <button type="button" class="partner-q-upload-remove" aria-label="Remove" title="Remove">&#x2715;</button>
+          </div>
+        `).join('');
+    list.querySelectorAll('.partner-q-upload-remove').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const row = btn.closest('[data-upload-id]');
+        const id  = row?.getAttribute('data-upload-id');
+        if (!id) return;
+        btn.disabled = true;
+        try {
+          await fetch(`${PARTNER_API}/api/customer/deck-upload/${encodeURIComponent(id)}`, {
+            method: 'DELETE', headers: { 'X-Customer-Key': customerKey() },
+          });
+          await deckUploadsRefresh();
+        } catch { btn.disabled = false; }
+      });
     });
-  });
+  } catch {
+    list.innerHTML = '<p class="partner-q-empty">Could not load uploads.</p>';
+  }
 }
 
-async function apiUploadDeckAsset(file, placeholderName, key) {
+async function deckUploadOne(file, statusEl) {
+  if (!DECK_UPLOAD_ACCEPT.test(file.name)) {
+    if (statusEl) statusEl.textContent = `Skipped ${file.name} — unsupported type`;
+    return;
+  }
+  if (file.size > DECK_UPLOAD_MAX) {
+    if (statusEl) statusEl.textContent = `Skipped ${file.name} — too large (max 30 MB)`;
+    return;
+  }
+  if (statusEl) statusEl.textContent = `Uploading ${file.name}…`;
   const buf = await file.arrayBuffer();
   const res = await fetch(
-    `${PARTNER_API}/api/customer/deck-asset?placeholder=${encodeURIComponent(placeholderName)}`,
+    `${PARTNER_API}/api/customer/deck-upload?filename=${encodeURIComponent(file.name)}`,
     {
       method:  'POST',
-      headers: { 'Content-Type': file.type || 'application/octet-stream', 'X-Customer-Key': key },
-      body:    buf,
+      headers: {
+        'X-Customer-Key': customerKey(),
+        'Content-Type':   file.type || 'application/octet-stream',
+      },
+      body: buf,
     },
   );
   if (!res.ok) {
-    let msg = `upload failed (${res.status})`;
-    try {
-      const body = await res.json();
-      if (body?.error?.message) msg = body.error.message;
-    } catch { /* ignore */ }
-    throw new Error(msg);
+    let msg = `HTTP ${res.status}`;
+    try { msg = (await res.json())?.error?.message || msg; } catch { /* ignore */ }
+    if (statusEl) statusEl.textContent = `Failed ${file.name}: ${msg}`;
+    return;
   }
-  const data = await res.json();
-  return data.url;
+  if (statusEl) statusEl.textContent = `Uploaded ${file.name}`;
 }
 
-// Called on submit — grabs every text/number/longText/email/date/year input
-// plus the values cached from image uploads.
-function collectInvestorDeck() {
-  const root = document.getElementById('deckSections');
-  if (!root || !DECK_STATE.schema) return {};
-  const out = {};
-  for (const f of DECK_STATE.schema.fields) {
-    if (f.inputType === 'image') {
-      const v = DECK_STATE.values.get(f.fieldKey);
-      if (v) out[f.fieldKey] = v;
-      continue;
-    }
-    const el = root.querySelector(`[data-deck-key="${f.fieldKey}"]`);
-    if (!el) continue;
-    const v = String(el.value || '').trim();
-    if (v) out[f.fieldKey] = (f.inputType === 'number' || f.inputType === 'year')
-      ? (Number.isFinite(+v) ? +v : v)
-      : v;
-  }
-  return out;
-}
+(function wireDeckDropzone() {
+  const zone   = document.getElementById('deckDropzone');
+  const input  = document.getElementById('deckFileInput');
+  if (!zone || !input) return;
 
-// Kick off schema load when the questionnaire panel becomes visible.
-// The existing flow shows it via `questionnaireSection.hidden = false`.
-const _qSection = document.getElementById('questionnaireSection');
-const _summary  = document.getElementById('deckSummary');
-async function tryLoadDeckSchema() {
-  try {
-    await loadDeckSchema();
-    deckRenderSections();
-  } catch (e) {
-    if (_summary) _summary.textContent = `Could not load investor-deck sections — refresh to retry. (${e.message || e})`;
-  }
-}
-if (_qSection) {
-  // MutationObserver fires as soon as the section is un-hidden, even on the
-  // first user click. Cheap, no polling.
-  const obs = new MutationObserver(() => {
-    if (!_qSection.hidden && !DECK_STATE.loaded) tryLoadDeckSchema();
+  const status = document.createElement('div');
+  status.className = 'partner-q-drop-status';
+  zone.appendChild(status);
+
+  zone.addEventListener('click', (e) => { if (e.target === input) return; input.click(); });
+  zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('is-drag-over'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('is-drag-over'));
+  zone.addEventListener('drop', async (e) => {
+    e.preventDefault();
+    zone.classList.remove('is-drag-over');
+    const files = Array.from(e.dataTransfer.files || []);
+    for (const f of files) await deckUploadOne(f, status);
+    await deckUploadsRefresh();
   });
-  obs.observe(_qSection, { attributes: true, attributeFilter: ['hidden'] });
-  // If the section is already visible at page load (e.g. deep link), load now.
-  if (!_qSection.hidden) tryLoadDeckSchema();
-}
+  input.addEventListener('change', async () => {
+    const files = Array.from(input.files || []);
+    for (const f of files) await deckUploadOne(f, status);
+    input.value = '';
+    await deckUploadsRefresh();
+  });
+
+  const qSection = document.getElementById('questionnaireSection');
+  if (qSection) {
+    const obs = new MutationObserver(() => { if (!qSection.hidden) deckUploadsRefresh(); });
+    obs.observe(qSection, { attributes: true, attributeFilter: ['hidden'] });
+    if (!qSection.hidden) deckUploadsRefresh();
+  }
+})();
