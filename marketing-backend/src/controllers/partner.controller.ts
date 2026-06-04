@@ -20,7 +20,6 @@ import {
   generatePopulatedPptx, pptxTemplatePath, customerPptxDir,
   buildPptxFileName, resolveStoredPptx,
 } from '../services/pptx-generator.service';
-import { runDeckExtraction } from '../services/deck-extractor.service';
 import { INVESTOR_DECK_FIELDS, SECTIONS, InvestorDeckField } from '../data/investor-deck-schema';
 import fs from 'fs';
 import { z } from 'zod';
@@ -872,31 +871,18 @@ async function generateDeckForSubmission(
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
   const outFile = `${outDir}/${buildPptxFileName(customerName, submissionId)}`.replace(/\\/g, '/');
 
-  let extraValues: Map<string, string> | undefined;
-  let aiStats: { filledCount: number; candidateCount: number; sourceChars: number } | null = null;
-  if (customerKeyId) {
-    try {
-      const r = await runDeckExtraction(customerKeyId);
-      extraValues = r.values;
-      aiStats = {
-        filledCount:    r.filledCount,
-        candidateCount: r.candidateCount,
-        sourceChars:    r.sourceChars,
-      };
-      console.log(`[partner] AI extraction: ${r.filledCount}/${r.candidateCount} ` +
-                  `placeholders filled from ${r.sourceChars} chars of source material`);
-    } catch (err) {
-      console.error('[partner] AI extraction failed (continuing with xlsx-only):', err);
-    }
-  }
-
+  // The new Claude-driven extractor inside generatePopulatedPptx reads the
+  // entire workbook + every upload's extracted text in one call and returns
+  // a ready-to-replace value map. The old runDeckExtraction (uploads-only) is
+  // no longer needed in this code path; we just pass the customerKeyId so the
+  // generator can pull the upload text itself.
   const pptxStats = await generatePopulatedPptx({
     templatePptxPath: pptxTemplatePath(),
     customerXlsxPath: xlsxAbsPath,
     outputPptxPath:   outFile,
-    extraValues,
+    customerKeyId,
   });
-  return { ...pptxStats, ai: aiStats };
+  return { ...pptxStats, ai: null };
 }
 
 // Silence unused-import warning when path lib isn't used anywhere else.
