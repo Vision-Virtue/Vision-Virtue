@@ -33,6 +33,7 @@
 import JSZip from 'jszip';
 import fs from 'fs';
 import path from 'path';
+import { XMLValidator } from 'fast-xml-parser';
 import {
   rewriteAffectedParagraphs, SlideRewriteInput,
 } from './slide-rewriter.service';
@@ -91,8 +92,38 @@ function decodeXmlEntities(s: string): string {
     .replace(/&amp;/g, '&');
 }
 
+/**
+ * Strip characters that are illegal in XML 1.0. Valid range is:
+ *   #x09, #x0A, #x0D, #x20-#xD7FF, #xE000-#xFFFD, #x10000-#x10FFFF
+ * Claude occasionally emits stray control chars (especially around emoji /
+ * weird whitespace). Leaving them in produces XML that JS regex thinks is
+ * well-formed but that PowerPoint rejects with "can't read".
+ *
+ * U+10000+ is encoded as a surrogate pair in a JS string -- we keep both
+ * halves of a valid pair and drop any lone surrogate.
+ */
+function stripXmlIllegal(s: string): string {
+  let out = '';
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c === 0x09 || c === 0x0A || c === 0x0D) { out += s[i]; continue; }
+    if (c >= 0x20 && c <= 0xD7FF)               { out += s[i]; continue; }
+    if (c >= 0xE000 && c <= 0xFFFD)             { out += s[i]; continue; }
+    if (c >= 0xD800 && c <= 0xDBFF) {
+      const lo = s.charCodeAt(i + 1);
+      if (lo >= 0xDC00 && lo <= 0xDFFF) {
+        out += s[i] + s[i + 1];
+        i++;
+      }
+      continue;
+    }
+    // Lone low surrogate, U+FFFE, U+FFFF, or other illegal -- drop.
+  }
+  return out;
+}
+
 function encodeXmlEntities(s: string): string {
-  return s
+  return stripXmlIllegal(s)
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
@@ -412,12 +443,32 @@ function cleanupSlideXml(slideXml: string, originalCount: number): { xml: string
     return match;
   });
 
-  // (3) Drop paragraphs that lost all their text runs. Keep paragraphs that
-  //     still have a non-empty <a:r>, or that have <a:fld> (placeholder
-  //     fields like page numbers), to avoid pruning slide footers.
-  xml = xml.replace(/<a:p\b[^>]*>([\s\S]*?)<\/a:p>/g, (match, inner: string) => {
-    const hasContent = /<a:r\b/.test(inner) || /<a:fld\b/.test(inner) || /<a:t\b[^>]*>[\S]/.test(inner);
-    return hasContent ? match : '';
+  // (3) Drop paragraphs that lost all their text runs, processed PER
+  //     <p:txBody> shape so we can guarantee each shape keeps at least
+  //     one paragraph. PowerPoint refuses to open a deck where any
+  //     <p:txBody> is empty (no <a:p> children) -- that's the corruption
+  //     mode we hit when Phase 4 cleared every paragraph in a shape.
+  //
+  //     A paragraph is considered "content-bearing" if it has any <a:r>
+  //     run, any <a:fld> field, or an <a:endParaRPr/> marker (which the
+  //     OOXML spec uses to denote intentional empty lines). Pure-<a:pPr>
+  //     paragraphs are leftover scaffolding and get dropped.
+  xml = xml.replace(/<p:txBody\b([^>]*)>([\s\S]*?)<\/p:txBody>/g, (_full, attrs: string, body: string) => {
+    const processed = body.replace(/<a:p\b[^>]*>([\s\S]*?)<\/a:p>/g, (paraMatch, inner: string) => {
+      const hasContent =
+        /<a:r\b/.test(inner) ||
+        /<a:fld\b/.test(inner) ||
+        /<a:endParaRPr\b/.test(inner) ||
+        /<a:t\b[^>]*>[\S]/.test(inner);
+      return hasContent ? paraMatch : '';
+    });
+    // Guarantee at least one <a:p> survives. An empty <a:p/> with only
+    // <a:endParaRPr/> is valid OOXML and renders as a blank line.
+    const hasParagraph = /<a:p\b/.test(processed);
+    const finalBody = hasParagraph
+      ? processed
+      : processed + '<a:p><a:endParaRPr lang="en-US"/></a:p>';
+    return `<p:txBody${attrs}>${finalBody}</p:txBody>`;
   });
 
   return { xml, stats };
@@ -812,8 +863,13 @@ export async function generatePopulatedPptx(opts: {
     }
   }
 
-  // ── PHASE 2: per-slide cleanup → mark for deletion ───────────────────────
+  // ── PHASE 2: per-slide cleanup → validate → mark for deletion ────────────
+  // Each surviving slide is parsed as XML at the end. Any slide that's still
+  // malformed (a Phase-4 rewrite or cleanup edge case we didn't anticipate)
+  // is dropped from the deck rather than shipped: better to omit a slide than
+  // ship a deck PowerPoint refuses to open at all.
   const slidesToDelete: string[] = [];
+  let invalidSlidesDropped = 0;
   for (const slide of slideStates) {
     const { xml: cleaned, stats: slideStats } =
       cleanupSlideXml(slide.afterReplace, slide.originalCount);
@@ -821,12 +877,25 @@ export async function generatePopulatedPptx(opts: {
     stats.slidesProcessed   += 1;
     stats.emptyRunsStripped  = (stats.emptyRunsStripped || 0) + slideStats.emptyRunsStripped;
 
+    // Safety gate: drop any slide whose XML doesn't parse cleanly.
+    const validation = XMLValidator.validate(cleaned);
+    if (validation !== true) {
+      console.warn(`[pptx-gen] slide ${slide.key} failed XML validation, dropping: ` +
+                   `${JSON.stringify(validation)}`);
+      slidesToDelete.push(slide.key);
+      invalidSlidesDropped += 1;
+      continue;
+    }
+
     if (slide.originalCount > 0) {
       const unfilledRatio = slideStats.unfilledPlaceholders / slide.originalCount;
       if (unfilledRatio > SLIDE_DELETE_THRESHOLD) {
         slidesToDelete.push(slide.key);
       }
     }
+  }
+  if (invalidSlidesDropped > 0) {
+    console.warn(`[pptx-gen] dropped ${invalidSlidesDropped} slide(s) due to XML validation failure`);
   }
 
   // ── PHASE 3: delete sparse slides ────────────────────────────────────────
