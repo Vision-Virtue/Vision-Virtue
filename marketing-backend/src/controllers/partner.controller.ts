@@ -491,18 +491,39 @@ export const partnerController = {
    */
   adminListSubmissions(_req: Request, res: Response): void {
     const subs = partnerSubmissionRepo.listAll();
+    // Resolve each submission's owning customer-key row so the admin UI
+    // can display the VV-XXXXXX value (useful for sharing with the
+    // customer if they lose their copy). Memoised per request to avoid
+    // repeated DB hits when several submissions share one key.
+    const keyCache = new Map<string, ReturnType<typeof customerKeyRepo.findById>>();
     res.json({
-      submissions: subs.map(s => ({
-        id:            s.id,
-        customerKeyId: s.customerKeyId,
-        customerName:  s.customerName,
-        status:        s.status,
-        submittedAt:   s.submittedAt,
-        finalizedAt:   s.finalizedAt,
-        hasXlsx:       !!s.finalizedXlsxPath,
-        hasPptx:       !!resolveStoredPptx(buildPptxFileName(s.customerName, s.id)),
-        formData:      s.formData,
-      })),
+      submissions: subs.map(s => {
+        let keyRow = null;
+        if (s.customerKeyId) {
+          if (keyCache.has(s.customerKeyId)) {
+            keyRow = keyCache.get(s.customerKeyId) || null;
+          } else {
+            keyRow = customerKeyRepo.findById(s.customerKeyId);
+            keyCache.set(s.customerKeyId, keyRow);
+          }
+        }
+        return {
+          id:                  s.id,
+          customerKeyId:       s.customerKeyId,
+          customerName:        s.customerName,
+          // The owning key row — useful for "give the customer back their
+          // forgotten key" workflows. Null if the row was deleted.
+          customerKey:         keyRow?.key       ?? null,
+          customerKeyOwner:    keyRow?.customer_name ?? null,
+          customerKeyRevoked:  keyRow?.revoked === 1,
+          status:              s.status,
+          submittedAt:         s.submittedAt,
+          finalizedAt:         s.finalizedAt,
+          hasXlsx:             !!s.finalizedXlsxPath,
+          hasPptx:             !!resolveStoredPptx(buildPptxFileName(s.customerName, s.id)),
+          formData:            s.formData,
+        };
+      }),
     });
   },
 
@@ -758,6 +779,7 @@ export const partnerController = {
         unmatchedCount:    stats.unmatched.length,
         unmatched:         stats.unmatched.slice(0, 25),
         ai:                stats.ai,
+        aiRewrite:         stats.aiRewrite,
       });
     } catch (err) {
       console.error('[partner] adminGeneratePptx failed:', err);

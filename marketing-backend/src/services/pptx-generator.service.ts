@@ -33,6 +33,9 @@
 import JSZip from 'jszip';
 import fs from 'fs';
 import path from 'path';
+import {
+  rewriteAffectedParagraphs, SlideRewriteInput,
+} from './slide-rewriter.service';
 
 const QUESTIONNAIRE_SHEET = 'Investor_Deck_Questionnaire_Inputs';
 const CALCULATIONS_SHEET  = 'Investor_Deck_Calculations';
@@ -343,6 +346,15 @@ export interface PptxGenStats {
   slidesProcessed: number;
   slidesDeleted?: number;
   emptyRunsStripped?: number;
+  /** Phase 4 LLM rewrite stats (absent if rewrite was skipped or had no work). */
+  aiRewrite?: {
+    slidesRewritten:      number;
+    paragraphsRewritten:  number;
+    paragraphsCleared:    number;
+    model?:               string;
+    skippedReason?:       string;
+    failureMessage?:      string;
+  };
 }
 
 // ─── Smart cleanup: strip empty {{X}} + empty runs, mark sparse slides ───────
@@ -415,6 +427,105 @@ function cleanupSlideXml(slideXml: string, originalCount: number): { xml: string
 function countOriginalPlaceholders(xml: string): number {
   const matches = xml.match(/\{\{[A-Z0-9_]+\}\}/g);
   return matches ? matches.length : 0;
+}
+
+// ─── Slide content extraction (for Phase 4 LLM rewrite) ─────────────────────
+
+interface SlideParagraphInfo {
+  /** 0-based occurrence order of the <a:p> in the slide XML. */
+  idx: number;
+  /** Concatenated <a:t> text content of all runs in this paragraph. */
+  text: string;
+  /** True if the paragraph still contains an unfilled `{{X}}` token. */
+  hasPlaceholder: boolean;
+}
+
+interface SlideContent {
+  /** Best-effort detected slide title (text of the first shape marked as title). */
+  title: string;
+  paragraphs: SlideParagraphInfo[];
+  /** Text of paragraphs that are NOT being rewritten — used as model context. */
+  contextText: string;
+}
+
+/**
+ * Walk the slide XML to produce a structured view of titles + paragraphs.
+ * Used by Phase 4 to decide which paragraphs need rewriting and to give the
+ * LLM the surrounding slide context so it can keep rewrites coherent.
+ */
+function extractSlideContent(slideXml: string): SlideContent {
+  let title = '';
+  const shapeRe = /<p:sp\b[^>]*>([\s\S]*?)<\/p:sp>/g;
+  let sm: RegExpExecArray | null;
+  while ((sm = shapeRe.exec(slideXml))) {
+    const inner = sm[1];
+    if (!/<p:ph\b[^/>]*type="(?:title|ctrTitle)"/.test(inner)) continue;
+    const tRe = /<a:t\b[^>]*>([\s\S]*?)<\/a:t>/g;
+    let parts = '';
+    let t: RegExpExecArray | null;
+    while ((t = tRe.exec(inner))) parts += decodeXmlEntities(t[1]);
+    const trimmed = parts.trim();
+    if (trimmed) { title = trimmed; break; }
+  }
+
+  const paragraphs: SlideParagraphInfo[] = [];
+  const paraRe = /<a:p\b[^>]*>([\s\S]*?)<\/a:p>/g;
+  let pm: RegExpExecArray | null;
+  let i = 0;
+  while ((pm = paraRe.exec(slideXml))) {
+    const inner = pm[1];
+    const tRe = /<a:t\b[^>]*>([\s\S]*?)<\/a:t>/g;
+    let parts = '';
+    let t: RegExpExecArray | null;
+    while ((t = tRe.exec(inner))) parts += decodeXmlEntities(t[1]);
+    paragraphs.push({
+      idx: i++,
+      text: parts,
+      hasPlaceholder: /\{\{[A-Z0-9_]+\}\}/.test(parts),
+    });
+  }
+
+  const contextText = paragraphs
+    .filter((p) => !p.hasPlaceholder && p.text.trim())
+    .map((p) => p.text.trim())
+    .join('\n');
+
+  return { title, paragraphs, contextText };
+}
+
+/**
+ * Replace the contents of the Nth `<a:p>` paragraph (0-indexed by occurrence
+ * order) with a single run carrying the first existing run's <a:rPr>. The
+ * paragraph's <a:pPr> is preserved so bullet level / alignment survives.
+ *
+ * If `newText` is empty or whitespace, the paragraph is emitted with only its
+ * <a:pPr> and no runs — the existing `cleanupSlideXml` pass will then drop
+ * the paragraph entirely.
+ */
+function replaceParagraphText(slideXml: string, paraIdx: number, newText: string): string {
+  const paraRe = /<a:p\b[^>]*>([\s\S]*?)<\/a:p>/g;
+  let i = 0;
+  return slideXml.replace(paraRe, (match, inner: string) => {
+    const myIdx = i++;
+    if (myIdx !== paraIdx) return match;
+
+    const pPr = /<a:pPr\b[^/>]*(?:\/>|>[\s\S]*?<\/a:pPr>)/.exec(inner)?.[0] || '';
+
+    // Preserve the first run's formatting so the rewritten text keeps the
+    // original font/size/colour. Falls back to no rPr if none was set.
+    let rPr = '';
+    const firstRunMatch = /<a:r\b[^>]*>([\s\S]*?)<\/a:r>/.exec(inner);
+    if (firstRunMatch) {
+      rPr = /<a:rPr\b[^/>]*(?:\/>|>[\s\S]*?<\/a:rPr>)/.exec(firstRunMatch[1])?.[0] || '';
+    }
+
+    if (!newText.trim()) {
+      // Paragraph collapses to just its pPr; cleanupSlideXml will remove it.
+      return `<a:p>${pPr}</a:p>`;
+    }
+    const newRun = `<a:r>${rPr}<a:t>${encodeXmlEntities(newText)}</a:t></a:r>`;
+    return `<a:p>${pPr}${newRun}</a:p>`;
+  });
 }
 
 // ─── Slide deletion: remove a slide from the package atomically ──────────────
@@ -496,6 +607,11 @@ export async function generatePopulatedPptx(opts: {
    * customer uploads). Merged into the final map; xlsx values win.
    */
   extraValues?: Map<string, string>;
+  /**
+   * Phase 4 LLM rewrite of partially-filled slides. Default true.
+   * Disable for tests / environments without ANTHROPIC_API_KEY.
+   */
+  aiRewrite?: boolean;
 }): Promise<PptxGenStats> {
   if (!fs.existsSync(opts.templatePptxPath)) {
     throw new Error(`PPTX template not found at ${opts.templatePptxPath}`);
@@ -532,39 +648,141 @@ export async function generatePopulatedPptx(opts: {
   const unmatchedSet = new Set<string>();
   const mut = { replaced: 0, unmatched: unmatchedSet };
 
-  // ── PHASE 1: per-slide replace → cleanup → mark for deletion ─────────────
-  // We tally placeholder fill-rates per slide and remember which slides
-  // ended up with >70% unfilled placeholders. Those get pruned from the
-  // package in Phase 2 (a second pass that touches presentation.xml
-  // metadata, which we can't safely mutate inside the file loop).
+  // ── PHASE 1: per-slide replace (no cleanup yet) ──────────────────────────
+  // We need the post-replacement XML still containing unfilled {{X}} tokens
+  // so Phase 1.5 can see WHICH placeholders went unfilled and rewrite the
+  // surrounding prose. Cleanup runs after rewrite so we don't strip the
+  // tokens before the LLM sees them.
   const SLIDE_DELETE_THRESHOLD = 0.7;
   const slideEntries = Object.keys(zip.files).filter(
     (k) => /^ppt\/slides\/slide\d+\.xml$/.test(k),
   );
-  const slidesToDelete: string[] = [];
+
+  interface SlideState {
+    key:             string;
+    originalCount:   number;
+    afterReplace:    string;
+    /** Marked true if Phase 1 left ≥70% of placeholders unfilled. */
+    willBeDeleted:   boolean;
+    /** Affected paragraphs queued for Phase 1.5 rewrite. */
+    affectedParas:   Array<{ id: string; idx: number; text: string }>;
+    title:           string;
+    contextText:     string;
+  }
+
+  const slideStates: SlideState[] = [];
 
   for (const key of slideEntries) {
-    const xml = await zip.file(key)!.async('string');
+    const xml           = await zip.file(key)!.async('string');
     const originalCount = countOriginalPlaceholders(xml);
+    const afterReplace  = applyReplacementsToSlideXml(xml, valueMap, mut);
+    const unfilledHere  = countOriginalPlaceholders(afterReplace);
+    const willBeDeleted = originalCount > 0 &&
+                          unfilledHere / originalCount > SLIDE_DELETE_THRESHOLD;
 
-    // (a) replace what we can
-    const afterReplace = applyReplacementsToSlideXml(xml, valueMap, mut);
-    // (b) strip leftover {{X}}, collapse empty runs/paragraphs
-    const { xml: cleaned, stats: slideStats } = cleanupSlideXml(afterReplace, originalCount);
-    zip.file(key, cleaned);
-    stats.slidesProcessed += 1;
-    stats.emptyRunsStripped = (stats.emptyRunsStripped || 0) + slideStats.emptyRunsStripped;
+    let affectedParas: SlideState['affectedParas'] = [];
+    let title = '';
+    let contextText = '';
+    // Only collect rewrite candidates for slides that will survive AND have
+    // at least one unfilled placeholder. Sparse slides (>70% unfilled) get
+    // deleted in Phase 2, so spending tokens to rewrite them is wasteful.
+    if (unfilledHere > 0 && !willBeDeleted) {
+      const content = extractSlideContent(afterReplace);
+      title       = content.title;
+      contextText = content.contextText;
+      const slideTag = key.replace(/^ppt\/slides\//, '').replace(/\.xml$/, '');
+      affectedParas = content.paragraphs
+        .filter((p) => p.hasPlaceholder && p.text.trim())
+        .map((p) => ({ id: `${slideTag}_p${p.idx}`, idx: p.idx, text: p.text }));
+    }
 
-    // (c) mark for deletion if the slide ended up mostly empty
-    if (originalCount > 0) {
-      const unfilledRatio = slideStats.unfilledPlaceholders / originalCount;
+    slideStates.push({ key, originalCount, afterReplace, willBeDeleted, affectedParas, title, contextText });
+  }
+
+  // ── PHASE 1.5: LLM rewrite of partially-filled slides (best-effort) ──────
+  // Batched into a single Claude call across all affected paragraphs. If the
+  // call fails or returns garbage, we log and continue with cleanup-only
+  // output — Phase 4 is an enhancement, never a blocker.
+  const aiRewriteEnabled = opts.aiRewrite !== false;
+  const slidesForRewrite: SlideRewriteInput[] = slideStates
+    .filter((s) => s.affectedParas.length > 0)
+    .map((s) => ({
+      slideKey:    s.key,
+      title:       s.title,
+      contextText: s.contextText,
+      affected:    s.affectedParas.map((p) => ({ id: p.id, currentText: p.text })),
+    }));
+
+  if (!aiRewriteEnabled) {
+    stats.aiRewrite = {
+      slidesRewritten: 0, paragraphsRewritten: 0, paragraphsCleared: 0,
+      skippedReason: 'aiRewrite=false',
+    };
+  } else if (slidesForRewrite.length === 0) {
+    stats.aiRewrite = {
+      slidesRewritten: 0, paragraphsRewritten: 0, paragraphsCleared: 0,
+      skippedReason: 'no partially-filled slides',
+    };
+  } else if (!process.env.ANTHROPIC_API_KEY) {
+    stats.aiRewrite = {
+      slidesRewritten: 0, paragraphsRewritten: 0, paragraphsCleared: 0,
+      skippedReason: 'ANTHROPIC_API_KEY not set',
+    };
+  } else {
+    try {
+      const { rewrites, model } = await rewriteAffectedParagraphs(slidesForRewrite);
+      let slidesRewritten     = 0;
+      let paragraphsRewritten = 0;
+      let paragraphsCleared   = 0;
+      for (const slide of slideStates) {
+        if (slide.affectedParas.length === 0) continue;
+        let xml = slide.afterReplace;
+        let touched = 0;
+        for (const para of slide.affectedParas) {
+          if (!rewrites.has(para.id)) continue;
+          const newText = rewrites.get(para.id) || '';
+          xml = replaceParagraphText(xml, para.idx, newText);
+          touched += 1;
+          if (newText.trim()) paragraphsRewritten += 1;
+          else                paragraphsCleared   += 1;
+        }
+        if (touched > 0) {
+          slide.afterReplace = xml;
+          slidesRewritten += 1;
+        }
+      }
+      stats.aiRewrite = { slidesRewritten, paragraphsRewritten, paragraphsCleared, model };
+      console.log(`[pptx-gen] Phase 4 rewrite: ${slidesRewritten} slide(s), ` +
+                  `${paragraphsRewritten} paragraph(s) rewritten, ` +
+                  `${paragraphsCleared} cleared (model=${model})`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error('[pptx-gen] Phase 4 rewrite failed (continuing with cleanup-only):', msg);
+      stats.aiRewrite = {
+        slidesRewritten: 0, paragraphsRewritten: 0, paragraphsCleared: 0,
+        failureMessage: msg,
+      };
+    }
+  }
+
+  // ── PHASE 2: per-slide cleanup → mark for deletion ───────────────────────
+  const slidesToDelete: string[] = [];
+  for (const slide of slideStates) {
+    const { xml: cleaned, stats: slideStats } =
+      cleanupSlideXml(slide.afterReplace, slide.originalCount);
+    zip.file(slide.key, cleaned);
+    stats.slidesProcessed   += 1;
+    stats.emptyRunsStripped  = (stats.emptyRunsStripped || 0) + slideStats.emptyRunsStripped;
+
+    if (slide.originalCount > 0) {
+      const unfilledRatio = slideStats.unfilledPlaceholders / slide.originalCount;
       if (unfilledRatio > SLIDE_DELETE_THRESHOLD) {
-        slidesToDelete.push(key);
+        slidesToDelete.push(slide.key);
       }
     }
   }
 
-  // ── PHASE 2: delete sparse slides ────────────────────────────────────────
+  // ── PHASE 3: delete sparse slides ────────────────────────────────────────
   // Done after all in-place edits so presentation.xml / rels / content-types
   // are only touched once per deletion.
   for (const slidePath of slidesToDelete) {

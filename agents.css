@@ -1284,6 +1284,84 @@
 }
 .partner-subs-folder-head[aria-expanded="true"] .partner-subs-folder-caret { transform: rotate(180deg); }
 
+.partner-subs-folder-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  background: rgba(91, 141, 224, 0.12);
+  border: 1px solid rgba(91, 141, 224, 0.32);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--accent-light, #5b8de0);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.12s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.partner-subs-folder-key:hover {
+  background: rgba(91, 141, 224, 0.20);
+  border-color: rgba(91, 141, 224, 0.55);
+}
+.partner-subs-folder-key:active { transform: scale(0.97); }
+.partner-subs-folder-key-label {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+.partner-subs-folder-key-val {
+  font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  font-size: 0.78rem;
+  color: var(--white, #fff);
+  letter-spacing: 0.02em;
+}
+.partner-subs-folder-key-copy {
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.55);
+  transition: color 0.15s;
+}
+.partner-subs-folder-key:hover .partner-subs-folder-key-copy {
+  color: var(--white, #fff);
+}
+.partner-subs-folder-key.is-revoked {
+  background: rgba(220, 80, 80, 0.10);
+  border-color: rgba(220, 80, 80, 0.32);
+  color: rgba(255, 180, 180, 0.85);
+  cursor: not-allowed;
+}
+.partner-subs-folder-key.is-revoked:hover {
+  background: rgba(220, 80, 80, 0.12);
+  border-color: rgba(220, 80, 80, 0.32);
+}
+.partner-subs-folder-key.is-revoked .partner-subs-folder-key-val {
+  color: rgba(255, 200, 200, 0.65);
+  text-decoration: line-through;
+}
+.partner-subs-folder-key-revoked {
+  font-size: 0.62rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0.08rem 0.4rem;
+  border-radius: 4px;
+  background: rgba(220, 80, 80, 0.25);
+  color: #ffb4b4;
+}
+.partner-subs-folder-key.is-missing {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.45);
+  cursor: default;
+}
+.partner-subs-folder-key.is-missing:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.partner-subs-folder-key.is-missing .partner-subs-folder-key-val {
+  color: rgba(255, 255, 255, 0.45);
+}
+
 .partner-subs-folder-body {
   padding: 0.5rem 1rem 1.1rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
