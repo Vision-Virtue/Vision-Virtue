@@ -895,6 +895,12 @@ async function generateDeckForSubmission(
     customerXlsxPath: xlsxAbsPath,
     outputPptxPath:   outFile,
     extraValues,
+    // Phase 4 disabled in production while we fix a bug in
+    // replaceParagraphText: with certain pptx slide structures the
+    // emitted <a:p> markup confuses the downstream cleanup and PowerPoint
+    // refuses to open the resulting deck. Re-enable once the regex
+    // preserves <a:p>/<a:rPr> attributes correctly (see slide-rewriter.service).
+    aiRewrite: false,
   });
   return { ...pptxStats, ai: aiStats };
 }
