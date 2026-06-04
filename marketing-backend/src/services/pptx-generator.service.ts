@@ -565,7 +565,26 @@ async function deleteSlideFromPackage(zip: JSZip, slidePath: string): Promise<vo
   // Slide rels reference is relative to ppt/, so "slides/slideN.xml".
   const relativeTarget = slidePath.replace(/^ppt\//, '');
 
-  // Resolve rId by Target. Attribute order isn't guaranteed; use indexOf.
+  // 1a. BEFORE touching anything, read the slide's own rels file to find any
+  //     notesSlide that this slide links to. PowerPoint templates often have a
+  //     1-to-1 speaker-notes-per-slide setup; if we delete the slide but leave
+  //     the notesSlide behind, the notesSlide's own rels still references the
+  //     deleted slide, the [Content_Types].xml still has the Override, and
+  //     PowerPoint refuses to open the deck. Cascade-delete the notesSlide.
+  const slideRelsPath = slidePath.replace(/slides\/(slide\d+\.xml)$/, 'slides/_rels/$1.rels');
+  let notesSlidePath:     string | null = null;
+  let notesSlideRelsPath: string | null = null;
+  const slideRelsEntry = zip.file(slideRelsPath);
+  if (slideRelsEntry) {
+    const slideRelsXml = await slideRelsEntry.async('string');
+    const m = /Target="\.\.\/notesSlides\/(notesSlide\d+\.xml)"/i.exec(slideRelsXml);
+    if (m) {
+      notesSlidePath     = `ppt/notesSlides/${m[1]}`;
+      notesSlideRelsPath = `ppt/notesSlides/_rels/${m[1]}.rels`;
+    }
+  }
+
+  // 2. Resolve rId by Target. Attribute order isn't guaranteed; use indexOf.
   const targetMarker = `Target="${relativeTarget}"`;
   const tIdx = presRelsXml.indexOf(targetMarker);
   if (tIdx < 0) return;
@@ -575,7 +594,7 @@ async function deleteSlideFromPackage(zip: JSZip, slidePath: string): Promise<vo
   const relFullTag = presRelsXml.slice(tagStart, tagEnd + 2);
   const rid = /Id="([^"]+)"/.exec(relFullTag)?.[1];
 
-  // 2. Remove the <p:sldId/> from presentation.xml.
+  // 3. Remove the <p:sldId/> from presentation.xml.
   //    Use [^>]*? (excludes only `>`, lazy) so attribute values that contain
   //    `/` (theoretically possible) don't trip the regex.
   if (rid) {
@@ -587,29 +606,35 @@ async function deleteSlideFromPackage(zip: JSZip, slidePath: string): Promise<vo
     zip.file('ppt/presentation.xml', presXml);
   }
 
-  // 3. Remove the Relationship from presentation rels.
+  // 4. Remove the Relationship from presentation rels.
   presRelsXml = presRelsXml.slice(0, tagStart) + presRelsXml.slice(tagEnd + 2);
   zip.file('ppt/_rels/presentation.xml.rels', presRelsXml);
 
-  // 4. Drop the slide's content-types override.
-  //    BUG FIX (2026-06-04): the previous regex used [^/>]* which can never
-  //    match because Override always carries ContentType="application/vnd..."
-  //    -- the `/` in the MIME type kills the character class. Result: the
-  //    Override entries survived but the slide files were removed from the
-  //    zip, so [Content_Types].xml referenced parts that no longer existed
-  //    and PowerPoint refused to open the deck. Switched to [^>]*? (lazy,
-  //    excludes only `>`) so the regex spans the full self-closing tag.
+  // 5. Drop the slide's content-types Override AND the notesSlide's Override
+  //    (if a notes slide was linked). The [^>]*? (lazy, excludes only `>`) is
+  //    required because Override carries ContentType="application/vnd..." and
+  //    a `/`-excluding class can never match across the MIME type.
   const slidePathEsc = escapeRegex(slidePath);
   ctXml = ctXml.replace(
     new RegExp(`<Override\\b[^>]*?\\bPartName="/${slidePathEsc}"[^>]*?/>`, 'g'),
     '',
   );
+  if (notesSlidePath) {
+    const notesPathEsc = escapeRegex(notesSlidePath);
+    ctXml = ctXml.replace(
+      new RegExp(`<Override\\b[^>]*?\\bPartName="/${notesPathEsc}"[^>]*?/>`, 'g'),
+      '',
+    );
+  }
   zip.file('[Content_Types].xml', ctXml);
 
-  // 5. Remove the slide xml + its rels file from the zip.
+  // 6. Remove the slide xml + its rels file from the zip.
   zip.remove(slidePath);
-  const slideRelsPath = slidePath.replace(/slides\/(slide\d+\.xml)$/, 'slides/_rels/$1.rels');
-  if (zip.file(slideRelsPath)) zip.remove(slideRelsPath);
+  if (slideRelsEntry) zip.remove(slideRelsPath);
+
+  // 7. Cascade-remove the orphaned notesSlide + its rels (if any).
+  if (notesSlidePath && zip.file(notesSlidePath))         zip.remove(notesSlidePath);
+  if (notesSlideRelsPath && zip.file(notesSlideRelsPath)) zip.remove(notesSlideRelsPath);
 }
 
 /**
