@@ -495,40 +495,51 @@ function extractSlideContent(slideXml: string): SlideContent {
 
 /**
  * Replace the contents of the Nth `<a:p>` paragraph (0-indexed by occurrence
- * order) with a single run carrying the first existing run's <a:rPr>. The
- * paragraph's <a:pPr> is preserved so bullet level / alignment survives.
+ * order) with a single run carrying the first existing run's <a:rPr>.
  *
- * If `newText` is empty or whitespace, the paragraph is emitted with only its
- * <a:pPr> and no runs — the existing `cleanupSlideXml` pass will then drop
- * the paragraph entirely.
+ * Preserves:
+ *   - <a:p> tag attributes (e.g. rtl, marL)
+ *   - <a:pPr> paragraph properties (bullet level, alignment)
+ *   - First run's <a:rPr> (font / size / colour) for the rewritten text
+ *   - <a:endParaRPr> end-of-paragraph marker that PowerPoint expects on
+ *     every paragraph; dropping it can cause "PowerPoint can't read"
+ *
+ * If `newText` is empty or whitespace, the paragraph is emitted with only
+ * <a:pPr> + <a:endParaRPr> (no runs) — visually empty but valid;
+ * cleanupSlideXml may then drop it if it has no useful content.
  */
 function replaceParagraphText(slideXml: string, paraIdx: number, newText: string): string {
-  const paraRe = /<a:p\b[^>]*>([\s\S]*?)<\/a:p>/g;
+  // Capture the opening <a:p ...> attributes so we don't lose them on emit.
+  const paraRe = /<a:p\b([^>]*)>([\s\S]*?)<\/a:p>/g;
   let i = 0;
-  return slideXml.replace(paraRe, (match, inner: string) => {
+  return slideXml.replace(paraRe, (match, openAttrs: string, inner: string) => {
     const myIdx = i++;
     if (myIdx !== paraIdx) return match;
 
-    const pPr = /<a:pPr\b[^/>]*(?:\/>|>[\s\S]*?<\/a:pPr>)/.exec(inner)?.[0] || '';
+    const pPr = /<a:pPr\b[^>]*?(?:\/>|>[\s\S]*?<\/a:pPr>)/.exec(inner)?.[0] || '';
+    const endParaRPr = /<a:endParaRPr\b[^>]*?(?:\/>|>[\s\S]*?<\/a:endParaRPr>)/.exec(inner)?.[0] || '';
 
-    // Preserve the first run's formatting so the rewritten text keeps the
-    // original font/size/colour. Falls back to no rPr if none was set.
+    // Preserve the first run's rPr so the rewritten text keeps font/size/colour.
     let rPr = '';
     const firstRunMatch = /<a:r\b[^>]*>([\s\S]*?)<\/a:r>/.exec(inner);
     if (firstRunMatch) {
-      rPr = /<a:rPr\b[^/>]*(?:\/>|>[\s\S]*?<\/a:rPr>)/.exec(firstRunMatch[1])?.[0] || '';
+      rPr = /<a:rPr\b[^>]*?(?:\/>|>[\s\S]*?<\/a:rPr>)/.exec(firstRunMatch[1])?.[0] || '';
     }
 
-    if (!newText.trim()) {
-      // Paragraph collapses to just its pPr; cleanupSlideXml will remove it.
-      return `<a:p>${pPr}</a:p>`;
-    }
-    const newRun = `<a:r>${rPr}<a:t>${encodeXmlEntities(newText)}</a:t></a:r>`;
-    return `<a:p>${pPr}${newRun}</a:p>`;
+    const trimmed = newText.trim();
+    const innerOut = trimmed
+      ? `${pPr}<a:r>${rPr}<a:t>${encodeXmlEntities(newText)}</a:t></a:r>${endParaRPr}`
+      : `${pPr}${endParaRPr}`;
+    return `<a:p${openAttrs}>${innerOut}</a:p>`;
   });
 }
 
 // ─── Slide deletion: remove a slide from the package atomically ──────────────
+
+/** Escape a string so it can be embedded literally inside a RegExp. */
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 /**
  * Remove one slide from the pptx package. Touches:
@@ -565,9 +576,12 @@ async function deleteSlideFromPackage(zip: JSZip, slidePath: string): Promise<vo
   const rid = /Id="([^"]+)"/.exec(relFullTag)?.[1];
 
   // 2. Remove the <p:sldId/> from presentation.xml.
+  //    Use [^>]*? (excludes only `>`, lazy) so attribute values that contain
+  //    `/` (theoretically possible) don't trip the regex.
   if (rid) {
+    const ridEsc = escapeRegex(rid);
     presXml = presXml.replace(
-      new RegExp(`<p:sldId\\b[^/>]*r:id="${rid}"[^/>]*/>`, 'g'),
+      new RegExp(`<p:sldId\\b[^>]*?\\br:id="${ridEsc}"[^>]*?/>`, 'g'),
       '',
     );
     zip.file('ppt/presentation.xml', presXml);
@@ -578,8 +592,16 @@ async function deleteSlideFromPackage(zip: JSZip, slidePath: string): Promise<vo
   zip.file('ppt/_rels/presentation.xml.rels', presRelsXml);
 
   // 4. Drop the slide's content-types override.
+  //    BUG FIX (2026-06-04): the previous regex used [^/>]* which can never
+  //    match because Override always carries ContentType="application/vnd..."
+  //    -- the `/` in the MIME type kills the character class. Result: the
+  //    Override entries survived but the slide files were removed from the
+  //    zip, so [Content_Types].xml referenced parts that no longer existed
+  //    and PowerPoint refused to open the deck. Switched to [^>]*? (lazy,
+  //    excludes only `>`) so the regex spans the full self-closing tag.
+  const slidePathEsc = escapeRegex(slidePath);
   ctXml = ctXml.replace(
-    new RegExp(`<Override\\b[^/>]*PartName="/${slidePath}"[^/>]*/>`, 'g'),
+    new RegExp(`<Override\\b[^>]*?\\bPartName="/${slidePathEsc}"[^>]*?/>`, 'g'),
     '',
   );
   zip.file('[Content_Types].xml', ctXml);
