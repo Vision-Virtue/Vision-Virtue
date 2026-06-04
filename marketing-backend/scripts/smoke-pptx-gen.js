@@ -67,7 +67,7 @@ const JSZip = require('jszip');
     customerXlsxPath: workerInput.filePath,
     outputPptxPath:   outPptx,
   });
-  console.log(`pptx stats: replaced=${stats.replaced}  slides=${stats.slidesProcessed}  unmatched=${stats.unmatched.length}`);
+  console.log(`pptx stats: replaced=${stats.replaced}  slidesProcessed=${stats.slidesProcessed}  slidesDeleted=${stats.slidesDeleted}  emptyRunsStripped=${stats.emptyRunsStripped}  unmatched=${stats.unmatched.length}`);
 
   // 4. Verify a couple of placeholders in the output slides
   const buf = await fs.readFile(outPptx);

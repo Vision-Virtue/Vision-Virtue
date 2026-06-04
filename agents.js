@@ -2815,6 +2815,21 @@ async function generatePptxDeck(d) {
     const card = document.createElement('div');
     card.className = 'partner-subs-folder';
     card.dataset.subId = sub.id;
+    // Customer key chip: shows VV-XXXXXX in the folder header. Authorized
+    // personnel can copy it to clipboard for the customer if they lose it.
+    const keyChip = sub.customerKey
+      ? `<span class="partner-subs-folder-key${sub.customerKeyRevoked ? ' is-revoked' : ''}"
+              data-customer-key="${htmlEsc(sub.customerKey)}"
+              title="${sub.customerKeyRevoked ? 'Key revoked' : 'Click to copy'}">
+           <span class="partner-subs-folder-key-label">KEY</span>
+           <span class="partner-subs-folder-key-val">${htmlEsc(sub.customerKey)}</span>
+           ${sub.customerKeyRevoked ? '<span class="partner-subs-folder-key-revoked">revoked</span>' : '<span class="partner-subs-folder-key-copy">⧉</span>'}
+         </span>`
+      : `<span class="partner-subs-folder-key is-missing" title="Customer key not found in database">
+           <span class="partner-subs-folder-key-label">KEY</span>
+           <span class="partner-subs-folder-key-val">—</span>
+         </span>`;
+
     card.innerHTML = `
       <button type="button" class="partner-subs-folder-head" aria-expanded="true">
         <svg class="partner-subs-folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -2824,6 +2839,7 @@ async function generatePptxDeck(d) {
           <div class="partner-subs-folder-name">${htmlEsc(sub.customerName) || '(no name)'}</div>
           <div class="partner-subs-folder-sub">Submitted ${htmlEsc(fmtDate(sub.submittedAt))}${sub.finalizedAt ? ' · Finalized ' + htmlEsc(fmtDate(sub.finalizedAt)) : ''}</div>
         </div>
+        ${keyChip}
         <span class="partner-status-pill ${pillCls}">${pillTxt}</span>
         <span class="partner-subs-folder-caret">▾</span>
       </button>
@@ -2831,6 +2847,34 @@ async function generatePptxDeck(d) {
         ${renderDeliverables(sub)}
       </div>
     `;
+
+    // Copy-to-clipboard handler on the key chip. Stops propagation so it
+    // doesn't toggle the folder open/closed.
+    const keyEl = card.querySelector('[data-customer-key]');
+    if (keyEl) {
+      keyEl.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        const key = keyEl.getAttribute('data-customer-key') || '';
+        try {
+          await navigator.clipboard.writeText(key);
+          const copy = keyEl.querySelector('.partner-subs-folder-key-copy');
+          if (copy) {
+            const original = copy.textContent;
+            copy.textContent = '✓';
+            setTimeout(() => { copy.textContent = original; }, 1100);
+          }
+        } catch {
+          // Clipboard API blocked (e.g. insecure context) — fall back to a
+          // text-area selection so the admin can still grab the value.
+          const ta = document.createElement('textarea');
+          ta.value = key;
+          document.body.appendChild(ta);
+          ta.select();
+          try { document.execCommand('copy'); } catch { /* nothing more to do */ }
+          ta.remove();
+        }
+      });
+    }
 
     const head = card.querySelector('.partner-subs-folder-head');
     const body = card.querySelector('.partner-subs-folder-body');
@@ -2945,11 +2989,15 @@ async function generatePptxDeck(d) {
         if (isPptx) {
           const stats = await res.json().catch(() => null);
           if (stats && typeof stats.replaced === 'number') {
-            const more = stats.unmatchedCount > 0 ? ` · ${stats.unmatchedCount} placeholder(s) unmatched` : '';
+            const unmatched = stats.unmatchedCount > 0 ? ` · ${stats.unmatchedCount} unmatched` : '';
+            const ai = stats.aiRewrite;
+            const rewrote = ai && (ai.paragraphsRewritten || ai.paragraphsCleared)
+              ? ` · AI rewrote ${ai.paragraphsRewritten}${ai.paragraphsCleared ? '/cleared ' + ai.paragraphsCleared : ''}`
+              : '';
             // Use a non-blocking flash on the button rather than an alert so
             // it doesn't interrupt the admin's flow on every regenerate.
-            btn.textContent = `✓ ${stats.replaced} replaced${more}`;
-            setTimeout(() => loadSubmissions(), 1200);
+            btn.textContent = `✓ ${stats.replaced} replaced${rewrote}${unmatched}`;
+            setTimeout(() => loadSubmissions(), 1800);
             return;
           }
         }
