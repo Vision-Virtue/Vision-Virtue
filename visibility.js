@@ -5,6 +5,23 @@
 
 const VIS_API = 'https://vv-marketing-api.onrender.com';
 
+// Admin shortcut: ?adminKey=VV-XXX[&adminName=...] lets Authorized Personnel
+// open a customer's portal directly from the Finance AI submissions list
+// without re-entering the key on the homepage modal. We populate the
+// sessionStorage handshake here so the auth check below passes; if the key
+// is bogus, the first API call will 401 and the user is bounced home.
+(function handleAdminKey() {
+  const params = new URLSearchParams(window.location.search);
+  const adminKey = params.get('adminKey');
+  if (!adminKey) return;
+  sessionStorage.setItem('vv_customer_auth', '1');
+  sessionStorage.setItem('vv_customer_key', adminKey);
+  sessionStorage.setItem('vv_customer_name', params.get('adminName') || 'Customer');
+  // Strip the auth bits from the URL so the key doesn't sit in the address
+  // bar (and a reload doesn't replay them after the user signs out).
+  history.replaceState({}, '', window.location.pathname + window.location.hash);
+})();
+
 // Auth check — same sessionStorage handshake as the partner area.
 if (sessionStorage.getItem('vv_customer_auth') !== '1') {
   window.location.replace('index.html');
@@ -878,7 +895,7 @@ function renderBudgetList() {
     li.innerHTML = `
       <div class="vis-budget-list-info">
         <div class="vis-budget-list-name">${htmlEsc(name)}</div>
-        <div class="vis-budget-list-meta">FY ${b.year} · ${b.granularity} · ${sym}${b.currency} · ${b.scale}${b.sbEnabled ? ' · S&B' : ''}</div>
+        <div class="vis-budget-list-meta">FY ${b.year} · ${b.granularity} · ${sym}${b.currency} · ${b.scale}${b.sbEnabled ? ' · S&B' : ''}${b.rcEnabled ? ' · R&C' : ''}</div>
       </div>
       ${statusBadge}
       <div class="vis-budget-list-actions">
@@ -981,6 +998,8 @@ function renderEditor() {
   renderFooterSummary();
   refreshSBSectionVisibility();
   if (currentBudget.budget.sbEnabled) void loadSalaries();
+  refreshRCSectionVisibility();
+  if (currentBudget.budget.rcEnabled) void loadRC();
 }
 
 function renderStatusPill() {
@@ -1012,6 +1031,7 @@ function renderSetupPills() {
     currency: setup.currency,
     scale: setup.scale,
     sbEnabled: String(setup.sbEnabled),
+    rcEnabled: String(setup.rcEnabled),
   };
   for (const group of document.querySelectorAll('.vis-pillgroup')) {
     const key = group.dataset.setup;
@@ -1031,7 +1051,7 @@ document.querySelectorAll('.vis-pillgroup').forEach(group => {
     if (!key || raw == null) return;
     let value;
     if (key === 'year') value = parseInt(raw, 10);
-    else if (key === 'sbEnabled') value = raw === 'true';
+    else if (key === 'sbEnabled' || key === 'rcEnabled') value = raw === 'true';
     else value = raw;
     const payload = { [key]: value };
     try {
@@ -1064,6 +1084,11 @@ document.querySelectorAll('.vis-pillgroup').forEach(group => {
       if (key === 'sbEnabled') {
         refreshSBSectionVisibility();
         if (currentBudget.budget.sbEnabled) void loadSalaries();
+      }
+      // Toggling R&C reveals or hides the Revenues & COGS panel.
+      if (key === 'rcEnabled') {
+        refreshRCSectionVisibility();
+        if (currentBudget.budget.rcEnabled) void loadRC();
       }
     } catch (err) {
       showBanner(bgEditorError, htmlEsc(`Save failed: ${(err && err.message) || err}`));
@@ -1119,19 +1144,20 @@ function parsePct(str) {
 // scale change is display-only; underlying values untouched).
 function scaleFactor(scale) { return scale === 'thousands' ? 1000 : 1; }
 
-/** Format a raw amount for display in a period input. Empty/zero → ''. */
+/** Format a raw amount for display in a period input. Empty/zero → ''.
+ *  Budget Structure stores only integers, so no decimal places are shown. */
 function fmtCellDisplay(raw, scale) {
   if (!Number.isFinite(raw) || raw === 0) return '';
-  return (raw / scaleFactor(scale)).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return (raw / scaleFactor(scale)).toLocaleString('en-US', { maximumFractionDigits: 0 });
 }
 
 /** Format an amount for display in read-only cells.
- *  Negative values render as (1,234.56) per accounting convention.
- *  Zero / empty → '—'. */
+ *  Negative values render as (1,234) per accounting convention.
+ *  Zero / empty → '—'. No decimals — Budget Structure is integers only. */
 function fmtAmountAccounting(raw, scale) {
   if (!Number.isFinite(raw) || raw === 0) return '—';
   const abs = Math.abs(raw / scaleFactor(scale));
-  const s = abs.toLocaleString('en-US', { maximumFractionDigits: 2 });
+  const s = abs.toLocaleString('en-US', { maximumFractionDigits: 0 });
   return raw < 0 ? `(${s})` : s;
 }
 
@@ -1140,7 +1166,7 @@ function fmtAmountAccounting(raw, scale) {
  *  Underlying signed value is preserved in the data + export. */
 function fmtAmountAbsDisplay(raw, scale) {
   if (!Number.isFinite(raw) || raw === 0) return '—';
-  return Math.abs(raw / scaleFactor(scale)).toLocaleString('en-US', { maximumFractionDigits: 2 });
+  return Math.abs(raw / scaleFactor(scale)).toLocaleString('en-US', { maximumFractionDigits: 0 });
 }
 
 /** Format a percentage. Negative → (xx.xx%). */
@@ -1246,7 +1272,8 @@ budgetTableBody.addEventListener('change', async (ev) => {
 
   if (field === 'cell') {
     const period = target.dataset.period;
-    const raw = parseCellInput(target.value, currentBudget.budget.scale);
+    // Budget Structure only stores integers — round any decimal input.
+    const raw = Math.round(parseCellInput(target.value, currentBudget.budget.scale));
     line.cells[period] = raw;
     // Reformat the cell with commas now that the user has finished typing
     // (change event fires on blur for text inputs).
@@ -1972,6 +1999,8 @@ sbEditBtn?.addEventListener('click', async () => {
       sbState.status = 'editing';
       refreshSBStatus();
       showBanner(sbInfoBanner, '');
+      // Reload rows from server so the table reflects the current state
+      await loadSalaries();
     }
   } catch (err) {
     showBanner(sbErrorBanner, htmlEsc(`Could not re-open: ${(err && err.message) || err}`));
@@ -2000,6 +2029,357 @@ sbDeleteRowBtn?.addEventListener('click', async () => {
     await loadSalaries();
   } catch (err) {
     showBanner(sbErrorBanner, htmlEsc(`Remove failed: ${(err && err.message) || err}`));
+  }
+});
+
+// ─────────────────────────────────────────────────────────────
+//  PHASE 3c-RC — Revenues & COGS module
+// ─────────────────────────────────────────────────────────────
+
+const rcSection     = document.getElementById('rcSection');
+const rcStatusPill  = document.getElementById('rcStatusPill');
+const rcTableHead   = document.getElementById('rcTableHead');
+const rcTableBody   = document.getElementById('rcTableBody');
+const rcEmpty       = document.getElementById('rcEmpty');
+const rcErrorBanner = document.getElementById('rcErrorBanner');
+const rcInfoBanner  = document.getElementById('rcInfoBanner');
+const rcSummary     = document.getElementById('rcSummary');
+const rcAddRowBtn   = document.getElementById('rcAddRowBtn');
+const rcDeleteRowBtn = document.getElementById('rcDeleteRowBtn');
+const rcFinalizeBtn = document.getElementById('rcFinalizeBtn');
+const rcEditBtn     = document.getElementById('rcEditBtn');
+
+let rcState = { status: 'editing', rows: [] };
+
+// Month keys in RC table are always monthly (12 columns) regardless of
+// budget granularity — the service aggregates when populating budget lines.
+const RC_MONTHS = ['M01','M02','M03','M04','M05','M06','M07','M08','M09','M10','M11','M12'];
+const RC_MONTH_LABELS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function refreshRCSectionVisibility() {
+  if (!rcSection || !currentBudget) return;
+  rcSection.hidden = !currentBudget.budget.rcEnabled;
+}
+
+function buildRCTableHead() {
+  if (!rcTableHead) return;
+  const year = currentBudget?.budget?.year || new Date().getFullYear();
+  const yy = String(year).slice(2);
+  const monthThs = RC_MONTH_LABELS.map((m, i) =>
+    `<th class="is-number vis-rc-qty-col">${m}-${yy}</th>`
+  ).join('');
+  rcTableHead.innerHTML = `<tr>
+    <th class="vis-col-num">#</th>
+    <th>Company</th>
+    <th>Division</th>
+    <th>Department</th>
+    <th>Product</th>
+    <th>Activity</th>
+    <th>Revenues GL</th>
+    <th class="is-number">Price</th>
+    <th>COGS GL</th>
+    <th class="is-number">Cost</th>
+    ${monthThs}
+    <th></th>
+  </tr>`;
+}
+
+async function loadRC() {
+  if (!currentBudget || !currentBudget.budget.rcEnabled) return;
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/rc`);
+    if (!res.ok) {
+      showBanner(rcErrorBanner, `Could not load Revenues & COGS (${res.status}).`);
+      return;
+    }
+    const data = await res.json();
+    rcState.status = data.status || 'editing';
+    rcState.rows   = data.rows   || [];
+    buildRCTableHead();
+    renderRCTable();
+    refreshRCStatus();
+    refreshRCValidation();
+  } catch (err) {
+    showBanner(rcErrorBanner, htmlEsc(`Could not load Revenues & COGS: ${(err && err.message) || err}`));
+  }
+}
+
+function refreshRCStatus() {
+  if (!rcStatusPill) return;
+  rcStatusPill.dataset.status = rcState.status;
+  rcStatusPill.textContent    = rcState.status === 'finalized' ? 'Finalized' : 'Editing';
+  document.body.classList.toggle('is-rc-finalized', rcState.status === 'finalized');
+  rcEditBtn.hidden     = rcState.status !== 'finalized';
+  rcFinalizeBtn.hidden = rcState.status === 'finalized';
+}
+
+function refreshRCValidation() {
+  const rows = rcState.rows || [];
+  const missingRevGl = rows.filter(r => !r.revGlId);
+  const hasMissingQty = rows.some(r =>
+    RC_MONTHS.every(m => !(Number(r.cells?.[m]) > 0))
+  );
+  let msg = '';
+  if (rows.length > 0 && missingRevGl.length > 0)
+    msg = `${missingRevGl.length} row${missingRevGl.length === 1 ? '' : 's'} need a Revenues GL before finalizing.`;
+  showBanner(rcErrorBanner, msg);
+  const canFinalize = rows.length > 0 && missingRevGl.length === 0;
+  rcFinalizeBtn.disabled = !canFinalize;
+  if (rows.length === 0) {
+    rcSummary.textContent = '';
+    rcSummary.className = 'vis-validation-summary';
+  } else if (missingRevGl.length > 0) {
+    rcSummary.textContent = `${rows.length} row${rows.length === 1 ? '' : 's'} · ${missingRevGl.length} missing Revenue GL`;
+    rcSummary.className = 'vis-validation-summary is-error';
+  } else {
+    rcSummary.textContent = `${rows.length} row${rows.length === 1 ? '' : 's'} · Ready to finalize`;
+    rcSummary.className = 'vis-validation-summary is-ready';
+  }
+}
+
+function buildRCGLOptions(selectedId, filter) {
+  // filter: 'revenues' → only GLs in Revenues section
+  //         'cogs'     → only GLs in COGS section
+  //         falsy      → all GLs
+  const all = (glRows || []);
+  const list = filter
+    ? all.filter(g => g.plSection === (filter === 'revenues' ? 'Revenues' : 'COGS'))
+    : all;
+  let html = '<option value="">— Select GL —</option>';
+  for (const g of list) {
+    const sel = g.id === selectedId ? ' selected' : '';
+    html += `<option value="${htmlEsc(g.id)}"${sel}>${htmlEsc(g.glName)}</option>`;
+  }
+  return html;
+}
+
+function renderRCTable() {
+  if (!rcTableBody) return;
+  clearRowSelection(rcTableBody, rcDeleteRowBtn);
+  rcTableBody.innerHTML = '';
+  const rows = rcState.rows || [];
+  rcEmpty.hidden = rows.length > 0;
+
+  const scale = currentBudget?.budget?.scale || 'standard';
+  const finalized = rcState.status === 'finalized';
+
+  rows.forEach((r, idx) => {
+    const tr = document.createElement('tr');
+    tr.dataset.id = r.id;
+
+    const monthCells = RC_MONTHS.map(m => {
+      const val = Number(r.cells?.[m]) || 0;
+      const disp = val === 0 ? '' : fmtCellDisplay(val, 'standard');
+      if (finalized) return `<td class="is-number is-readonly">${disp || '—'}</td>`;
+      return `<td class="is-number"><input type="text" inputmode="decimal" data-field="qty" data-month="${m}" value="${htmlEsc(disp)}" /></td>`;
+    }).join('');
+
+    const orgSelOrVal = (dim, id) => finalized
+      ? `<td>${htmlEsc(orgById(id) || '—')}</td>`
+      : `<td><select data-field="${dim}Id">${buildOrgOptions(dim, id)}</select></td>`;
+
+    const glSelOrVal = (field, id, filter) => finalized
+      ? `<td>${htmlEsc((glRows || []).find(g => g.id === id)?.glName || '—')}</td>`
+      : `<td><select data-field="${field}">${buildRCGLOptions(id, filter)}</select></td>`;
+
+    const numInputOrVal = (field, val) => finalized
+      ? `<td class="is-number is-readonly">${val ? fmtCellDisplay(val, 'standard') : '—'}</td>`
+      : `<td class="is-number"><input type="text" inputmode="decimal" data-field="${field}" value="${val ? htmlEsc(fmtCellDisplay(val, 'standard')) : ''}" /></td>`;
+
+    tr.innerHTML = `
+      <td>${idx + 1}</td>
+      ${orgSelOrVal('company',    r.companyId)}
+      ${orgSelOrVal('division',   r.divisionId)}
+      ${orgSelOrVal('department', r.departmentId)}
+      ${orgSelOrVal('product',    r.productId)}
+      ${orgSelOrVal('activity',   r.activityId)}
+      ${glSelOrVal('revGlId',  r.revGlId,  'revenues')}
+      ${numInputOrVal('price', r.price)}
+      ${glSelOrVal('cogsGlId', r.cogsGlId, 'cogs')}
+      ${numInputOrVal('cost',  r.cost)}
+      ${monthCells}
+      <td class="is-actions">${finalized ? '' : '<button type="button" class="vis-budget-line-rm" data-action="rc-remove" aria-label="Remove">×</button>'}</td>
+    `;
+    rcTableBody.appendChild(tr);
+  });
+}
+
+// Helper: name of org entity by id
+function orgById(id) {
+  if (!id) return null;
+  for (const dim of ORG_DIMENSIONS) {
+    const found = (osEntities[dim] || []).find(e => e.id === id);
+    if (found) return found.name;
+  }
+  return null;
+}
+
+async function rcPatch(rowId, fields) {
+  try {
+    const res = await api(
+      `/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/rc/${encodeURIComponent(rowId)}`,
+      { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(fields) },
+    );
+    if (!res.ok) {
+      const er = await res.json().catch(() => ({}));
+      showBanner(rcErrorBanner, htmlEsc(er?.error?.message || `Save failed (${res.status}).`));
+    }
+  } catch (err) {
+    showBanner(rcErrorBanner, htmlEsc(`Save failed: ${(err && err.message) || err}`));
+  }
+}
+
+// Add row
+rcAddRowBtn?.addEventListener('click', async () => {
+  if (!currentBudget || rcState.status === 'finalized') return;
+  try {
+    const res = await api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/rc`, { method: 'POST' });
+    if (!res.ok) { showBanner(rcErrorBanner, `Could not add row (${res.status}).`); return; }
+    const data = await res.json();
+    rcState.rows.push(data.row);
+    renderRCTable();
+    refreshRCValidation();
+  } catch (err) {
+    showBanner(rcErrorBanner, htmlEsc(`Could not add row: ${(err && err.message) || err}`));
+  }
+});
+
+// Delete selected rows
+rcDeleteRowBtn?.addEventListener('click', async () => {
+  if (!currentBudget || rcState.status === 'finalized') return;
+  const selectedIds = [...rcTableBody.querySelectorAll('tr.is-selected')].map(tr => tr.dataset.id);
+  if (selectedIds.length === 0) return;
+  try {
+    await Promise.all(selectedIds.map(id =>
+      api(`/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/rc/${encodeURIComponent(id)}`, { method: 'DELETE' })
+    ));
+    rcState.rows = rcState.rows.filter(r => !selectedIds.includes(r.id));
+    clearRowSelection(rcTableBody, rcDeleteRowBtn);
+    renderRCTable();
+    refreshRCValidation();
+  } catch (err) {
+    showBanner(rcErrorBanner, htmlEsc(`Delete failed: ${(err && err.message) || err}`));
+  }
+});
+
+// Row selection (uses the same clearRowSelection / toggle as budget/salaries tables)
+rcTableBody?.addEventListener('click', (ev) => {
+  if (rcState.status === 'finalized') return;
+  const tr = ev.target.closest('tr');
+  if (!tr || ev.target.closest('select') || ev.target.closest('input') || ev.target.closest('button')) return;
+  tr.classList.toggle('is-selected');
+  const count = rcTableBody.querySelectorAll('tr.is-selected').length;
+  if (rcDeleteRowBtn) rcDeleteRowBtn.disabled = count === 0;
+});
+
+// Remove icon inside a row
+rcTableBody?.addEventListener('click', async (ev) => {
+  const btn = ev.target.closest('[data-action="rc-remove"]');
+  if (!btn || !currentBudget || rcState.status === 'finalized') return;
+  const tr = btn.closest('tr');
+  if (!tr) return;
+  const id = tr.dataset.id;
+  try {
+    const res = await api(
+      `/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/rc/${encodeURIComponent(id)}`,
+      { method: 'DELETE' }
+    );
+    if (res.ok) {
+      rcState.rows = rcState.rows.filter(r => r.id !== id);
+      renderRCTable();
+      refreshRCValidation();
+    }
+  } catch (err) {
+    showBanner(rcErrorBanner, htmlEsc(`Remove failed: ${(err && err.message) || err}`));
+  }
+});
+
+// Field changes → PATCH
+rcTableBody?.addEventListener('change', async (ev) => {
+  if (rcState.status === 'finalized') return;
+  const target = ev.target;
+  if (!(target instanceof HTMLElement)) return;
+  const tr = target.closest('tr');
+  if (!tr) return;
+  const id = tr.dataset.id;
+  const row = rcState.rows.find(r => r.id === id);
+  if (!row) return;
+  const field = target.dataset.field;
+  if (!field) return;
+
+  if (field === 'qty') {
+    // Monthly quantity cell
+    const month = target.dataset.month;
+    if (!month) return;
+    const val = parseCellInput(target.value, 'standard');
+    if (!row.cells) row.cells = {};
+    row.cells[month] = val;
+    target.value = val === 0 ? '' : fmtCellDisplay(val, 'standard');
+    // Build full cells from current DOM to save all 12 months at once
+    const allCells = {};
+    RC_MONTHS.forEach(m => {
+      const inp = tr.querySelector(`input[data-month="${m}"]`);
+      const v = inp ? parseCellInput(inp.value, 'standard') : (row.cells?.[m] || 0);
+      allCells[m] = v;
+    });
+    await rcPatch(id, { cells: allCells });
+  } else if (field === 'price' || field === 'cost') {
+    const val = parseCellInput(target.value, 'standard');
+    row[field] = val;
+    target.value = val === 0 ? '' : fmtCellDisplay(val, 'standard');
+    await rcPatch(id, { [field]: val });
+  } else if (field === 'revGlId' || field === 'cogsGlId') {
+    const val = target.value || null;
+    row[field] = val;
+    await rcPatch(id, { [field]: val });
+    refreshRCValidation();
+  } else if (['companyId','divisionId','departmentId','productId','activityId'].includes(field)) {
+    const val = target.value || null;
+    row[field] = val;
+    await rcPatch(id, { [field]: val });
+  }
+});
+
+// Finalize
+rcFinalizeBtn?.addEventListener('click', async () => {
+  if (!currentBudget || rcState.status === 'finalized') return;
+  try {
+    const res = await api(
+      `/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/rc/finalize`,
+      { method: 'POST' }
+    );
+    const data = await res.json();
+    if (!res.ok) {
+      showBanner(rcErrorBanner, htmlEsc(data?.error?.message || `Finalize failed (${res.status}).`));
+      return;
+    }
+    rcState.status = 'finalized';
+    refreshRCStatus();
+    renderRCTable();
+    showBanner(rcInfoBanner, `Revenues & COGS finalized — ${data.pivotCount} budget line${data.pivotCount === 1 ? '' : 's'} created.`);
+    // Reload budget lines to show the newly created RC lines in the Budget Structure
+    await openBudget(currentBudget.budget.id);
+  } catch (err) {
+    showBanner(rcErrorBanner, htmlEsc(`Finalize failed: ${(err && err.message) || err}`));
+  }
+});
+
+// Edit (re-open finalized RC)
+rcEditBtn?.addEventListener('click', async () => {
+  if (!currentBudget) return;
+  try {
+    const res = await api(
+      `/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/rc/edit`,
+      { method: 'POST' }
+    );
+    if (res.ok) {
+      rcState.status = 'editing';
+      refreshRCStatus();
+      renderRCTable();
+      showBanner(rcInfoBanner, '');
+    }
+  } catch (err) {
+    showBanner(rcErrorBanner, htmlEsc(`Edit failed: ${(err && err.message) || err}`));
   }
 });
 
@@ -2043,11 +2423,12 @@ function setView(view) {
   }
   if (structureSection) structureSection.hidden = view !== 'structure';
   if (sbSection)        sbSection.hidden        = view !== 'structure' || !currentBudget?.budget?.sbEnabled;
+  if (rcSection)        rcSection.hidden        = view !== 'structure' || !currentBudget?.budget?.rcEnabled;
   if (pivotSection)     pivotSection.hidden     = view !== 'pivot';
   const dash = document.getElementById('dashboardSection');
   if (dash) dash.hidden = view !== 'dashboard';
   if (view === 'pivot')     void refreshPivot();
-  if (view === 'dashboard') renderDashboard();
+  if (view === 'dashboard') void renderBudgetDashboard();
 }
 
 for (const t of viewTabs) {
@@ -2425,6 +2806,98 @@ function fmtThousandsSigned(v) {
     : n.toLocaleString('en-US');
 }
 
+// Derive dashboard KPIs from the server-computed P&L pivot (groups array).
+// Works with any section names — matches by substring so 'Financial Income/(Expenses)'
+// and similar non-standard names are still counted.
+function computeDashboardAggFromPivot(pivotData) {
+  if (!pivotData) return null;
+  const groups = pivotData.groups || [];
+  if (groups.length === 0) return null;
+
+  // Verify there's ANY non-zero data in the pivot at all
+  const hasData = groups.some(g => Math.abs(g.fyTotal || 0) > 0);
+  if (!hasData) return null;
+
+  const byName = new Map(groups.map(g => [g.plSection, g]));
+  const absTotal = (sec) => Math.abs(byName.get(sec)?.fyTotal || 0);
+
+  // Standard P&L sections
+  const totalRev  = absTotal('Revenues');
+  const totalCogs = absTotal('COGS');
+  const totalRnd  = absTotal('R&D');
+  const totalSm   = absTotal('S&M');
+  const totalGa   = absTotal('G&A');
+  const totalOpex = totalRnd + totalSm + totalGa;
+
+  // Revenue by category from pivot — Revenues section categories
+  const revGroup = byName.get('Revenues');
+  const revByCategory = (revGroup?.categories || []).map(c => ({
+    name: c.name, value: Math.abs(c.fyTotal || 0),
+  })).filter(d => d.value > 0);
+
+  // If no standard Revenues group, build a "Total Revenue" category from all revenue-like groups
+  // by showing ALL sections in the mix chart
+  const finalRevByCategory = revByCategory.length > 0 ? revByCategory :
+    groups.filter(g => Math.abs(g.fyTotal || 0) > 0).map(g => ({
+      name: g.plSection, value: Math.abs(g.fyTotal || 0),
+    }));
+
+  // Revenue by quarter from pivot period cells
+  const periodKeys = pivotData.periodKeys || [];
+  const revCells = revGroup?.cells || {};
+  const sumMonths = (...keys) => keys.reduce((s, k) => s + Math.abs(revCells[k] || 0), 0);
+  let revByQuarter;
+  if (periodKeys.some(k => k.startsWith('M'))) {
+    revByQuarter = {
+      Q1: sumMonths('M01','M02','M03'), Q2: sumMonths('M04','M05','M06'),
+      Q3: sumMonths('M07','M08','M09'), Q4: sumMonths('M10','M11','M12'),
+    };
+  } else if (periodKeys.some(k => k.startsWith('Q'))) {
+    revByQuarter = {
+      Q1: Math.abs(revCells.Q1||0), Q2: Math.abs(revCells.Q2||0),
+      Q3: Math.abs(revCells.Q3||0), Q4: Math.abs(revCells.Q4||0),
+    };
+  } else {
+    const q = totalRev / 4;
+    revByQuarter = { Q1: q, Q2: q, Q3: q, Q4: q };
+  }
+
+  // Salaries & benefits from all sections' categories
+  let salariesAndBenefits = 0;
+  for (const g of groups) {
+    for (const c of g.categories || []) {
+      if (c.name === 'Salaries and benefits') salariesAndBenefits += Math.abs(c.fyTotal || 0);
+    }
+  }
+
+  // If no standard OPEX, treat all non-Revenue non-COGS groups as OPEX
+  const effectiveTotalOpex = totalOpex > 0 ? totalOpex :
+    groups.filter(g => g.plSection !== 'Revenues' && g.plSection !== 'COGS')
+          .reduce((s, g) => s + Math.abs(g.fyTotal || 0), 0);
+
+  // Effective revenue = largest value among all groups (Revenues preferred)
+  const effectiveTotalRev = totalRev > 0 ? totalRev :
+    Math.max(...groups.map(g => Math.abs(g.fyTotal || 0)), 0);
+
+  return {
+    totalRev: effectiveTotalRev,
+    totalCogs,
+    totalOpex: effectiveTotalOpex,
+    salariesAndBenefits,
+    gmPct: effectiveTotalRev > 0 ? ((effectiveTotalRev - totalCogs) / effectiveTotalRev) * 100 : 0,
+    opexPct: effectiveTotalRev > 0 ? (effectiveTotalOpex / effectiveTotalRev) * 100 : 0,
+    salariesOpexPct: effectiveTotalOpex > 0 ? (salariesAndBenefits / effectiveTotalOpex) * 100 : 0,
+    revByCategory: finalRevByCategory,
+    revByQuarter,
+    revByProduct:    [],
+    ebitdaByProduct: [],
+    opexByActivity:  [],
+    ebitdaByDivision:[],
+    opexByDepartment:[],
+    _fromPivot: true,
+  };
+}
+
 function computeDashboardAgg() {
   if (!currentBudget) return null;
   const lines = currentBudget.lines || [];
@@ -2588,45 +3061,90 @@ function dashEmptyCheck(agg) {
   return sum === 0;
 }
 
-function renderDashboard() {
+async function renderBudgetDashboard() {
   const dash = document.getElementById('dashboardSection');
   if (!dash) return;
   // Chart.js loads via CDN with `defer`; retry shortly if the user
   // opens the Dashboard tab before it lands.
   if (typeof Chart === 'undefined') {
-    setTimeout(renderDashboard, 60);
+    setTimeout(() => void renderBudgetDashboard(), 100);
     return;
   }
-  // Register the datalabels plugin if available. We don't block on
-  // it — if the CDN is blocked (ad blockers, CSP, offline) the
-  // dashboard still renders, just without value labels.
+  // Register the datalabels plugin if available.
   try {
     if (typeof ChartDataLabels !== 'undefined'
         && Chart.registry?.plugins?.get
         && !Chart.registry.plugins.get('datalabels')) {
       Chart.register(ChartDataLabels);
     }
-  } catch (_e) { /* registration is best-effort */ }
-  const agg = computeDashboardAgg();
-  const empty = dashEmptyCheck(agg);
+  } catch (_e) { /* best-effort */ }
+
+  // Show a loading hint while we fetch
   const dashEmpty = document.getElementById('dashEmpty');
+  const scaleHint = document.getElementById('dashScaleHint');
+  dashEmpty.hidden = false;
+  dashEmpty.textContent = 'Loading dashboard…';
+  if (scaleHint) scaleHint.hidden = true;
+
+  // ── Always fetch the authoritative server-computed pivot ──────
+  // (Do this even if lastPivotData is already set — ensures fresh data
+  //  and is the ONLY reliable way to populate the dashboard regardless
+  //  of whether glRows has plSection mappings loaded client-side.)
+  if (currentBudget) {
+    try {
+      const pvRes = await api(
+        `/api/visibility/budgets/${encodeURIComponent(currentBudget.budget.id)}/pivot`,
+      );
+      if (pvRes.ok) lastPivotData = await pvRes.json();
+    } catch (_e) { /* best-effort — fall through to client-side path */ }
+  }
+
+  // Primary path: server pivot (authoritative for top-line KPIs)
+  let agg = lastPivotData ? computeDashboardAggFromPivot(lastPivotData) : null;
+
+  // Client-side path: always run so we have dimensional data
+  // (per-Product / per-Activity / per-Department / per-Division breakdowns
+  //  are derived from currentBudget.lines org FKs — the pivot API doesn't expose them).
+  const clientAgg = computeDashboardAgg();
+
+  if (agg && clientAgg) {
+    // Merge: keep pivot's accurate totals but fill in dimensional arrays from client-side.
+    agg = Object.assign({}, agg, {
+      revByProduct:    clientAgg.revByProduct,
+      ebitdaByProduct: clientAgg.ebitdaByProduct,
+      opexByActivity:  clientAgg.opexByActivity,
+      ebitdaByDivision: clientAgg.ebitdaByDivision,
+      opexByDepartment: clientAgg.opexByDepartment,
+      // Prefer client-side category breakdown (handles granularity) unless pivot gave one
+      revByCategory: agg.revByCategory.length > 0 ? agg.revByCategory : clientAgg.revByCategory,
+      // Client-side quarterly split respects the budget's granularity setting
+      revByQuarter: clientAgg.revByQuarter,
+      // Client-side salaries computation is more precise (category-level filter)
+      salariesAndBenefits: clientAgg.salariesAndBenefits > 0
+        ? clientAgg.salariesAndBenefits : agg.salariesAndBenefits,
+    });
+  } else if (!agg) {
+    // No pivot data — fall back entirely to client-side
+    agg = clientAgg;
+  }
+
+  const empty = dashEmptyCheck(agg);
   dashEmpty.hidden = !empty;
   // Be specific about *why* the dashboard is empty so the user knows
   // whether to add Structure rows or fill in amounts.
   if (empty) {
     const lineCount = (currentBudget?.lines || []).length;
+    const pivotGroups = lastPivotData?.groups?.length || 0;
     if (lineCount === 0) {
       dashEmpty.textContent = 'No data to visualize. Add Budget Structure rows first.';
+    } else if (pivotGroups > 0) {
+      dashEmpty.textContent = 'Budget structure exists but all amounts are zero. Fill in the monthly cell values to see the dashboard.';
     } else {
       dashEmpty.textContent = `Structure has ${lineCount} row${lineCount === 1 ? '' : 's'} but no amounts have been entered yet. Fill in monthly cells to see the dashboard.`;
     }
-  }
-  document.getElementById('dashScaleHint').hidden = empty;
-  document.getElementById('dashScaleHint').innerHTML =
-    `All amounts are shown in <strong>thousands</strong> (rounded). Source: this budget's Structure rows.`;
-  destroyDashCharts();
-  if (empty) {
-    // Clear KPI text too.
+    // Early return — agg may be null here so we must not access agg._fromPivot below.
+    document.getElementById('dashScaleHint').hidden = true;
+    destroyDashCharts();
     document.getElementById('dashTotalRev').textContent  = '—';
     document.getElementById('dashGmPct').textContent     = '—';
     document.getElementById('dashTotalOpex').textContent = '—';
@@ -2635,6 +3153,12 @@ function renderDashboard() {
     document.getElementById('dashSalariesAbs').textContent = '—';
     return;
   }
+  // agg is guaranteed non-null past this point.
+  document.getElementById('dashScaleHint').hidden = false;
+  document.getElementById('dashScaleHint').innerHTML = agg._fromPivot
+    ? `All amounts are shown in <strong>thousands</strong> (rounded). Source: P&L Pivot (server-computed). Product/division charts require GL → plSection mapping in Financial Structure.`
+    : `All amounts are shown in <strong>thousands</strong> (rounded). Source: this budget's Structure rows.`;
+  destroyDashCharts();
 
   // ── Top-line KPIs ─────────────────────────────────────────
   document.getElementById('dashTotalRev').textContent  = fmtThousands(agg.totalRev);
@@ -5242,4 +5766,430 @@ function formatTileMoney(v) {
     showBanner(osErrorBanner, htmlEsc(`Could not load Organizational Structure: ${(err && err.message) || err}`));
   }
   renderOrg();
+})();
+
+// ============================================================
+//  MARCUS VALE — CFO ADVISOR
+//  Slide-in chat panel connected to all 6 Visibility steps.
+// ============================================================
+(function setupCfoAdvisor() {
+
+  // ── DOM refs ──────────────────────────────────────────────
+  const engageBtn  = document.getElementById('cfoEngageBtn');
+  const panel      = document.getElementById('cfoPanel');
+  const closeBtn   = document.getElementById('cfoPanelClose');
+  const backdrop   = document.getElementById('cfoBackdrop');
+  const messagesEl = document.getElementById('cfoMessages');
+  const inputEl    = document.getElementById('cfoInput');
+  const sendBtn    = document.getElementById('cfoSendBtn');
+
+  if (!engageBtn || !panel || !messagesEl || !inputEl || !sendBtn) return;
+
+  // ── Conversation history (for multi-turn context) ─────────
+  let cfoHistory = [];
+  let greeted    = false;
+  let busy       = false;
+
+  // ── Open / close ──────────────────────────────────────────
+  function openPanel() {
+    panel.classList.add('is-open');
+    panel.setAttribute('aria-hidden', 'false');
+    backdrop.classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+    if (!greeted) { greet(); greeted = true; }
+    setTimeout(() => inputEl.focus(), 350);
+  }
+
+  function closePanel() {
+    panel.classList.remove('is-open');
+    panel.setAttribute('aria-hidden', 'true');
+    backdrop.classList.remove('is-open');
+    document.body.style.overflow = '';
+  }
+
+  engageBtn.addEventListener('click', openPanel);
+  closeBtn.addEventListener('click', closePanel);
+  backdrop.addEventListener('click', closePanel);
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && panel.classList.contains('is-open')) closePanel();
+  });
+
+  // ── Greeting (static, no API call) ───────────────────────
+  function greet() {
+    const steps = [];
+    if (fsStatus === 'completed')  steps.push('Financial Structure');
+    if (osStatus === 'completed')  steps.push('Organizational Structure');
+    if (currentBudget)             steps.push('Budget');
+    if (lastPivotData)             steps.push('P&L');
+    if (currentCf)                 steps.push('CF Structure');
+    if (currentForecast)           steps.push('CF Forecast');
+
+    let greeting;
+    if (steps.length === 0) {
+      greeting = "Your workspace is empty. Start with Step 1 — Financial Structure. Upload your GL list and map every account to a P&L section. That's the foundation everything else sits on.";
+    } else {
+      greeting = `Your data is on my desk. I can see: ${steps.join(', ')}. Ask me about your structure, margins, cost drivers, anomalies, or cash position. Make it count.`;
+    }
+    appendCfoMessage(greeting, 'cfo', true);
+  }
+
+  // ── Context snapshot (sent with every message) ───────────
+  function gatherContext() {
+    const ctx = {};
+
+    // Step 1: Financial Structure
+    ctx.financialStructure = {
+      status: fsStatus,
+      totalAccounts: glRows.length,
+      mapped: glRows.filter(r => r.plSection && r.budgetCategory).length,
+      unmapped: glRows.filter(r => !r.plSection || !r.budgetCategory).length,
+      bySection: {}
+    };
+    glRows.forEach(r => {
+      if (!r.plSection) return;
+      if (!ctx.financialStructure.bySection[r.plSection]) ctx.financialStructure.bySection[r.plSection] = [];
+      ctx.financialStructure.bySection[r.plSection].push({
+        glNumber: r.glNumber,
+        glName: r.glName,
+        category: r.budgetCategory === (dropdowns.yourBudgetCategoryToken || 'Your Budget Category')
+          ? r.budgetCategoryCustom : r.budgetCategory,
+        inventoryRelated: r.inventoryRelated
+      });
+    });
+
+    // Step 2: Org Structure
+    ctx.orgStructure = {
+      status: osStatus,
+      companies:   (osEntities.company   || []).map(e => e.name || e),
+      divisions:   (osEntities.division  || []).map(e => e.name || e),
+      departments: (osEntities.department|| []).map(e => e.name || e),
+      products:    (osEntities.product   || []).map(e => e.name || e),
+      activities:  (osEntities.activity  || []).map(e => e.name || e),
+    };
+
+    // Step 3: Budget — cells is a {M01:..,M02:..} object, NOT an array
+    if (currentBudget) {
+      const b = currentBudget.budget;
+      ctx.budget = {
+        name: b.name, currency: b.currency, granularity: b.granularity,
+        scale: b.scale, year: b.year, status: b.status,
+        totalLines: (currentBudget.lines || []).length,
+        linesBySection: {}
+      };
+      (currentBudget.lines || []).forEach(line => {
+        const gl = findGL(line.glAccountId);
+        const sec = gl?.plSection || 'Unmapped';
+        const category = gl
+          ? (gl.budgetCategory === (dropdowns.yourBudgetCategoryToken || 'Your Budget Category')
+             ? gl.budgetCategoryCustom : gl.budgetCategory)
+          : null;
+        if (!ctx.budget.linesBySection[sec]) ctx.budget.linesBySection[sec] = { lines: [], total: 0 };
+        // line.cells is { M01: val, M02: val, … } — use Object.values to sum
+        const total = Object.values(line.cells || {}).reduce((s, v) => s + (Number(v) || 0), 0);
+        ctx.budget.linesBySection[sec].lines.push({
+          category,
+          provider: line.serviceProviderName,
+          description: line.serviceDescription,
+          total
+        });
+        ctx.budget.linesBySection[sec].total += total;
+      });
+    }
+
+    // Step 4: P&L Pivot — use server-computed groups (lastPivotData.groups, NOT .sections/.totals)
+    if (lastPivotData) {
+      const groups = lastPivotData.groups || [];
+      ctx.plSummary = {
+        available: true,
+        periodKeys: lastPivotData.periodKeys || [],
+        sections: groups.map(g => ({
+          section: g.plSection,
+          fyTotal: g.fyTotal,
+          categories: (g.categories || []).map(c => ({ name: c.name, fyTotal: c.fyTotal }))
+        }))
+      };
+    }
+
+    // Step 5: CF Structure — pass full settings so CFO can assess WC params
+    if (currentCf) {
+      ctx.cfStructure = {
+        budgetName:     currentCf.budget?.name || null,
+        openingBalance: currentCf.cf?.openingBalance ?? null,
+        status:         currentCf.cf?.status || null,
+        granularity:    currentCf.budget?.granularity || null,
+        periodKeys:     currentCf.periodKeys || [],
+      };
+      // Payables section (if user has navigated to it)
+      if (currentPayables && currentPayables.payables) {
+        const pRows = currentPayables.payables.rows || [];
+        ctx.cfStructure.payables = {
+          openingBalance: currentPayables.payables.openingBalance ?? 0,
+          rowCount: pRows.length,
+          rows: pRows.map(r => ({
+            plSection:   r.plSection,
+            category:    r.budgetCategory,
+            paymentTerm: r.paymentTerm,
+            fyExpense:   r.fyExpense,
+            fyPayment:   r.fyPayment,
+          })),
+        };
+      }
+      // Receivables section
+      if (currentReceivables && currentReceivables.receivables) {
+        const rRows = currentReceivables.receivables.rows || [];
+        ctx.cfStructure.receivables = {
+          openingBalance: currentReceivables.receivables.openingBalance ?? 0,
+          rowCount: rRows.length,
+          rows: rRows.map(r => ({
+            plSection:      r.plSection,
+            category:       r.budgetCategory,
+            paymentTerm:    r.paymentTerm,
+            fyRevenue:      r.fyRevenue,
+            fyCollection:   r.fyCollection,
+          })),
+        };
+      }
+      // Inventory section
+      if (currentInventory && currentInventory.inventory) {
+        const iRows = currentInventory.inventory.rows || [];
+        ctx.cfStructure.inventory = {
+          openingBalance: currentInventory.inventory.openingBalance ?? 0,
+          rowCount: iRows.length,
+          rows: iRows.map(r => ({
+            plSection:   r.plSection,
+            category:    r.budgetCategory,
+            paymentTerm: r.paymentTerm,
+            fyAmount:    r.fyAmount,
+          })),
+        };
+      }
+      // Salaries section
+      if (currentSalaries && currentSalaries.salaries) {
+        const sRows = currentSalaries.salaries.rows || [];
+        ctx.cfStructure.salaries = {
+          openingBalance: currentSalaries.salaries.openingBalance ?? 0,
+          rowCount: sRows.length,
+          rows: sRows.map(r => ({
+            description:  r.description,
+            fyTotal:      r.fyTotal,
+          })),
+        };
+      }
+    }
+
+    // Step 6: CF Forecast — pass actual numbers per period
+    if (currentForecast) {
+      const pks  = currentForecast.periodKeys || [];
+      const rows = currentForecast.rows || {};
+      // Build per-period breakdown
+      const periods = {};
+      for (const pk of pks) {
+        periods[pk] = {
+          openingBalance: rows.ob?.[pk]        ?? 0,
+          ebitda:         rows.ebitda?.[pk]    ?? 0,
+          workingCapital: rows.wc?.[pk]        ?? 0,
+          salaries:       rows.salaries?.[pk]  ?? 0,
+          otherAdj:       rows.otherAdj?.[pk]  ?? 0,
+          financing:      rows.financing?.[pk] ?? 0,
+          capex:          rows.capex?.[pk]     ?? 0,
+          closingBalance: rows.cb?.[pk]        ?? 0,
+        };
+      }
+      // Compute summary metrics for quick CFO assessment
+      const cbValues          = pks.map(pk => rows.cb?.[pk] ?? 0);
+      const minClosingBalance = cbValues.length ? Math.min(...cbValues) : null;
+      const finalBalance      = cbValues.length ? cbValues[cbValues.length - 1] : null;
+      const negativePeriods   = pks.filter(pk => (rows.cb?.[pk] ?? 0) < 0);
+      ctx.cfForecast = {
+        granularity: currentForecast.granularity,
+        periodKeys:  pks,
+        periods,
+        wcBreakdown: currentForecast.wcBreakdown || null,
+        summary: {
+          minClosingBalance,
+          finalClosingBalance:    finalBalance,
+          periodsWithNegativeCash: negativePeriods,
+        },
+      };
+    }
+
+    return ctx;
+  }
+
+  // ── Message rendering ─────────────────────────────────────
+  function appendUserMessage(text) {
+    const div = document.createElement('div');
+    div.className = 'cfo-msg cfo-msg-user';
+    div.innerHTML = `<div class="cfo-msg-bubble">${htmlEsc(text)}</div>`;
+    messagesEl.appendChild(div);
+    scrollToBottom();
+  }
+
+  function parseCfoXml(raw) {
+    // Extract the four sections from the CFO XML response
+    function extract(tag) {
+      const m = raw.match(new RegExp(`<${tag}>([\s\S]*?)<\/${tag}>`));
+      return m ? m[1].trim() : '';
+    }
+    return {
+      analysis:     extract('analysis'),
+      actionItems:  extract('action_items'),
+      flags:        extract('flags'),
+      nextQuestion: extract('next_question'),
+    };
+  }
+
+  function appendCfoMessage(raw, _role = 'cfo', isGreeting = false) {
+    const div = document.createElement('div');
+    div.className = 'cfo-msg cfo-msg-cfo';
+
+    if (isGreeting || !raw.includes('<cfo_response>')) {
+      // Plain text (greeting or fallback)
+      div.innerHTML = `<div class="cfo-msg-bubble">${htmlEsc(raw)}</div>`;
+    } else {
+      const p = parseCfoXml(raw);
+      const sections = [];
+
+      if (p.analysis) {
+        sections.push(`<div class="cfo-response-section">
+          <div class="cfo-response-label">Analysis</div>
+          <div class="cfo-response-body">${htmlEsc(p.analysis)}</div>
+        </div>`);
+      }
+      if (p.actionItems) {
+        sections.push(`<div class="cfo-response-section">
+          <div class="cfo-response-label">Action Items</div>
+          <div class="cfo-response-body">${htmlEsc(p.actionItems)}</div>
+        </div>`);
+      }
+      if (p.flags && p.flags.toLowerCase() !== 'none identified.') {
+        sections.push(`<div class="cfo-response-section cfo-response-flags">
+          <div class="cfo-response-label">⚑ Flags</div>
+          <div class="cfo-response-body">${htmlEsc(p.flags)}</div>
+        </div>`);
+      }
+      if (p.nextQuestion) {
+        sections.push(`<div class="cfo-response-section cfo-response-next">
+          <div class="cfo-response-label">Next Step</div>
+          <div class="cfo-response-body">${htmlEsc(p.nextQuestion)}</div>
+        </div>`);
+      }
+
+      div.innerHTML = `<div class="cfo-msg-bubble">
+        <div class="cfo-response">${sections.join('') || htmlEsc(raw)}</div>
+      </div>`;
+    }
+
+    messagesEl.appendChild(div);
+    scrollToBottom();
+  }
+
+  function appendTyping() {
+    const div = document.createElement('div');
+    div.className = 'cfo-msg cfo-msg-cfo';
+    div.id = 'cfoTyping';
+    div.innerHTML = `<div class="cfo-typing">
+      <div class="cfo-typing-dot"></div>
+      <div class="cfo-typing-dot"></div>
+      <div class="cfo-typing-dot"></div>
+    </div>`;
+    messagesEl.appendChild(div);
+    scrollToBottom();
+  }
+
+  function removeTyping() {
+    const t = document.getElementById('cfoTyping');
+    if (t) t.remove();
+  }
+
+  function scrollToBottom() {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  // ── Send message ──────────────────────────────────────────
+  async function sendMessage() {
+    if (busy) return;
+    const text = inputEl.value.trim();
+    if (!text) return;
+
+    inputEl.value = '';
+    inputEl.style.height = '';
+    appendUserMessage(text);
+
+    busy = true;
+    sendBtn.disabled = true;
+    appendTyping();
+
+    let thinkingTimer = null;
+    let abortTimer    = null;
+    const controller  = new AbortController();
+
+    try {
+      // Build context + history inside try so any error is caught & shown
+      const context       = gatherContext();
+      const recentHistory = cfoHistory.slice(-10);
+
+      // "Still thinking…" hint after 15 s — Opus can take a moment
+      thinkingTimer = setTimeout(() => {
+        const t = document.getElementById('cfoTyping');
+        if (t) {
+          const inner = t.querySelector('.cfo-typing');
+          if (inner && !inner.nextElementSibling) {
+            inner.insertAdjacentHTML('afterend',
+              '<div class="cfo-still-thinking">Still thinking — Opus can take a moment…</div>');
+          }
+        }
+      }, 15000);
+
+      // Hard abort after 60 s so the UI never hangs forever
+      abortTimer = setTimeout(() => controller.abort(), 60000);
+
+      const res = await api('/api/visibility/cfo/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text, history: recentHistory, context }),
+        signal: controller.signal,
+      });
+
+      clearTimeout(abortTimer);
+      clearTimeout(thinkingTimer);
+      const data = await res.json();
+      removeTyping();
+
+      if (!res.ok) {
+        appendCfoMessage(`Error: ${data?.error?.message || 'Could not reach CFO. Try again.'}`, 'cfo', true);
+      } else {
+        const reply = data?.data?.reply || '';
+        appendCfoMessage(reply);
+        // Store in history for multi-turn
+        cfoHistory.push({ role: 'user', content: text });
+        cfoHistory.push({ role: 'assistant', content: reply });
+      }
+    } catch (err) {
+      if (abortTimer)    clearTimeout(abortTimer);
+      if (thinkingTimer) clearTimeout(thinkingTimer);
+      removeTyping();
+      const msg = err && err.name === 'AbortError'
+        ? 'Request timed out after 60 s. Please try again.'
+        : `Error: ${err && err.message ? err.message : 'Could not process request.'}`;
+      appendCfoMessage(msg, 'cfo', true);
+    } finally {
+      busy = false;
+      sendBtn.disabled = false;
+      inputEl.focus();
+    }
+  }
+
+  // ── Event listeners ───────────────────────────────────────
+  sendBtn.addEventListener('click', sendMessage);
+  inputEl.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+  });
+
+  // Auto-resize textarea
+  inputEl.addEventListener('input', () => {
+    inputEl.style.height = '';
+    inputEl.style.height = Math.min(inputEl.scrollHeight, 120) + 'px';
+  });
+
 })();

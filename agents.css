@@ -1362,6 +1362,46 @@
   color: rgba(255, 255, 255, 0.45);
 }
 
+/* Open-Portal pills — open the customer's Visibility or Partner portal in a
+   new tab. Same customer key authenticates both offerings; pills sit
+   immediately to the right of the key chip in the folder header. */
+.partner-subs-folder-portal {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-left: 0.4rem;
+  padding: 0.25rem 0.55rem;
+  border-radius: 999px;
+  border: 1px solid rgba(91, 141, 224, 0.32);
+  background: rgba(91, 141, 224, 0.10);
+  color: var(--accent-light, #5b8de0);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.12s, color 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.partner-subs-folder-portal:hover {
+  background: rgba(91, 141, 224, 0.22);
+  border-color: rgba(91, 141, 224, 0.6);
+  color: var(--white, #fff);
+}
+.partner-subs-folder-portal:active { transform: scale(0.95); }
+.partner-subs-folder-portal:focus-visible {
+  outline: 2px solid var(--accent-light, #5b8de0);
+  outline-offset: 2px;
+}
+.partner-subs-folder-portal-icon {
+  font-size: 0.85rem;
+  line-height: 1;
+}
+.partner-subs-folder-portal-label {
+  font-size: 0.72rem;
+}
+
 .partner-subs-folder-body {
   padding: 0.5rem 1rem 1.1rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);

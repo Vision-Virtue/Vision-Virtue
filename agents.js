@@ -2816,7 +2816,30 @@ async function generatePptxDeck(d) {
     card.className = 'partner-subs-folder';
     card.dataset.subId = sub.id;
     // Customer key chip: shows VV-XXXXXX in the folder header. Authorized
-    // personnel can copy it to clipboard for the customer if they lose it.
+    // personnel can copy it to clipboard for the customer if they lose it,
+    // or open the customer's Visibility / Partner portal directly via the
+    // adjacent pills (both offerings share the same customer key).
+    const portalKey = sub.customerKey && !sub.customerKeyRevoked ? sub.customerKey : '';
+    const portalName = sub.customerName || '';
+    const buildPortalUrl = (page) => page +
+      `?adminKey=${encodeURIComponent(portalKey)}` +
+      `&adminName=${encodeURIComponent(portalName)}`;
+    const portalPills = portalKey
+      ? `<a class="partner-subs-folder-portal"
+             href="${buildPortalUrl('visibility.html')}"
+             target="_blank" rel="noopener" data-open-portal="1"
+             title="Open this customer's Visibility portal in a new tab">
+           <span class="partner-subs-folder-portal-icon" aria-hidden="true">📊</span>
+           <span class="partner-subs-folder-portal-label">Visibility</span>
+         </a>
+         <a class="partner-subs-folder-portal"
+             href="${buildPortalUrl('partner.html')}"
+             target="_blank" rel="noopener" data-open-portal="1"
+             title="Open this customer's Partner portal in a new tab">
+           <span class="partner-subs-folder-portal-icon" aria-hidden="true">🤝</span>
+           <span class="partner-subs-folder-portal-label">Partner</span>
+         </a>`
+      : '';
     const keyChip = sub.customerKey
       ? `<span class="partner-subs-folder-key${sub.customerKeyRevoked ? ' is-revoked' : ''}"
               data-customer-key="${htmlEsc(sub.customerKey)}"
@@ -2824,7 +2847,7 @@ async function generatePptxDeck(d) {
            <span class="partner-subs-folder-key-label">KEY</span>
            <span class="partner-subs-folder-key-val">${htmlEsc(sub.customerKey)}</span>
            ${sub.customerKeyRevoked ? '<span class="partner-subs-folder-key-revoked">revoked</span>' : '<span class="partner-subs-folder-key-copy">⧉</span>'}
-         </span>`
+         </span>${portalPills}`
       : `<span class="partner-subs-folder-key is-missing" title="Customer key not found in database">
            <span class="partner-subs-folder-key-label">KEY</span>
            <span class="partner-subs-folder-key-val">—</span>
@@ -2875,6 +2898,13 @@ async function generatePptxDeck(d) {
         }
       });
     }
+
+    // Open-Portal anchors (Visibility + Partner): let the native target="_blank"
+    // handle the navigation, just stop the click from bubbling to the
+    // folder-head toggle so the folder doesn't collapse under the admin.
+    card.querySelectorAll('[data-open-portal]').forEach((el) => {
+      el.addEventListener('click', (ev) => ev.stopPropagation());
+    });
 
     const head = card.querySelector('.partner-subs-folder-head');
     const body = card.querySelector('.partner-subs-folder-body');
