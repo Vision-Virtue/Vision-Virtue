@@ -5,6 +5,23 @@
 
 const VIS_API = 'https://vv-marketing-api.onrender.com';
 
+// Admin shortcut: ?adminKey=VV-XXX[&adminName=...] lets Authorized Personnel
+// open a customer's portal directly from the Finance AI submissions list
+// without re-entering the key on the homepage modal. We populate the
+// sessionStorage handshake here so the auth check below passes; if the key
+// is bogus, the first API call will 401 and the user is bounced home.
+(function handleAdminKey() {
+  const params = new URLSearchParams(window.location.search);
+  const adminKey = params.get('adminKey');
+  if (!adminKey) return;
+  sessionStorage.setItem('vv_customer_auth', '1');
+  sessionStorage.setItem('vv_customer_key', adminKey);
+  sessionStorage.setItem('vv_customer_name', params.get('adminName') || 'Customer');
+  // Strip the auth bits from the URL so the key doesn't sit in the address
+  // bar (and a reload doesn't replay them after the user signs out).
+  history.replaceState({}, '', window.location.pathname + window.location.hash);
+})();
+
 // Auth check — same sessionStorage handshake as the partner area.
 if (sessionStorage.getItem('vv_customer_auth') !== '1') {
   window.location.replace('index.html');
