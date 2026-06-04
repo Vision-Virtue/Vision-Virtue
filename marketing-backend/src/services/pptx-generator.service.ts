@@ -33,10 +33,19 @@
 import JSZip from 'jszip';
 import fs from 'fs';
 import path from 'path';
+import * as XLSX from 'xlsx';
+import Anthropic from '@anthropic-ai/sdk';
 import { XMLValidator } from 'fast-xml-parser';
 import {
   rewriteAffectedParagraphs, SlideRewriteInput,
 } from './slide-rewriter.service';
+import { INVESTOR_DECK_FIELDS } from '../data/investor-deck-schema';
+import { listUploads, getOrExtractText } from './deck-upload.service';
+
+const EXTRACTOR_MODEL = 'claude-sonnet-4-20250514';
+const EXTRACTOR_MAX_TOKENS = 8192;
+// Hard cap so Excel + uploads stay well under the model's 200K input window.
+const EXTRACTOR_MAX_SOURCE_CHARS = 320_000;
 
 const QUESTIONNAIRE_SHEET = 'Investor_Deck_Questionnaire_Inputs';
 const CALCULATIONS_SHEET  = 'Investor_Deck_Calculations';
@@ -286,6 +295,219 @@ export async function extractPlaceholdersFromXlsx(
   }
 
   return { map: merged, sources };
+}
+
+// ─── NEW: Claude-driven placeholder extraction ──────────────────────────────
+//
+// Replaces the rigid sheet-name + column-letter lookup with a single LLM call
+// that:
+//   1. Reads ALL sheets from the customer's xlsx (no schema assumption)
+//   2. Reads any text the customer dropped into the partner-portal dropzone
+//   3. Reads the unique {{PLACEHOLDER}} list from the template pptx
+//   4. Asks Claude to produce a JSON map { "{{X}}": "formatted value", ... }
+//
+// Numbers come back already formatted for an investor deck ($12M / 73% / 3.5x),
+// and any placeholder with no supporting data resolves to an empty string so the
+// downstream cleanup pass strips its <a:r> run + parent <a:p> paragraph.
+
+/** Dump every sheet in the workbook to a readable text block. */
+function readWorkbookAsText(xlsxPath: string): string {
+  const wb = XLSX.readFile(xlsxPath, { cellDates: true, cellNF: false, cellText: false });
+  const parts: string[] = [];
+  for (const sheetName of wb.SheetNames) {
+    const sheet = wb.Sheets[sheetName];
+    if (!sheet) continue;
+    // sheet_to_csv gives a flat readable dump (tab-separated would be cleaner
+    // but CSV is unambiguous and Claude tolerates either). Empty rows at the
+    // tail are auto-trimmed by sheet_to_csv with skipHidden=false.
+    const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
+    if (!csv.trim()) continue;
+    parts.push(`### Sheet: ${sheetName}\n${csv.trim()}`);
+  }
+  return parts.join('\n\n---\n\n');
+}
+
+/** Collect every unique {{PLACEHOLDER}} token referenced by any slide XML. */
+async function collectUniquePlaceholders(templatePptxPath: string): Promise<string[]> {
+  const buf = await fs.promises.readFile(templatePptxPath);
+  const zip = await JSZip.loadAsync(buf);
+  const found = new Set<string>();
+  const slideEntries = Object.keys(zip.files).filter(
+    (k) => /^ppt\/slides\/slide\d+\.xml$/.test(k),
+  );
+  for (const key of slideEntries) {
+    const xml = await zip.file(key)!.async('string');
+    const matches = xml.match(/\{\{[A-Z0-9_]+\}\}/g);
+    if (!matches) continue;
+    for (const m of matches) found.add(m);
+  }
+  return Array.from(found).sort();
+}
+
+/** Build a single text dump of every customer upload's extracted body. */
+async function gatherUploadsText(customerKeyId: string): Promise<string> {
+  let uploads: Array<{ id: string; originalName: string; ext: string }>;
+  try {
+    uploads = listUploads(customerKeyId);
+  } catch (err) {
+    console.warn('[pptx-gen] listUploads failed (continuing without uploads):', err);
+    return '';
+  }
+  const parts: string[] = [];
+  for (const u of uploads) {
+    let text = '';
+    try {
+      text = await getOrExtractText(customerKeyId, u.id);
+    } catch (err) {
+      parts.push(`### Upload: ${u.originalName}\n[extraction failed: ${err instanceof Error ? err.message : 'unknown'}]`);
+      continue;
+    }
+    if (!text.trim()) continue;
+    parts.push(`### Upload: ${u.originalName} (${u.ext.toUpperCase()})\n${text.trim()}`);
+  }
+  return parts.join('\n\n---\n\n');
+}
+
+const EXTRACTOR_SYSTEM_PROMPT =
+  'You are filling placeholders in a Vision & Virtue investor-deck PowerPoint ' +
+  'template from a customer\'s populated Excel financial model and any supporting ' +
+  'materials they have uploaded. Return ONLY a valid JSON object mapping each ' +
+  '{{PLACEHOLDER}} token to its correctly formatted value.' +
+  '\n\nFORMATTING RULES (apply to every value you return):' +
+  '\n  - Currency in millions: "$XM" (e.g. 12_000_000 -> "$12M", 1_500_000 -> "$1.5M")' +
+  '\n  - Currency in thousands: "$XK" (e.g. 40_000 -> "$40K", 2_400_000 -> "$2.4M")' +
+  '\n  - Percentages: "XX%" (e.g. 0.42 -> "42%", 42 -> "42%", 0.073 -> "7.3%")' +
+  '\n  - Multiples / runway: "X.Xx" (e.g. 3.5 -> "3.5x")' +
+  '\n  - Ratios / scores: one decimal' +
+  '\n  - Counts: thousands-separator commas (e.g. 12345 -> "12,345")' +
+  '\n  - Years: 4-digit ("2026")' +
+  '\n  - Short strings should fit on a slide (one phrase, no full sentences unless the' +
+  ' placeholder name implies long text).' +
+  '\n\nDATA-FINDING RULES:' +
+  '\n  - The customer\'s Excel structure may vary. Look at ALL sheets. Match by the' +
+  ' placeholder name, by the row label, by financial intuition, or by context.' +
+  '\n  - If a calc placeholder is implied by the data even without an exact label, infer' +
+  ' it (e.g. sum the revenue rows for {{REV_Y1}} if a Year-1 column exists).' +
+  '\n  - If a placeholder is qualitative (company description, founders, market) and the' +
+  ' customer uploaded materials, draw from those uploads.' +
+  '\n  - If neither the Excel nor the uploads support a placeholder, set its value to' +
+  ' "" (empty string). Never write "TBD", "N/A", "Unknown", "various", or any filler.' +
+  ' Never invent facts.' +
+  '\n\nOUTPUT RULES:' +
+  '\n  - Return ONLY the JSON object. No markdown fences, no commentary, no preface.' +
+  '\n  - Start with "{" and end with "}".' +
+  '\n  - Include every placeholder from the list -- if you can\'t fill it, return "".';
+
+function buildExtractorUserPrompt(
+  workbookText: string,
+  uploadsText: string,
+  placeholders: string[],
+): string {
+  // For placeholders that match a schema entry, surface the question/guidance so
+  // Claude knows the intent (e.g. {{COHORT_1_VALUE}} -> "value of cohort 1").
+  const schemaByPlaceholder = new Map(INVESTOR_DECK_FIELDS.map((f) => [f.placeholder, f]));
+  const placeholderBlock = placeholders.map((p) => {
+    const f = schemaByPlaceholder.get(p);
+    if (!f) return `  - ${p}`;
+    return `  - ${p} -- ${f.question} (${f.guidance || f.purpose})`;
+  }).join('\n');
+
+  let sources = '';
+  if (workbookText.trim()) sources += `EXCEL (all sheets):\n\n${workbookText.trim()}`;
+  if (uploadsText.trim())  sources += (sources ? '\n\n=================\n\n' : '') +
+                                       `CUSTOMER UPLOADS (extracted text):\n\n${uploadsText.trim()}`;
+  if (!sources)            sources  = '(no source data supplied)';
+
+  // Length-cap the combined source block to keep input tokens bounded.
+  if (sources.length > EXTRACTOR_MAX_SOURCE_CHARS) {
+    sources = sources.slice(0, EXTRACTOR_MAX_SOURCE_CHARS) +
+              `\n\n[... ${sources.length - EXTRACTOR_MAX_SOURCE_CHARS} chars truncated ...]`;
+  }
+
+  return `${sources}\n\n=================\n\nPLACEHOLDERS (return a value for every one; "" if unsupported):\n${placeholderBlock}\n\nReturn the JSON object now.`;
+}
+
+let _extractorClient: Anthropic | null = null;
+function extractorClient(): Anthropic {
+  if (_extractorClient) return _extractorClient;
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error('ANTHROPIC_API_KEY is not set.');
+  _extractorClient = new Anthropic({ apiKey: key });
+  return _extractorClient;
+}
+
+function findMatchingBrace(str: string, start: number): number {
+  let depth = 0; let inString = false; let escape = false;
+  for (let i = start; i < str.length; i++) {
+    const ch = str[i];
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') depth++;
+    else if (ch === '}') { depth--; if (depth === 0) return i; }
+  }
+  return -1;
+}
+
+function parseExtractorJson(raw: string): Record<string, string> {
+  const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
+  const candidate = (fence ? fence[1] : raw).trim();
+  try {
+    return JSON.parse(candidate) as Record<string, string>;
+  } catch {
+    const start = candidate.indexOf('{');
+    if (start < 0) throw new Error('Claude returned no JSON object.');
+    const end = findMatchingBrace(candidate, start);
+    if (end < 0) throw new Error('Claude JSON object is unterminated.');
+    return JSON.parse(candidate.slice(start, end + 1)) as Record<string, string>;
+  }
+}
+
+/**
+ * Replacement for `extractPlaceholdersFromXlsx`. Reads every sheet of the
+ * customer's Excel + any text already extracted from their portal uploads,
+ * collects every unique placeholder from the template pptx, and asks Claude
+ * to return one ready-to-replace value map. Numbers come back already
+ * formatted for an investor deck; unfillable placeholders resolve to "".
+ *
+ * `uploadsText` is optional -- callers that have a customerKeyId can supply
+ * it from `gatherUploadsText(customerKeyId)`.
+ */
+export async function extractPlaceholdersWithClaude(
+  xlsxPath: string,
+  templatePptxPath: string,
+  uploadsText: string = '',
+): Promise<Map<string, string>> {
+  const workbookText = readWorkbookAsText(xlsxPath);
+  const placeholders = await collectUniquePlaceholders(templatePptxPath);
+  if (placeholders.length === 0) return new Map();
+
+  const userPrompt = buildExtractorUserPrompt(workbookText, uploadsText, placeholders);
+  const client = extractorClient();
+  const resp = await client.messages.create({
+    model:      EXTRACTOR_MODEL,
+    max_tokens: EXTRACTOR_MAX_TOKENS,
+    system:     EXTRACTOR_SYSTEM_PROMPT,
+    messages:   [{ role: 'user', content: userPrompt }],
+  });
+  const first = resp.content[0];
+  if (!first || first.type !== 'text') {
+    throw new Error('Claude returned no text content for placeholder extraction.');
+  }
+  const parsed = parseExtractorJson(first.text);
+  const allowed = new Set(placeholders);
+  const out = new Map<string, string>();
+  for (const [k, v] of Object.entries(parsed)) {
+    if (!allowed.has(k)) continue;
+    const s = (v == null ? '' : String(v)).trim();
+    if (s) out.set(k, s);
+  }
+  const filled = out.size;
+  const total  = placeholders.length;
+  console.log(`[pptx-gen] Claude extraction: ${filled}/${total} placeholders filled ` +
+              `(workbook=${workbookText.length} chars, uploads=${uploadsText.length} chars)`);
+  return out;
 }
 
 // ─── PPTX text replacement ───────────────────────────────────────────────────
@@ -701,10 +923,11 @@ export async function generatePopulatedPptx(opts: {
   customerXlsxPath: string;
   outputPptxPath: string;
   /**
-   * Additional placeholder→value pairs (e.g. from AI extraction of
-   * customer uploads). Merged into the final map; xlsx values win.
+   * Customer key id -- used to gather extracted text from any files the
+   * customer dropped into the partner-portal dropzone so Claude can pull
+   * qualitative content (founders, market thesis, etc.) from them.
    */
-  extraValues?: Map<string, string>;
+  customerKeyId?: string;
   /**
    * Phase 4 LLM rewrite of partially-filled slides. Default true.
    * Disable for tests / environments without ANTHROPIC_API_KEY.
@@ -718,23 +941,16 @@ export async function generatePopulatedPptx(opts: {
     throw new Error(`Customer xlsx not found at ${opts.customerXlsxPath}`);
   }
 
-  const { map } = await extractPlaceholdersFromXlsx(opts.customerXlsxPath);
-
-  // Start with AI-extracted values (if any), then overlay xlsx values
-  // — xlsx wins on collisions because formula-computed and admin-edited
-  // values are more trusted than AI inference from uploaded text.
-  const valueMap = new Map<string, string>();
-  if (opts.extraValues) {
-    for (const [k, v] of opts.extraValues) {
-      const trimmed = (v == null ? '' : String(v)).trim();
-      if (trimmed) valueMap.set(k, trimmed);
-    }
-  }
-  for (const [k, v] of map) {
-    const trimmed = (v == null ? '' : String(v)).trim();
-    const isMissing = /^MISSING INPUT/i.test(trimmed);
-    if (trimmed && !isMissing) valueMap.set(k, trimmed);
-  }
+  // Single Claude call: read every Excel sheet + every upload's extracted
+  // text, see the placeholder list from the template, return one
+  // ready-to-replace map with values already formatted ($12M / 73% / 3.5x).
+  // No more rigid sheet-name + column-letter lookups.
+  const uploadsText = opts.customerKeyId ? await gatherUploadsText(opts.customerKeyId) : '';
+  const valueMap = await extractPlaceholdersWithClaude(
+    opts.customerXlsxPath,
+    opts.templatePptxPath,
+    uploadsText,
+  );
 
   const pptxBuf = await fs.promises.readFile(opts.templatePptxPath);
   const zip = await JSZip.loadAsync(pptxBuf);
