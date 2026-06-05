@@ -99,8 +99,11 @@ function scaleFor(w: number, h: number): Scale {
 
 function buildLayout(w: number, h: number, hasTitle: boolean, hasLegend: boolean): Layout {
   const s = scaleFor(w, h);
+  // Extra top headroom equal to ~1.4x the value-label font so max-height bars
+  // can carry a value label without colliding with the title.
+  const valueLabelRoom = Math.round(s.barLabelFs * 1.4);
   const pad = {
-    top:    hasTitle  ? Math.round(s.titleFs * 2.0) : Math.round(s.titleFs * 0.6),
+    top:    (hasTitle ? Math.round(s.titleFs * 2.0) : Math.round(s.titleFs * 0.6)) + valueLabelRoom,
     right:  Math.round(s.axisFs  * 1.5),
     bottom: hasLegend ? Math.round(s.legendFs * 3.5) : Math.round(s.legendFs * 2.4),
     left:   Math.round(s.axisFs  * 4.8),
@@ -175,15 +178,23 @@ function buildColumnSvg(data: ChartData, w: number, h: number, stacked: boolean)
 
   for (let i = 0; i < groupCount; i++) {
     const groupX = layout.pad.left + i * groupW + groupPad / 2;
+    const valuePad = Math.round(s.barLabelFs * 0.45);  // gap between bar top and value label
 
     if (stacked) {
+      // Draw stacked bars bottom-up, then the TOTAL value label above the stack.
       let stackY = layout.pad.top + layout.innerH;
+      let total  = 0;
       for (let si = 0; si < data.series.length; si++) {
         const v = data.series[si].values[i] || 0;
         if (v <= 0) continue;
         const barH = (v / maxVal) * layout.innerH;
         stackY -= barH;
+        total  += v;
         out += `<rect x="${groupX}" y="${stackY}" width="${Math.max(0, barW - 1)}" height="${Math.max(0, barH)}" fill="${colors[si]}"/>`;
+      }
+      if (total > 0) {
+        const txt = fmtValue(total, data.valueFormat);
+        out += `<text x="${groupX + barW / 2}" y="${stackY - valuePad}" text-anchor="middle" fill="${WHITE}" font-family="Calibri,Arial,sans-serif" font-size="${s.barLabelFs}" font-weight="600">${escXml(txt)}</text>`;
       }
     } else {
       for (let si = 0; si < data.series.length; si++) {
@@ -192,6 +203,11 @@ function buildColumnSvg(data: ChartData, w: number, h: number, stacked: boolean)
         const x = groupX + si * barW;
         const y = layout.pad.top + layout.innerH - Math.max(0, barH);
         out += `<rect x="${x}" y="${y}" width="${Math.max(0, barW - 2)}" height="${Math.max(0, barH)}" fill="${colors[si]}"/>`;
+        // Value label above each bar.
+        if (v !== 0) {
+          const txt = fmtValue(v, data.valueFormat);
+          out += `<text x="${x + (barW - 2) / 2}" y="${y - valuePad}" text-anchor="middle" fill="${WHITE}" font-family="Calibri,Arial,sans-serif" font-size="${s.barLabelFs}" font-weight="600">${escXml(txt)}</text>`;
+        }
       }
     }
 
@@ -226,17 +242,21 @@ function buildLineSvg(data: ChartData, w: number, h: number): string {
 
   for (let si = 0; si < data.series.length; si++) {
     const series = data.series[si];
-    const pts: string[] = [];
+    const pts: Array<{ x: number; y: number; v: number }> = [];
     for (let i = 0; i < data.labels.length; i++) {
       const v = series.values[i] || 0;
       const x = layout.pad.left + i * stepX;
       const y = layout.pad.top + layout.innerH - (v / maxVal) * layout.innerH;
-      pts.push(`${x},${y}`);
+      pts.push({ x, y, v });
     }
-    out += `<polyline points="${pts.join(' ')}" fill="none" stroke="${colors[si]}" stroke-width="${strokeW}"/>`;
+    out += `<polyline points="${pts.map((p) => `${p.x},${p.y}`).join(' ')}" fill="none" stroke="${colors[si]}" stroke-width="${strokeW}"/>`;
+    const labelOffset = Math.round(s.barLabelFs * 0.9) + dotR;
     for (const p of pts) {
-      const [x, y] = p.split(',');
-      out += `<circle cx="${x}" cy="${y}" r="${dotR}" fill="${colors[si]}"/>`;
+      out += `<circle cx="${p.x}" cy="${p.y}" r="${dotR}" fill="${colors[si]}"/>`;
+      if (p.v !== 0) {
+        const txt = fmtValue(p.v, data.valueFormat);
+        out += `<text x="${p.x}" y="${p.y - labelOffset}" text-anchor="middle" fill="${WHITE}" font-family="Calibri,Arial,sans-serif" font-size="${s.barLabelFs}" font-weight="600">${escXml(txt)}</text>`;
+      }
     }
   }
 
