@@ -807,6 +807,84 @@ function replaceParagraphText(slideXml: string, paraIdx: number, newText: string
   });
 }
 
+// ─── Presentation order helpers + slide footer renumber ─────────────────────
+
+/**
+ * Read the slide paths in their authored order from presentation.xml's
+ * <p:sldIdLst>. Returns an ordered array of "ppt/slides/slideN.xml" paths.
+ */
+async function readPresentationSlideOrder(zip: JSZip): Promise<string[]> {
+  const presFile     = zip.file('ppt/presentation.xml');
+  const presRelsFile = zip.file('ppt/_rels/presentation.xml.rels');
+  if (!presFile || !presRelsFile) return [];
+  const pres     = await presFile.async('string');
+  const presRels = await presRelsFile.async('string');
+
+  const rids: string[] = [];
+  const sldRe = /<p:sldId\b[^>]*?\br:id="([^"]+)"[^>]*?\/>/g;
+  let m: RegExpExecArray | null;
+  while ((m = sldRe.exec(pres))) rids.push(m[1]);
+
+  // Build rId -> Target map from rels (Target is relative to ppt/).
+  const ridToTarget = new Map<string, string>();
+  const relRe = /<Relationship\b[^>]*?\bId="([^"]+)"[^>]*?\bTarget="([^"]+)"[^>]*?\/>/g;
+  let r: RegExpExecArray | null;
+  while ((r = relRe.exec(presRels))) ridToTarget.set(r[1], r[2]);
+
+  const out: string[] = [];
+  for (const rid of rids) {
+    const target = ridToTarget.get(rid);
+    if (!target) continue;
+    out.push(`ppt/${target.replace(/^\.\//, '')}`);
+  }
+  return out;
+}
+
+/**
+ * Rewrite hard-coded "NN / <originalTotal>" footer text in every surviving
+ * slide to "NEW_INDEX / NEW_TOTAL". Common pattern: V&V template has things
+ * like "03 / 20" baked into the slide-number footer text run. After we
+ * delete slides, those numbers stop matching reality.
+ */
+async function renumberSlideFooters(zip: JSZip, originalTotal: number): Promise<void> {
+  const order = await readPresentationSlideOrder(zip);
+  const newTotal = order.length;
+  if (newTotal === 0) return;
+
+  // Build a regex that only matches "<digits> / <originalTotal>" so we don't
+  // accidentally rewrite unrelated number-like text. originalTotal is a
+  // numeric literal so escapeRegex isn't strictly required, but use it for
+  // safety in case the template count is itself a multi-digit number.
+  const totalEsc = escapeRegex(String(originalTotal));
+  const pattern = new RegExp(
+    `<a:t([^>]*)>(\\s*)(\\d{1,3})(\\s*/\\s*)${totalEsc}(\\s*)</a:t>`,
+    'g',
+  );
+
+  for (let i = 0; i < order.length; i++) {
+    const slidePath = order[i];
+    const slideFile = zip.file(slidePath);
+    if (!slideFile) continue;
+    let xml = await slideFile.async('string');
+    let touched = false;
+
+    xml = xml.replace(pattern, (_full, attrs: string, lead: string, oldIdx: string, sep: string, trail: string) => {
+      touched = true;
+      // Preserve zero-padding from the original index width: "03" stays
+      // two-digit, "3" stays unpadded.
+      const newIdx = oldIdx.length >= 2
+        ? String(i + 1).padStart(oldIdx.length, '0')
+        : String(i + 1);
+      const newTotalStr = oldIdx.length >= 2 && String(newTotal).length < oldIdx.length
+        ? String(newTotal).padStart(oldIdx.length, '0')
+        : String(newTotal);
+      return `<a:t${attrs}>${lead}${newIdx}${sep}${newTotalStr}${trail}</a:t>`;
+    });
+
+    if (touched) zip.file(slidePath, xml);
+  }
+}
+
 // ─── Slide deletion: remove a slide from the package atomically ──────────────
 
 /** Escape a string so it can be embedded literally inside a RegExp. */
@@ -962,6 +1040,15 @@ export async function generatePopulatedPptx(opts: {
   const unmatchedSet = new Set<string>();
   const mut = { replaced: 0, unmatched: unmatchedSet };
 
+  // Discover the ORIGINAL presentation order + which slide is the closing
+  // ("final") slide. We protect the final slide from deletion regardless of
+  // its placeholder fill ratio -- the deck must always end on the CTA /
+  // thank-you slide so the customer sees a clean close.
+  const originalOrder = await readPresentationSlideOrder(zip);
+  const originalTotal = originalOrder.length;
+  const finalSlidePath: string | null =
+    originalOrder.length > 0 ? originalOrder[originalOrder.length - 1] : null;
+
   // ── PHASE 1: per-slide replace (no cleanup yet) ──────────────────────────
   // We need the post-replacement XML still containing unfilled {{X}} tokens
   // so Phase 1.5 can see WHICH placeholders went unfilled and rewrite the
@@ -991,7 +1078,10 @@ export async function generatePopulatedPptx(opts: {
     const originalCount = countOriginalPlaceholders(xml);
     const afterReplace  = applyReplacementsToSlideXml(xml, valueMap, mut);
     const unfilledHere  = countOriginalPlaceholders(afterReplace);
-    const willBeDeleted = originalCount > 0 &&
+    // The final (closing) slide is always kept. Every deck must end on the
+    // CTA / thank-you slide regardless of how empty its placeholders are.
+    const isFinalSlide  = key === finalSlidePath;
+    const willBeDeleted = !isFinalSlide && originalCount > 0 &&
                           unfilledHere / originalCount > SLIDE_DELETE_THRESHOLD;
 
     let affectedParas: SlideState['affectedParas'] = [];
@@ -1103,7 +1193,9 @@ export async function generatePopulatedPptx(opts: {
       continue;
     }
 
-    if (slide.originalCount > 0) {
+    // The final (closing) slide is exempt from the unfilled-threshold drop;
+    // we always want the deck to end on the CTA / thank-you slide.
+    if (slide.key !== finalSlidePath && slide.originalCount > 0) {
       const unfilledRatio = slideStats.unfilledPlaceholders / slide.originalCount;
       if (unfilledRatio > SLIDE_DELETE_THRESHOLD) {
         slidesToDelete.push(slide.key);
@@ -1120,6 +1212,21 @@ export async function generatePopulatedPptx(opts: {
   for (const slidePath of slidesToDelete) {
     await deleteSlideFromPackage(zip, slidePath);
     stats.slidesDeleted = (stats.slidesDeleted || 0) + 1;
+  }
+
+  // ── PHASE 4: renumber slide-number footers ───────────────────────────────
+  // Templates often hard-code page-number text like "03 / 20" in slide
+  // footers. After deletion the original totals are wrong AND the indices
+  // skip (you'd see 02, 03, 07, 11 instead of 02, 03, 04, 05). Walk the
+  // surviving slides in their new presentation order and rewrite any
+  // "NN / <originalTotal>" pattern to "NEW_INDEX / NEW_TOTAL".
+  if (originalTotal > 0 && (stats.slidesDeleted || 0) > 0) {
+    try {
+      await renumberSlideFooters(zip, originalTotal);
+    } catch (err) {
+      console.warn('[pptx-gen] slide renumber failed (continuing):',
+                   err instanceof Error ? err.message : err);
+    }
   }
 
   stats.replaced = mut.replaced;

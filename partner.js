@@ -550,7 +550,7 @@ qForm?.addEventListener('submit', async e => {
 
   const submitBtn = qForm.querySelector('.partner-q-submit');
   const originalText = submitBtn?.textContent;
-  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submittingâ€¦'; }
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting…'; }
 
   try {
     await apiSubmitQuestionnaire(name, formData);
@@ -560,7 +560,7 @@ qForm?.addEventListener('submit', async e => {
     await renderTileState();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (err) {
-    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalText || 'Submit Questionnaire'; }
+    if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalText || 'Submit'; }
     alert('Submission failed. Please check your connection and try again.\n\n' + (err && err.message ? err.message : ''));
   }
 });
@@ -679,7 +679,15 @@ async function deckUploadOne(file, statusEl) {
   status.className = 'partner-q-drop-status';
   zone.appendChild(status);
 
-  zone.addEventListener('click', (e) => { if (e.target === input) return; input.click(); });
+  zone.addEventListener('click', (e) => {
+    // Skip if the click was on the native file input or on the "Browse files"
+    // label — the browser already fires input.click() for those via the
+    // label's for=deckFileInput binding. Without this guard the file picker
+    // opens twice: once natively, once from this zone-wide handler.
+    if (e.target === input) return;
+    if (e.target.closest && e.target.closest('label[for="deckFileInput"]')) return;
+    input.click();
+  });
   zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('is-drag-over'); });
   zone.addEventListener('dragleave', () => zone.classList.remove('is-drag-over'));
   zone.addEventListener('drop', async (e) => {
