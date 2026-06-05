@@ -485,12 +485,42 @@ export async function extractPlaceholdersWithClaude(
 
   const userPrompt = buildExtractorUserPrompt(workbookText, uploadsText, placeholders);
   const client = extractorClient();
-  const resp = await client.messages.create({
+
+  // Retry once on 429 (Anthropic per-minute rate limit). Wait 65 seconds so
+  // the per-minute window has fully rolled over. If still rate-limited we
+  // throw a friendly error the controller turns into a "wait and retry"
+  // message for the admin.
+  const callOnce = () => client.messages.create({
     model:      EXTRACTOR_MODEL,
     max_tokens: EXTRACTOR_MAX_TOKENS,
     system:     EXTRACTOR_SYSTEM_PROMPT,
     messages:   [{ role: 'user', content: userPrompt }],
   });
+  let resp;
+  try {
+    resp = await callOnce();
+  } catch (err) {
+    const e = err as { status?: number; message?: string };
+    const is429 = e.status === 429 || /\b429\b|rate[_ -]?limit/i.test(e.message || '');
+    if (!is429) throw err;
+    console.warn('[pptx-gen] Claude extraction rate-limited, sleeping 65s and retrying once...');
+    await new Promise((r) => setTimeout(r, 65_000));
+    try {
+      resp = await callOnce();
+    } catch (err2) {
+      const e2 = err2 as { status?: number; message?: string };
+      const still429 = e2.status === 429 || /\b429\b|rate[_ -]?limit/i.test(e2.message || '');
+      if (still429) {
+        throw new Error(
+          'Anthropic rate limit (30,000 input tokens/min) was hit twice in a row. ' +
+          'Please wait ~60 seconds and try again, or upgrade your Anthropic tier at ' +
+          'https://console.anthropic.com/settings/billing',
+        );
+      }
+      throw err2;
+    }
+  }
+
   const first = resp.content[0];
   if (!first || first.type !== 'text') {
     throw new Error('Claude returned no text content for placeholder extraction.');

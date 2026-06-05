@@ -873,14 +873,16 @@ async function generateDeckForSubmission(
 
   // The new Claude-driven extractor inside generatePopulatedPptx reads the
   // entire workbook + every upload's extracted text in one call and returns
-  // a ready-to-replace value map. The old runDeckExtraction (uploads-only) is
-  // no longer needed in this code path; we just pass the customerKeyId so the
-  // generator can pull the upload text itself.
+  // a ready-to-replace value map -- so it does the job Phase 4 (slide rewrite)
+  // used to do for partially-filled slides. We disable Phase 4 here so each
+  // PPTX generate makes just one Claude call instead of two. That keeps us
+  // comfortably under the 30K-input-tokens/minute Anthropic tier limit.
   const pptxStats = await generatePopulatedPptx({
     templatePptxPath: pptxTemplatePath(),
     customerXlsxPath: xlsxAbsPath,
     outputPptxPath:   outFile,
     customerKeyId,
+    aiRewrite:        false,
   });
   return { ...pptxStats, ai: null };
 }
