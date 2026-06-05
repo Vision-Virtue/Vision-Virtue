@@ -969,6 +969,13 @@ interface ShapeCoords { x: number; y: number; cx: number; cy: number }
  * Find the bounding box of the <p:sp> shape that contains the given
  * placeholder text. Returns coords in EMU (English Metric Units, the
  * pptx native: 914400 EMU == 1 inch).
+ *
+ * IMPORTANT for chart placeholders: V&V templates put the {{CHART_*}}
+ * token inside a SMALL caption-text shape that sits in the centre of a
+ * MUCH larger dashed-border "frame" shape. Naively using the text shape's
+ * coords for the chart picture produces a tiny chart in the middle of a
+ * big empty box. For chart placeholders use `findChartHostFrame` instead,
+ * which walks for the smallest enclosing frame.
  */
 function findShapeCoordsContaining(slideXml: string, placeholder: string): ShapeCoords | null {
   const shapeRe = /<p:sp\b[^>]*>([\s\S]*?)<\/p:sp>/g;
@@ -990,6 +997,50 @@ function findShapeCoordsContaining(slideXml: string, placeholder: string): Shape
     };
   }
   return null;
+}
+
+/**
+ * For a chart placeholder, return the bounding box of the visual host
+ * frame -- i.e. the smallest <p:sp> on the slide that strictly encloses
+ * the small text shape carrying {{CHART_*}}. Fallback: the text shape
+ * itself if no enclosing frame is found.
+ */
+function findChartHostFrame(slideXml: string, placeholder: string): ShapeCoords | null {
+  const textShape = findShapeCoordsContaining(slideXml, placeholder);
+  if (!textShape) return null;
+
+  // Walk every <p:sp> and collect those that geographically enclose textShape
+  // (excluding textShape itself). Pick the smallest area => tightest frame.
+  const shapeRe = /<p:sp\b[^>]*>([\s\S]*?)<\/p:sp>/g;
+  let best: ShapeCoords | null = null;
+  let bestArea = Infinity;
+  let m: RegExpExecArray | null;
+  while ((m = shapeRe.exec(slideXml))) {
+    const inner = m[1];
+    const xfrmMatch = /<a:xfrm\b[^>]*>([\s\S]*?)<\/a:xfrm>/.exec(inner);
+    if (!xfrmMatch) continue;
+    const off = /<a:off\b[^/>]*x="(-?\d+)"[^/>]*y="(-?\d+)"/.exec(xfrmMatch[1]);
+    const ext = /<a:ext\b[^/>]*cx="(\d+)"[^/>]*cy="(\d+)"/.exec(xfrmMatch[1]);
+    if (!off || !ext) continue;
+    const c: ShapeCoords = {
+      x:  parseInt(off[1], 10),
+      y:  parseInt(off[2], 10),
+      cx: parseInt(ext[1], 10),
+      cy: parseInt(ext[2], 10),
+    };
+    // Skip the text shape itself.
+    if (c.x === textShape.x && c.y === textShape.y &&
+        c.cx === textShape.cx && c.cy === textShape.cy) continue;
+    // Strict enclosure check (and strictly bigger -- area at least 2x).
+    const enclosesX = c.x <= textShape.x && (c.x + c.cx) >= (textShape.x + textShape.cx);
+    const enclosesY = c.y <= textShape.y && (c.y + c.cy) >= (textShape.y + textShape.cy);
+    if (!enclosesX || !enclosesY) continue;
+    const area = c.cx * c.cy;
+    const textArea = textShape.cx * textShape.cy;
+    if (area < textArea * 2) continue;  // not meaningfully bigger
+    if (area < bestArea) { best = c; bestArea = area; }
+  }
+  return best || textShape;
 }
 
 /** Slug a placeholder name to a safe filename token. */
@@ -1353,11 +1404,13 @@ export async function generatePopulatedPptx(opts: {
     const originalCount = countOriginalPlaceholders(xml);
 
     // Capture coords of any chart placeholder we have data for BEFORE the
-    // replacement pass blanks the placeholder text.
+    // replacement pass blanks the placeholder text. Uses findChartHostFrame
+    // which walks for the smallest enclosing dashed-border shape, NOT the
+    // tiny caption-text shape that actually carries the {{CHART_*}} token.
     for (const chartPlaceholder of chartMap.keys()) {
       if (chartLocations.has(chartPlaceholder)) continue;
       if (!xml.includes(chartPlaceholder)) continue;
-      const coords = findShapeCoordsContaining(xml, chartPlaceholder);
+      const coords = findChartHostFrame(xml, chartPlaceholder);
       if (coords) chartLocations.set(chartPlaceholder, { slideKey: key, coords });
     }
 
