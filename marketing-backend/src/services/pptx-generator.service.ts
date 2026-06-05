@@ -1113,9 +1113,24 @@ async function injectCharts(
 
     let pngBuf: Buffer;
     try {
-      // Render at 2x the EMU display size for crisp output (EMU/9525 -> pixels).
-      const widthPx  = Math.max(800,  Math.round(loc.coords.cx / 9525 * 2));
-      const heightPx = Math.max(500,  Math.round(loc.coords.cy / 9525 * 2));
+      // Match the placeholder's exact aspect ratio so PowerPoint isn't asked
+      // to stretch / letterbox the image (the previous version clamped both
+      // dimensions to a min, producing 800x500 PNGs that landed in 4:2 boxes
+      // distorted). Scale up so the long side is at least 1800 px for crisp
+      // text; the short side preserves aspect.
+      const aspect = loc.coords.cx / loc.coords.cy;
+      let widthPx  = Math.round(loc.coords.cx / 9525);  // 1x = EMU at 96 DPI
+      let heightPx = Math.round(loc.coords.cy / 9525);
+      const longSide = Math.max(widthPx, heightPx);
+      const MIN_LONG = 1800;
+      if (longSide < MIN_LONG) {
+        const scale = MIN_LONG / longSide;
+        widthPx  = Math.round(widthPx * scale);
+        heightPx = Math.round(heightPx * scale);
+      }
+      // Sanity-clamp absurd aspect ratios so we don't allocate huge canvases.
+      if (aspect > 5)         heightPx = Math.max(heightPx, Math.round(widthPx / 5));
+      else if (aspect < 0.2)  widthPx  = Math.max(widthPx,  Math.round(heightPx * 0.2));
       pngBuf = renderChartPng(chartData, widthPx, heightPx);
     } catch (err) {
       console.warn(`[pptx-gen] chart ${placeholder} render failed:`,

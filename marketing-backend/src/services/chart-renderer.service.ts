@@ -80,12 +80,30 @@ interface Layout {
   innerW: number; innerH: number;
 }
 
+/**
+ * Font/padding sizes scale with the canvas so charts look proportionally
+ * dense whether they're 800px wide or 3000px wide. PowerPoint then
+ * downscales to whatever the placeholder's actual rendered size is.
+ */
+interface Scale { titleFs: number; axisFs: number; legendFs: number; barLabelFs: number }
+function scaleFor(w: number, h: number): Scale {
+  // base on the geometric mean so very-wide-thin charts don't get giant text.
+  const base = Math.sqrt(w * h);
+  return {
+    titleFs:    Math.max(20, Math.round(base * 0.030)),
+    axisFs:     Math.max(16, Math.round(base * 0.022)),
+    legendFs:   Math.max(16, Math.round(base * 0.022)),
+    barLabelFs: Math.max(16, Math.round(base * 0.022)),
+  };
+}
+
 function buildLayout(w: number, h: number, hasTitle: boolean, hasLegend: boolean): Layout {
+  const s = scaleFor(w, h);
   const pad = {
-    top:    hasTitle ? 40 : 16,
-    right:  20,
-    bottom: hasLegend ? 56 : 36,
-    left:   72,
+    top:    hasTitle  ? Math.round(s.titleFs * 2.0) : Math.round(s.titleFs * 0.6),
+    right:  Math.round(s.axisFs  * 1.5),
+    bottom: hasLegend ? Math.round(s.legendFs * 3.5) : Math.round(s.legendFs * 2.4),
+    left:   Math.round(s.axisFs  * 4.8),
   };
   return { w, h, pad, innerW: w - pad.left - pad.right, innerH: h - pad.top - pad.bottom };
 }
@@ -95,30 +113,33 @@ function svgHeader(w: number, h: number): string {
          `<rect width="${w}" height="${h}" fill="${NAVY}"/>`;
 }
 
-function svgTitle(title: string, w: number): string {
-  return `<text x="${w / 2}" y="26" text-anchor="middle" fill="${WHITE}" font-family="Calibri,Arial,sans-serif" font-size="15" font-weight="700">${escXml(title)}</text>`;
+function svgTitle(title: string, w: number, s: Scale): string {
+  return `<text x="${w / 2}" y="${Math.round(s.titleFs * 1.4)}" text-anchor="middle" fill="${WHITE}" ` +
+         `font-family="Calibri,Arial,sans-serif" font-size="${s.titleFs}" font-weight="700">${escXml(title)}</text>`;
 }
 
-function svgAxes(layout: Layout, maxVal: number, vf: ChartData['valueFormat']): string {
+function svgAxes(layout: Layout, maxVal: number, vf: ChartData['valueFormat'], s: Scale): string {
   const { pad, innerW, innerH } = layout;
   const ticks = 4;
   let out = '';
   for (let i = 0; i <= ticks; i++) {
     const y = pad.top + innerH - (i * innerH) / ticks;
-    out += `<line x1="${pad.left}" y1="${y}" x2="${pad.left + innerW}" y2="${y}" stroke="${NAVY_GRID}" stroke-width="1"/>`;
-    out += `<text x="${pad.left - 8}" y="${y + 4}" text-anchor="end" fill="${GRAY}" font-family="Calibri,Arial,sans-serif" font-size="11">${escXml(fmtValue((maxVal * i) / ticks, vf))}</text>`;
+    out += `<line x1="${pad.left}" y1="${y}" x2="${pad.left + innerW}" y2="${y}" stroke="${NAVY_GRID}" stroke-width="${Math.max(1, Math.round(s.axisFs / 14))}"/>`;
+    out += `<text x="${pad.left - Math.round(s.axisFs * 0.6)}" y="${y + Math.round(s.axisFs * 0.35)}" text-anchor="end" fill="${GRAY}" font-family="Calibri,Arial,sans-serif" font-size="${s.axisFs}">${escXml(fmtValue((maxVal * i) / ticks, vf))}</text>`;
   }
   return out;
 }
 
-function svgLegend(series: ChartSeries[], colors: string[], layout: Layout): string {
+function svgLegend(series: ChartSeries[], colors: string[], layout: Layout, s: Scale): string {
   let out = '';
   let x = layout.pad.left;
-  const y = layout.h - 18;
+  const y = layout.h - Math.round(s.legendFs * 1.2);
+  const swatchW = Math.round(s.legendFs * 1.3);
+  const swatchH = Math.round(s.legendFs * 0.95);
   for (let i = 0; i < series.length; i++) {
-    out += `<rect x="${x}" y="${y - 10}" width="14" height="10" fill="${colors[i]}"/>`;
-    out += `<text x="${x + 20}" y="${y - 1}" fill="${LGRAY}" font-family="Calibri,Arial,sans-serif" font-size="11">${escXml(series[i].name)}</text>`;
-    x += 20 + Math.max(60, series[i].name.length * 7) + 20;
+    out += `<rect x="${x}" y="${y - swatchH}" width="${swatchW}" height="${swatchH}" fill="${colors[i]}"/>`;
+    out += `<text x="${x + swatchW + Math.round(s.legendFs * 0.4)}" y="${y - Math.round(s.legendFs * 0.1)}" fill="${LGRAY}" font-family="Calibri,Arial,sans-serif" font-size="${s.legendFs}">${escXml(series[i].name)}</text>`;
+    x += swatchW + Math.round(s.legendFs * 0.4) + series[i].name.length * Math.round(s.legendFs * 0.55) + Math.round(s.legendFs * 1.4);
   }
   return out;
 }
@@ -127,18 +148,19 @@ function buildColumnSvg(data: ChartData, w: number, h: number, stacked: boolean)
   const hasTitle  = !!(data.title && data.title.trim());
   const hasLegend = data.series.length > 1;
   const layout    = buildLayout(w, h, hasTitle, hasLegend);
-  const colors    = data.series.map((s, i) => s.color || DEFAULT_COLORS[i % DEFAULT_COLORS.length]);
+  const s         = scaleFor(w, h);
+  const colors    = data.series.map((sr, i) => sr.color || DEFAULT_COLORS[i % DEFAULT_COLORS.length]);
 
   // Compute max for y-axis scaling
   let maxVal = 0;
   if (stacked) {
     for (let i = 0; i < data.labels.length; i++) {
       let stack = 0;
-      for (const s of data.series) stack += s.values[i] || 0;
+      for (const sr of data.series) stack += sr.values[i] || 0;
       if (stack > maxVal) maxVal = stack;
     }
   } else {
-    for (const s of data.series) for (const v of s.values) if (v > maxVal) maxVal = v;
+    for (const sr of data.series) for (const v of sr.values) if (v > maxVal) maxVal = v;
   }
   if (maxVal === 0) maxVal = 1;
 
@@ -148,37 +170,37 @@ function buildColumnSvg(data: ChartData, w: number, h: number, stacked: boolean)
   const barW       = stacked ? groupW - groupPad : (groupW - groupPad) / data.series.length;
 
   let out = svgHeader(w, h);
-  if (hasTitle) out += svgTitle(data.title!, w);
-  out += svgAxes(layout, maxVal, data.valueFormat);
+  if (hasTitle) out += svgTitle(data.title!, w, s);
+  out += svgAxes(layout, maxVal, data.valueFormat, s);
 
   for (let i = 0; i < groupCount; i++) {
     const groupX = layout.pad.left + i * groupW + groupPad / 2;
 
     if (stacked) {
       let stackY = layout.pad.top + layout.innerH;
-      for (let s = 0; s < data.series.length; s++) {
-        const v = data.series[s].values[i] || 0;
+      for (let si = 0; si < data.series.length; si++) {
+        const v = data.series[si].values[i] || 0;
         if (v <= 0) continue;
         const barH = (v / maxVal) * layout.innerH;
         stackY -= barH;
-        out += `<rect x="${groupX}" y="${stackY}" width="${Math.max(0, barW - 1)}" height="${Math.max(0, barH)}" fill="${colors[s]}"/>`;
+        out += `<rect x="${groupX}" y="${stackY}" width="${Math.max(0, barW - 1)}" height="${Math.max(0, barH)}" fill="${colors[si]}"/>`;
       }
     } else {
-      for (let s = 0; s < data.series.length; s++) {
-        const v = data.series[s].values[i] || 0;
+      for (let si = 0; si < data.series.length; si++) {
+        const v = data.series[si].values[i] || 0;
         const barH = (v / maxVal) * layout.innerH;
-        const x = groupX + s * barW;
+        const x = groupX + si * barW;
         const y = layout.pad.top + layout.innerH - Math.max(0, barH);
-        out += `<rect x="${x}" y="${y}" width="${Math.max(0, barW - 2)}" height="${Math.max(0, barH)}" fill="${colors[s]}"/>`;
+        out += `<rect x="${x}" y="${y}" width="${Math.max(0, barW - 2)}" height="${Math.max(0, barH)}" fill="${colors[si]}"/>`;
       }
     }
 
     const labelX = groupX + (stacked ? barW / 2 : (data.series.length * barW) / 2);
-    const labelY = layout.pad.top + layout.innerH + 18;
-    out += `<text x="${labelX}" y="${labelY}" text-anchor="middle" fill="${LGRAY}" font-family="Calibri,Arial,sans-serif" font-size="11">${escXml(data.labels[i])}</text>`;
+    const labelY = layout.pad.top + layout.innerH + Math.round(s.barLabelFs * 1.4);
+    out += `<text x="${labelX}" y="${labelY}" text-anchor="middle" fill="${LGRAY}" font-family="Calibri,Arial,sans-serif" font-size="${s.barLabelFs}">${escXml(data.labels[i])}</text>`;
   }
 
-  if (hasLegend) out += svgLegend(data.series, colors, layout);
+  if (hasLegend) out += svgLegend(data.series, colors, layout, s);
   out += '</svg>';
   return out;
 }
@@ -187,20 +209,23 @@ function buildLineSvg(data: ChartData, w: number, h: number): string {
   const hasTitle  = !!(data.title && data.title.trim());
   const hasLegend = data.series.length > 1;
   const layout    = buildLayout(w, h, hasTitle, hasLegend);
-  const colors    = data.series.map((s, i) => s.color || DEFAULT_COLORS[i % DEFAULT_COLORS.length]);
+  const s         = scaleFor(w, h);
+  const colors    = data.series.map((sr, i) => sr.color || DEFAULT_COLORS[i % DEFAULT_COLORS.length]);
 
   let maxVal = 0;
-  for (const s of data.series) for (const v of s.values) if (v > maxVal) maxVal = v;
+  for (const sr of data.series) for (const v of sr.values) if (v > maxVal) maxVal = v;
   if (maxVal === 0) maxVal = 1;
 
   const stepX = layout.innerW / Math.max(1, data.labels.length - 1);
+  const strokeW = Math.max(2.5, Math.round(s.axisFs / 5));
+  const dotR    = Math.max(3.5, Math.round(s.axisFs / 4));
 
   let out = svgHeader(w, h);
-  if (hasTitle) out += svgTitle(data.title!, w);
-  out += svgAxes(layout, maxVal, data.valueFormat);
+  if (hasTitle) out += svgTitle(data.title!, w, s);
+  out += svgAxes(layout, maxVal, data.valueFormat, s);
 
-  for (let s = 0; s < data.series.length; s++) {
-    const series = data.series[s];
+  for (let si = 0; si < data.series.length; si++) {
+    const series = data.series[si];
     const pts: string[] = [];
     for (let i = 0; i < data.labels.length; i++) {
       const v = series.values[i] || 0;
@@ -208,19 +233,19 @@ function buildLineSvg(data: ChartData, w: number, h: number): string {
       const y = layout.pad.top + layout.innerH - (v / maxVal) * layout.innerH;
       pts.push(`${x},${y}`);
     }
-    out += `<polyline points="${pts.join(' ')}" fill="none" stroke="${colors[s]}" stroke-width="2.5"/>`;
+    out += `<polyline points="${pts.join(' ')}" fill="none" stroke="${colors[si]}" stroke-width="${strokeW}"/>`;
     for (const p of pts) {
       const [x, y] = p.split(',');
-      out += `<circle cx="${x}" cy="${y}" r="3.5" fill="${colors[s]}"/>`;
+      out += `<circle cx="${x}" cy="${y}" r="${dotR}" fill="${colors[si]}"/>`;
     }
   }
 
   for (let i = 0; i < data.labels.length; i++) {
     const x = layout.pad.left + i * stepX;
-    out += `<text x="${x}" y="${layout.pad.top + layout.innerH + 18}" text-anchor="middle" fill="${LGRAY}" font-family="Calibri,Arial,sans-serif" font-size="11">${escXml(data.labels[i])}</text>`;
+    out += `<text x="${x}" y="${layout.pad.top + layout.innerH + Math.round(s.barLabelFs * 1.4)}" text-anchor="middle" fill="${LGRAY}" font-family="Calibri,Arial,sans-serif" font-size="${s.barLabelFs}">${escXml(data.labels[i])}</text>`;
   }
 
-  if (hasLegend) out += svgLegend(data.series, colors, layout);
+  if (hasLegend) out += svgLegend(data.series, colors, layout, s);
   out += '</svg>';
   return out;
 }
