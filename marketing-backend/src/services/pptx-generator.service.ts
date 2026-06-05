@@ -41,6 +41,7 @@ import {
 } from './slide-rewriter.service';
 import { INVESTOR_DECK_FIELDS } from '../data/investor-deck-schema';
 import { listUploads, getOrExtractText } from './deck-upload.service';
+import { renderChartPng, asChartData, ChartData } from './chart-renderer.service';
 
 const EXTRACTOR_MODEL = 'claude-sonnet-4-20250514';
 const EXTRACTOR_MAX_TOKENS = 8192;
@@ -397,6 +398,19 @@ const EXTRACTOR_SYSTEM_PROMPT =
   '\n  - If neither the Excel nor the uploads support a placeholder, set its value to' +
   ' "" (empty string). Never write "TBD", "N/A", "Unknown", "various", or any filler.' +
   ' Never invent facts.' +
+  '\n\nCHART PLACEHOLDERS (starts with {{CHART_):' +
+  '\n  - If you can construct a sensible chart from the Excel/upload data, return' +
+  ' a JSON OBJECT (not a string) with this exact shape:' +
+  '\n      { "type": "column" | "stackedColumn" | "line",' +
+  '\n        "title":  "<short title>",' +
+  '\n        "labels": ["Q1","Q2",...],' +
+  '\n        "series": [{ "name": "<label>", "values": [1.2, 1.5, ...] }],' +
+  '\n        "valueFormat": "currency" | "percent" | "count" | "number" }' +
+  '\n  - For ARR / revenue charts use "currency" and put values in MILLIONS' +
+  ' as plain numbers (e.g. 1.5 means $1.5M).' +
+  '\n  - Stacked charts (e.g. {{CHART_ARR_5Y}} = "ARR build, new vs expansion"):' +
+  ' two series stacked. Single-series charts: one entry in series[].' +
+  '\n  - If the data isn\'t there, return "" for the chart placeholder (a string).' +
   '\n\nOUTPUT RULES:' +
   '\n  - Return ONLY the JSON object. No markdown fences, no commentary, no preface.' +
   '\n  - Start with "{" and end with "}".' +
@@ -457,17 +471,17 @@ function findMatchingBrace(str: string, start: number): number {
   return -1;
 }
 
-function parseExtractorJson(raw: string): Record<string, string> {
+function parseExtractorJson(raw: string): Record<string, unknown> {
   const fence = raw.match(/```(?:json)?\s*([\s\S]*?)```/);
   const candidate = (fence ? fence[1] : raw).trim();
   try {
-    return JSON.parse(candidate) as Record<string, string>;
+    return JSON.parse(candidate) as Record<string, unknown>;
   } catch {
     const start = candidate.indexOf('{');
     if (start < 0) throw new Error('Claude returned no JSON object.');
     const end = findMatchingBrace(candidate, start);
     if (end < 0) throw new Error('Claude JSON object is unterminated.');
-    return JSON.parse(candidate.slice(start, end + 1)) as Record<string, string>;
+    return JSON.parse(candidate.slice(start, end + 1)) as Record<string, unknown>;
   }
 }
 
@@ -481,14 +495,21 @@ function parseExtractorJson(raw: string): Record<string, string> {
  * `uploadsText` is optional -- callers that have a customerKeyId can supply
  * it from `gatherUploadsText(customerKeyId)`.
  */
+export interface ExtractorResult {
+  /** Plain-text placeholder values for string-replacement. */
+  values: Map<string, string>;
+  /** Chart-shaped placeholder data, rendered to PNG before slide injection. */
+  charts: Map<string, ChartData>;
+}
+
 export async function extractPlaceholdersWithClaude(
   xlsxPath: string,
   templatePptxPath: string,
   uploadsText: string = '',
-): Promise<Map<string, string>> {
+): Promise<ExtractorResult> {
   const workbookText = readWorkbookAsText(xlsxPath);
   const placeholders = await collectUniquePlaceholders(templatePptxPath);
-  if (placeholders.length === 0) return new Map();
+  if (placeholders.length === 0) return { values: new Map(), charts: new Map() };
 
   const userPrompt = buildExtractorUserPrompt(workbookText, uploadsText, placeholders);
   const client = extractorClient();
@@ -542,17 +563,25 @@ export async function extractPlaceholdersWithClaude(
   }
   const parsed = parseExtractorJson(first.text);
   const allowed = new Set(placeholders);
-  const out = new Map<string, string>();
+  const values = new Map<string, string>();
+  const charts = new Map<string, ChartData>();
   for (const [k, v] of Object.entries(parsed)) {
     if (!allowed.has(k)) continue;
-    const s = (v == null ? '' : String(v)).trim();
-    if (s) out.set(k, s);
+    // Chart placeholders MAY come back as objects. Validate + store separately.
+    if (k.startsWith('{{CHART_') && v && typeof v === 'object') {
+      const chart = asChartData(v);
+      if (chart) { charts.set(k, chart); continue; }
+      // Object didn't validate -> fall through; placeholder will be cleaned out.
+    }
+    const s = (v == null ? '' : typeof v === 'object' ? '' : String(v)).trim();
+    if (s) values.set(k, s);
   }
-  const filled = out.size;
-  const total  = placeholders.length;
-  console.log(`[pptx-gen] Claude extraction: ${filled}/${total} placeholders filled ` +
+  const filledText  = values.size;
+  const filledChart = charts.size;
+  const total       = placeholders.length;
+  console.log(`[pptx-gen] Claude extraction: ${filledText} text + ${filledChart} chart / ${total} placeholders ` +
               `(workbook=${workbookText.length} chars, uploads=${uploadsText.length} chars)`);
-  return out;
+  return { values, charts };
 }
 
 // ─── PPTX text replacement ───────────────────────────────────────────────────
@@ -653,6 +682,8 @@ export interface PptxGenStats {
     skippedReason?:       string;
     failureMessage?:      string;
   };
+  /** Number of chart placeholders successfully rendered + embedded as PNGs. */
+  chartsInjected?: number;
 }
 
 // ─── Smart cleanup: strip empty {{X}} + empty runs, mark sparse slides ───────
@@ -930,6 +961,184 @@ async function renumberSlideFooters(zip: JSZip, originalTotal: number): Promise<
   }
 }
 
+// ─── Chart shape detection + image injection ────────────────────────────────
+
+interface ShapeCoords { x: number; y: number; cx: number; cy: number }
+
+/**
+ * Find the bounding box of the <p:sp> shape that contains the given
+ * placeholder text. Returns coords in EMU (English Metric Units, the
+ * pptx native: 914400 EMU == 1 inch).
+ */
+function findShapeCoordsContaining(slideXml: string, placeholder: string): ShapeCoords | null {
+  const shapeRe = /<p:sp\b[^>]*>([\s\S]*?)<\/p:sp>/g;
+  let m: RegExpExecArray | null;
+  while ((m = shapeRe.exec(slideXml))) {
+    const inner = m[1];
+    if (!inner.includes(placeholder)) continue;
+    const xfrmMatch = /<a:xfrm\b[^>]*>([\s\S]*?)<\/a:xfrm>/.exec(inner);
+    if (!xfrmMatch) continue;
+    const xfrm = xfrmMatch[1];
+    const off  = /<a:off\b[^/>]*x="(-?\d+)"[^/>]*y="(-?\d+)"/.exec(xfrm);
+    const ext  = /<a:ext\b[^/>]*cx="(\d+)"[^/>]*cy="(\d+)"/.exec(xfrm);
+    if (!off || !ext) continue;
+    return {
+      x:  parseInt(off[1], 10),
+      y:  parseInt(off[2], 10),
+      cx: parseInt(ext[1], 10),
+      cy: parseInt(ext[2], 10),
+    };
+  }
+  return null;
+}
+
+/** Slug a placeholder name to a safe filename token. */
+function placeholderSlug(p: string): string {
+  return p.replace(/[{}]/g, '').replace(/[^a-zA-Z0-9_]+/g, '_').toLowerCase();
+}
+
+/**
+ * Ensure [Content_Types].xml has a <Default Extension="png" ContentType="image/png"/>
+ * entry so every PNG we add resolves under the same rule. Idempotent.
+ */
+async function ensurePngDefault(zip: JSZip): Promise<void> {
+  const ctFile = zip.file('[Content_Types].xml');
+  if (!ctFile) return;
+  let ct = await ctFile.async('string');
+  if (/<Default\b[^>]*Extension="png"/i.test(ct)) return;
+  ct = ct.replace('<Types ', '<Types ').replace(
+    /(<Types\b[^>]*>)/,
+    '$1<Default Extension="png" ContentType="image/png"/>',
+  );
+  zip.file('[Content_Types].xml', ct);
+}
+
+/**
+ * Read the slide's rels file, allocate the next available rId, insert a new
+ * <Relationship> pointing at ../media/<imageFileName>, and return the rId.
+ */
+async function addImageRelToSlide(
+  zip: JSZip,
+  slideKey: string,
+  imageFileName: string,
+): Promise<string> {
+  const relsKey = slideKey.replace(/slides\/(slide\d+\.xml)$/, 'slides/_rels/$1.rels');
+  let relsXml: string;
+  const relsFile = zip.file(relsKey);
+  if (relsFile) {
+    relsXml = await relsFile.async('string');
+  } else {
+    relsXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+              '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>';
+  }
+  // Compute next free rId.
+  const used = new Set<number>();
+  for (const m of relsXml.matchAll(/Id="rId(\d+)"/g)) used.add(parseInt(m[1], 10));
+  let next = 1;
+  while (used.has(next)) next++;
+  const rid = `rId${next}`;
+  const newRel = `<Relationship Id="${rid}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="../media/${imageFileName}"/>`;
+  relsXml = relsXml.replace('</Relationships>', `${newRel}</Relationships>`);
+  zip.file(relsKey, relsXml);
+  return rid;
+}
+
+/** Build a <p:pic> shape that occupies the given coords and points at rId. */
+function buildPictureShapeXml(
+  picId: number,
+  picName: string,
+  rId: string,
+  coords: ShapeCoords,
+): string {
+  return (
+    `<p:pic>` +
+      `<p:nvPicPr>` +
+        `<p:cNvPr id="${picId}" name="${picName}"/>` +
+        `<p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr>` +
+        `<p:nvPr/>` +
+      `</p:nvPicPr>` +
+      `<p:blipFill>` +
+        `<a:blip r:embed="${rId}"/>` +
+        `<a:stretch><a:fillRect/></a:stretch>` +
+      `</p:blipFill>` +
+      `<p:spPr>` +
+        `<a:xfrm>` +
+          `<a:off x="${coords.x}" y="${coords.y}"/>` +
+          `<a:ext cx="${coords.cx}" cy="${coords.cy}"/>` +
+        `</a:xfrm>` +
+        `<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>` +
+      `</p:spPr>` +
+    `</p:pic>`
+  );
+}
+
+/**
+ * Render every chart in `chartMap` to a PNG, embed each into the pptx zip,
+ * wire it up via Content-Types + slide rels, and insert a <p:pic> shape on
+ * top of the original placeholder's bounding box.
+ *
+ * Skips:
+ *   - charts whose host slide has been deleted (in slidesToDelete)
+ *   - charts whose shape coords weren't captured (no chartLocations entry)
+ *   - charts that throw at render time (logged + skipped, deck still ships)
+ *
+ * Returns the count of charts actually inserted.
+ */
+async function injectCharts(
+  zip: JSZip,
+  chartMap: Map<string, ChartData>,
+  chartLocations: Map<string, { slideKey: string; coords: ShapeCoords }>,
+  deletedSlides: string[],
+): Promise<number> {
+  if (chartMap.size === 0) return 0;
+  await ensurePngDefault(zip);
+
+  const deletedSet = new Set(deletedSlides);
+  let inserted = 0;
+  // Stable picId base above what the template's existing shapes likely use.
+  let picIdSeed = 1000;
+
+  for (const [placeholder, chartData] of chartMap) {
+    const loc = chartLocations.get(placeholder);
+    if (!loc) {
+      console.warn(`[pptx-gen] chart ${placeholder} had no host slide -- skipped`);
+      continue;
+    }
+    if (deletedSet.has(loc.slideKey)) {
+      console.warn(`[pptx-gen] chart ${placeholder} host slide ${loc.slideKey} was deleted -- skipped`);
+      continue;
+    }
+    const slideFile = zip.file(loc.slideKey);
+    if (!slideFile) continue;
+
+    let pngBuf: Buffer;
+    try {
+      // Render at 2x the EMU display size for crisp output (EMU/9525 -> pixels).
+      const widthPx  = Math.max(800,  Math.round(loc.coords.cx / 9525 * 2));
+      const heightPx = Math.max(500,  Math.round(loc.coords.cy / 9525 * 2));
+      pngBuf = renderChartPng(chartData, widthPx, heightPx);
+    } catch (err) {
+      console.warn(`[pptx-gen] chart ${placeholder} render failed:`,
+                   err instanceof Error ? err.message : err);
+      continue;
+    }
+
+    const fileName = `chart-${placeholderSlug(placeholder)}.png`;
+    zip.file(`ppt/media/${fileName}`, pngBuf);
+
+    const rId = await addImageRelToSlide(zip, loc.slideKey, fileName);
+    const picXml = buildPictureShapeXml(picIdSeed++, `Chart ${placeholderSlug(placeholder)}`, rId, loc.coords);
+
+    let slideXml = await slideFile.async('string');
+    // Insert just before </p:spTree> so the picture renders on top of the
+    // original (now-empty) placeholder shape.
+    slideXml = slideXml.replace('</p:spTree>', `${picXml}</p:spTree>`);
+    zip.file(loc.slideKey, slideXml);
+    inserted += 1;
+  }
+  return inserted;
+}
+
 // ─── Slide deletion: remove a slide from the package atomically ──────────────
 
 /** Escape a string so it can be embedded literally inside a RegExp. */
@@ -1069,7 +1278,7 @@ export async function generatePopulatedPptx(opts: {
   // ready-to-replace map with values already formatted ($12M / 73% / 3.5x).
   // No more rigid sheet-name + column-letter lookups.
   const uploadsText = opts.customerKeyId ? await gatherUploadsText(opts.customerKeyId) : '';
-  const valueMap = await extractPlaceholdersWithClaude(
+  const { values: valueMap, charts: chartMap } = await extractPlaceholdersWithClaude(
     opts.customerXlsxPath,
     opts.templatePptxPath,
     uploadsText,
@@ -1118,9 +1327,25 @@ export async function generatePopulatedPptx(opts: {
 
   const slideStates: SlideState[] = [];
 
+  // Captured BEFORE replacement so we still have the chart placeholder text
+  // in the original shape (the replacement zeroes it out). Used by the
+  // chart-injection phase to know where to drop each rendered PNG.
+  interface ChartLocation { slideKey: string; coords: { x: number; y: number; cx: number; cy: number } }
+  const chartLocations = new Map<string, ChartLocation>();
+
   for (const key of slideEntries) {
     const xml           = await zip.file(key)!.async('string');
     const originalCount = countOriginalPlaceholders(xml);
+
+    // Capture coords of any chart placeholder we have data for BEFORE the
+    // replacement pass blanks the placeholder text.
+    for (const chartPlaceholder of chartMap.keys()) {
+      if (chartLocations.has(chartPlaceholder)) continue;
+      if (!xml.includes(chartPlaceholder)) continue;
+      const coords = findShapeCoordsContaining(xml, chartPlaceholder);
+      if (coords) chartLocations.set(chartPlaceholder, { slideKey: key, coords });
+    }
+
     const afterReplace  = applyReplacementsToSlideXml(xml, valueMap, mut);
     const unfilledHere  = countOriginalPlaceholders(afterReplace);
     // The final (closing) slide is always kept. Every deck must end on the
@@ -1257,6 +1482,21 @@ export async function generatePopulatedPptx(opts: {
   for (const slidePath of slidesToDelete) {
     await deleteSlideFromPackage(zip, slidePath);
     stats.slidesDeleted = (stats.slidesDeleted || 0) + 1;
+  }
+
+  // ── PHASE 3.5: render + inject chart images ──────────────────────────────
+  // For every chart placeholder Claude returned data for, render a PNG of the
+  // chart and drop it into the slide at the original placeholder's coords.
+  // Best-effort: a failed chart logs a warning, the slide still ships.
+  if (chartMap.size > 0 && chartLocations.size > 0) {
+    try {
+      const chartsInjected = await injectCharts(zip, chartMap, chartLocations, slidesToDelete);
+      stats.chartsInjected = chartsInjected;
+      console.log(`[pptx-gen] charts injected: ${chartsInjected} / ${chartMap.size}`);
+    } catch (err) {
+      console.warn('[pptx-gen] chart injection failed (continuing):',
+                   err instanceof Error ? err.message : err);
+    }
   }
 
   // ── PHASE 4: renumber slide-number footers ───────────────────────────────
