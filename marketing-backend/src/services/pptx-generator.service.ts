@@ -404,10 +404,13 @@ const EXTRACTOR_SYSTEM_PROMPT =
   '\n      { "type": "column" | "stackedColumn" | "line",' +
   '\n        "title":  "<short title>",' +
   '\n        "labels": ["Q1","Q2",...],' +
-  '\n        "series": [{ "name": "<label>", "values": [1.2, 1.5, ...] }],' +
+  '\n        "series": [{ "name": "<label>", "values": [1200000, 1500000, ...] }],' +
   '\n        "valueFormat": "currency" | "percent" | "count" | "number" }' +
-  '\n  - For ARR / revenue charts use "currency" and put values in MILLIONS' +
-  ' as plain numbers (e.g. 1.5 means $1.5M).' +
+  '\n  - For "currency" return RAW DOLLAR AMOUNTS as numbers (12000000 for $12M,' +
+  ' 450000 for $450K). The renderer formats them as $XM / $XK on the axis and' +
+  ' bar labels automatically. DO NOT pre-scale to millions.' +
+  '\n  - For "percent" return raw percent numbers (42 means 42%, not 0.42).' +
+  '\n  - For "count" return integer counts (e.g. 12345 stays 12,345).' +
   '\n  - Stacked charts (e.g. {{CHART_ARR_5Y}} = "ARR build, new vs expansion"):' +
   ' two series stacked. Single-series charts: one entry in series[].' +
   '\n  - If the data isn\'t there, return "" for the chart placeholder (a string).' +
