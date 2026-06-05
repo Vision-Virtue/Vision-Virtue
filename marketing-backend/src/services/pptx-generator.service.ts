@@ -44,8 +44,12 @@ import { listUploads, getOrExtractText } from './deck-upload.service';
 
 const EXTRACTOR_MODEL = 'claude-sonnet-4-20250514';
 const EXTRACTOR_MAX_TOKENS = 8192;
-// Hard cap so Excel + uploads stay well under the model's 200K input window.
-const EXTRACTOR_MAX_SOURCE_CHARS = 320_000;
+// Tight char caps keep the per-call input under ~15K tokens so we have room
+// for retries inside Anthropic's 30K-input-tokens-per-minute tier.
+//   ~4 chars/token -> 60K chars ≈ 15K tokens of source data.
+//   PLUS placeholders list + system prompt ≈ another 2-3K tokens.
+const EXTRACTOR_MAX_WORKBOOK_CHARS = 35_000;
+const EXTRACTOR_MAX_UPLOADS_CHARS  = 25_000;
 
 const QUESTIONNAIRE_SHEET = 'Investor_Deck_Questionnaire_Inputs';
 const CALCULATIONS_SHEET  = 'Investor_Deck_Calculations';
@@ -398,31 +402,34 @@ const EXTRACTOR_SYSTEM_PROMPT =
   '\n  - Start with "{" and end with "}".' +
   '\n  - Include every placeholder from the list -- if you can\'t fill it, return "".';
 
+function clipForBudget(s: string, maxChars: number): string {
+  const trimmed = s.trim();
+  if (trimmed.length <= maxChars) return trimmed;
+  return trimmed.slice(0, maxChars) +
+         `\n\n[... ${trimmed.length - maxChars} chars truncated to fit token budget ...]`;
+}
+
 function buildExtractorUserPrompt(
   workbookText: string,
   uploadsText: string,
   placeholders: string[],
 ): string {
-  // For placeholders that match a schema entry, surface the question/guidance so
-  // Claude knows the intent (e.g. {{COHORT_1_VALUE}} -> "value of cohort 1").
-  const schemaByPlaceholder = new Map(INVESTOR_DECK_FIELDS.map((f) => [f.placeholder, f]));
-  const placeholderBlock = placeholders.map((p) => {
-    const f = schemaByPlaceholder.get(p);
-    if (!f) return `  - ${p}`;
-    return `  - ${p} -- ${f.question} (${f.guidance || f.purpose})`;
-  }).join('\n');
+  // Placeholder names only -- the names are self-descriptive enough
+  // ({{COMPANY_NAME}}, {{ROUND_SIZE}}, {{REV_Y1}}, etc.) that the per-field
+  // schema enrichment (~5K tokens) wasn't paying for itself.
+  const placeholderBlock = placeholders.map((p) => `  - ${p}`).join('\n');
+
+  // Aggressive per-source caps -- two skinny blocks instead of one giant
+  // combined cap. Workbook and uploads share token budget, but each gets a
+  // hard ceiling so a 200K-char PDF can't crowd out the financial model.
+  const workbookClipped = clipForBudget(workbookText, EXTRACTOR_MAX_WORKBOOK_CHARS);
+  const uploadsClipped  = clipForBudget(uploadsText,  EXTRACTOR_MAX_UPLOADS_CHARS);
 
   let sources = '';
-  if (workbookText.trim()) sources += `EXCEL (all sheets):\n\n${workbookText.trim()}`;
-  if (uploadsText.trim())  sources += (sources ? '\n\n=================\n\n' : '') +
-                                       `CUSTOMER UPLOADS (extracted text):\n\n${uploadsText.trim()}`;
-  if (!sources)            sources  = '(no source data supplied)';
-
-  // Length-cap the combined source block to keep input tokens bounded.
-  if (sources.length > EXTRACTOR_MAX_SOURCE_CHARS) {
-    sources = sources.slice(0, EXTRACTOR_MAX_SOURCE_CHARS) +
-              `\n\n[... ${sources.length - EXTRACTOR_MAX_SOURCE_CHARS} chars truncated ...]`;
-  }
+  if (workbookClipped) sources += `EXCEL (all sheets):\n\n${workbookClipped}`;
+  if (uploadsClipped)  sources += (sources ? '\n\n=================\n\n' : '') +
+                                  `CUSTOMER UPLOADS (extracted text):\n\n${uploadsClipped}`;
+  if (!sources)        sources  = '(no source data supplied)';
 
   return `${sources}\n\n=================\n\nPLACEHOLDERS (return a value for every one; "" if unsupported):\n${placeholderBlock}\n\nReturn the JSON object now.`;
 }
@@ -486,39 +493,47 @@ export async function extractPlaceholdersWithClaude(
   const userPrompt = buildExtractorUserPrompt(workbookText, uploadsText, placeholders);
   const client = extractorClient();
 
-  // Retry once on 429 (Anthropic per-minute rate limit). Wait 65 seconds so
-  // the per-minute window has fully rolled over. If still rate-limited we
-  // throw a friendly error the controller turns into a "wait and retry"
-  // message for the admin.
+  // Rough token estimate (4 chars/token) so logs surface when we're near the
+  // 30K-input-tokens/min Anthropic tier limit.
+  const promptChars = userPrompt.length + EXTRACTOR_SYSTEM_PROMPT.length;
+  const approxTokens = Math.round(promptChars / 4);
+  console.log(`[pptx-gen] Claude extractor call: ~${approxTokens} input tokens ` +
+              `(${promptChars} chars, workbook=${workbookText.length} chars, uploads=${uploadsText.length} chars)`);
+
+  // Retry on 429 (Anthropic per-minute rate limit). Sleep 65 seconds between
+  // attempts so the rolling 60s window fully clears. 3 total attempts gives
+  // us ~2 min of headroom for transient rate pressure to dissipate.
   const callOnce = () => client.messages.create({
     model:      EXTRACTOR_MODEL,
     max_tokens: EXTRACTOR_MAX_TOKENS,
     system:     EXTRACTOR_SYSTEM_PROMPT,
     messages:   [{ role: 'user', content: userPrompt }],
   });
-  let resp;
-  try {
-    resp = await callOnce();
-  } catch (err) {
-    const e = err as { status?: number; message?: string };
-    const is429 = e.status === 429 || /\b429\b|rate[_ -]?limit/i.test(e.message || '');
-    if (!is429) throw err;
-    console.warn('[pptx-gen] Claude extraction rate-limited, sleeping 65s and retrying once...');
-    await new Promise((r) => setTimeout(r, 65_000));
+  const MAX_ATTEMPTS = 3;
+  const BACKOFF_MS   = 65_000;
+  let resp: Awaited<ReturnType<typeof callOnce>> | null = null;
+  let lastErr: unknown = null;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     try {
       resp = await callOnce();
-    } catch (err2) {
-      const e2 = err2 as { status?: number; message?: string };
-      const still429 = e2.status === 429 || /\b429\b|rate[_ -]?limit/i.test(e2.message || '');
-      if (still429) {
-        throw new Error(
-          'Anthropic rate limit (30,000 input tokens/min) was hit twice in a row. ' +
-          'Please wait ~60 seconds and try again, or upgrade your Anthropic tier at ' +
-          'https://console.anthropic.com/settings/billing',
-        );
-      }
-      throw err2;
+      break;
+    } catch (err) {
+      lastErr = err;
+      const e = err as { status?: number; message?: string };
+      const is429 = e.status === 429 || /\b429\b|rate[_ -]?limit/i.test(e.message || '');
+      if (!is429) throw err;
+      if (attempt === MAX_ATTEMPTS) break;
+      console.warn(`[pptx-gen] extractor 429 (attempt ${attempt}/${MAX_ATTEMPTS}), sleeping 65s before retry`);
+      await new Promise((r) => setTimeout(r, BACKOFF_MS));
     }
+  }
+  if (!resp) {
+    throw new Error(
+      `Anthropic rate limit (30,000 input tokens/min) hit ${MAX_ATTEMPTS} times in a row ` +
+      `(prompt was ~${approxTokens} tokens). Please wait ~2 minutes and try again, ` +
+      `or upgrade your Anthropic tier at https://console.anthropic.com/settings/billing. ` +
+      `Last error: ${lastErr instanceof Error ? lastErr.message : String(lastErr)}`,
+    );
   }
 
   const first = resp.content[0];
