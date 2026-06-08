@@ -124,7 +124,7 @@ export const partnerController = {
 
     // Generate the personalized xlsx. Non-fatal — log but still 201.
     try {
-      const result = await generateFinalizedXlsx(sub.id, sub.customerName, sub.formData as never);
+      const result = await generateFinalizedXlsx(sub.id, sub.customerName, sub.formData as never, keyRow.id);
       partnerSubmissionRepo.setXlsxPath(sub.id, result.fileName);
       // Best-effort pptx populate. Values pulled from Investor_Deck_Calculations
       // will be "MISSING INPUT" until an admin opens + saves the xlsx in Excel,
@@ -612,7 +612,7 @@ export const partnerController = {
     // Self-heal: if there is no xlsx on disk yet, generate one now.
     if (!sub.finalizedXlsxPath || !resolveStoredXlsx(sub.finalizedXlsxPath)) {
       try {
-        const result = await generateFinalizedXlsx(sub.id, sub.customerName, sub.formData as never);
+        const result = await generateFinalizedXlsx(sub.id, sub.customerName, sub.formData as never, sub.customerKeyId ?? undefined);
         partnerSubmissionRepo.setXlsxPath(sub.id, result.fileName);
       } catch (err) {
         console.error('[partner] xlsx regeneration on finalize failed:', err);
@@ -650,7 +650,7 @@ export const partnerController = {
       return;
     }
     try {
-      const result  = await generateFinalizedXlsx(sub.id, sub.customerName, sub.formData as never);
+      const result  = await generateFinalizedXlsx(sub.id, sub.customerName, sub.formData as never, sub.customerKeyId ?? undefined);
       const updated = partnerSubmissionRepo.setXlsxPath(sub.id, result.fileName);
       res.json({
         submission: {
