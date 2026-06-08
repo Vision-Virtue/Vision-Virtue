@@ -460,9 +460,27 @@ let _idSeed = 0;
 function nextId(prefix) { return `${prefix}-${++_idSeed}`; }
 
 // â”€â”€ Customer row (6.a) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const CUSTOMER_TYPES = ['Direct', 'CP', 'B2C', 'B2B', 'Distributor', 'Other'];
+const CUSTOMER_TYPES = ['Direct', 'CP', 'B2C', 'B2B', 'Distributor'];
 const TERRITORIES    = ['EU', 'US', 'ROW', 'APAC', 'LATAM', 'MEA'];
-const REVENUE_TYPES  = ['HW', 'SW', 'Other'];
+// Revenue types — mirrors the Definitions sheet in Financial Model v9.
+const REVENUE_TYPES  = [
+  'Software / SaaS',
+  'Hardware',
+  'Usage-Based Revenue',
+  'Maintenance & Support',
+  'Professional Services / NRE',
+  'POC / Pilot Revenue',
+  'Installation & Training',
+  'Licensing / Royalties',
+  'Revenue Share / Success Fees',
+  'Consumables / Parts / Accessories',
+  'Other',
+];
+
+// Marker value the Type / Territory selects emit when the user wants to
+// type their own value. The matching "<input data-*-custom>" is revealed
+// and its value is used when collecting form data.
+const CUSTOM_OPT = '__other__';
 
 function makeCustomerRow() {
   const tr = document.createElement('tr');
@@ -473,16 +491,35 @@ function makeCustomerRow() {
       <select class="partner-q-select partner-q-cell" data-cust-type>
         <option value="">— Select —</option>
         ${CUSTOMER_TYPES.map(o => `<option value="${o}">${o}</option>`).join('')}
+        <option value="${CUSTOM_OPT}">Other (specify)</option>
       </select>
+      <input type="text" class="partner-q-input partner-q-cell partner-q-custom" data-cust-type-custom placeholder="Type…" hidden />
     </td>
     <td>
       <select class="partner-q-select partner-q-cell" data-cust-territory>
         <option value="">— Select —</option>
         ${TERRITORIES.map(o => `<option value="${o}">${o}</option>`).join('')}
+        <option value="${CUSTOM_OPT}">Other (specify)</option>
       </select>
+      <input type="text" class="partner-q-input partner-q-cell partner-q-custom" data-cust-territory-custom placeholder="Territory…" hidden />
     </td>
     <td><button type="button" class="partner-q-rmrow" aria-label="Remove row">&#x2715;</button></td>
   `;
+  // Toggle the free-text input when the customer picks "Other (specify)".
+  const wireCustomToggle = (selectAttr, inputAttr) => {
+    const sel = tr.querySelector(`[${selectAttr}]`);
+    const inp = tr.querySelector(`[${inputAttr}]`);
+    if (!sel || !inp) return;
+    sel.addEventListener('change', () => {
+      const open = sel.value === CUSTOM_OPT;
+      inp.hidden = !open;
+      if (open) setTimeout(() => inp.focus(), 0);
+      else inp.value = '';
+    });
+  };
+  wireCustomToggle('data-cust-type',      'data-cust-type-custom');
+  wireCustomToggle('data-cust-territory', 'data-cust-territory-custom');
+
   tr.querySelector('.partner-q-rmrow').addEventListener('click', () => {
     tr.remove();
     syncDerivedSections();
@@ -552,6 +589,7 @@ function makeLetsScaleRow() {
     </td>
     <td><span class="partner-q-readonly" data-ls-revtype>—</span></td>
     <td><span class="partner-q-readonly" data-ls-price>—</span></td>
+    <td><input type="text" class="partner-q-input partner-q-cell partner-q-money" data-ls-cost inputmode="decimal" autocomplete="off" placeholder="$ 0" /></td>
     <td><input type="number" class="partner-q-input partner-q-cell" data-ls-q1 min="0" step="1" placeholder="0" /></td>
     <td><input type="number" class="partner-q-input partner-q-cell" data-ls-q2 min="0" step="1" placeholder="0" /></td>
     <td><input type="number" class="partner-q-input partner-q-cell" data-ls-q3 min="0" step="1" placeholder="0" /></td>
@@ -563,6 +601,7 @@ function makeLetsScaleRow() {
   // When the customer or product dropdown changes, refresh that row's auto-fill cells
   tr.querySelector('[data-ls-cust]').addEventListener('change', () => updateLetsScaleRow(tr));
   tr.querySelector('[data-ls-prod]').addEventListener('change', () => updateLetsScaleRow(tr));
+  bindMoneyInputs(tr);
   return tr;
 }
 
@@ -573,13 +612,26 @@ function addLetsScaleRow() {
 }
 
 // â”€â”€ Read state from the Customer/Product tables â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+//
+// For Type / Territory, the customer can pick a preset OR choose
+// "Other (specify)" which reveals a free-text input. We return the typed
+// value in the custom case.
+function readWithCustom(tr, selectAttr, customAttr) {
+  const sel = tr.querySelector(`[${selectAttr}]`);
+  if (!sel) return '';
+  if (sel.value === CUSTOM_OPT) {
+    return (tr.querySelector(`[${customAttr}]`)?.value || '').trim();
+  }
+  return sel.value || '';
+}
+
 function getCustomers() {
   return Array.from(document.querySelectorAll('tbody[data-customers-body] tr'))
     .map(tr => ({
       id:        tr.dataset.custId,
       name:      tr.querySelector('[data-cust-name]')?.value.trim() || '',
-      type:      tr.querySelector('[data-cust-type]')?.value || '',
-      territory: tr.querySelector('[data-cust-territory]')?.value || '',
+      type:      readWithCustom(tr, 'data-cust-type',      'data-cust-type-custom'),
+      territory: readWithCustom(tr, 'data-cust-territory', 'data-cust-territory-custom'),
     }));
 }
 function getProducts() {
@@ -624,8 +676,6 @@ function syncDerivedSections() {
     fillIdSelect(tr.querySelector('[data-ls-prod]'), products);
     updateLetsScaleRow(tr);
   });
-
-  syncUnitCosts(products);
 }
 
 // â”€â”€ Format a stored money string for read-only display â”€â”€â”€â”€â”€â”€â”€
@@ -635,33 +685,6 @@ function formatPriceDisplay(raw) {
   const [intPart, decPart] = cleaned.split('.');
   const intFmt = parseInt(intPart || '0', 10).toLocaleString('en-US');
   return '$ ' + (decPart !== undefined ? `${intFmt}.${decPart}` : intFmt);
-}
-
-// â”€â”€ Section 8 (Unit Costs): mirror products from 6.b â”€â”€â”€â”€â”€â”€â”€â”€â”€
-function syncUnitCosts(products) {
-  const body = document.querySelector('tbody[data-unitcost-body]');
-  if (!body) return;
-  // Preserve any cost values the user already entered, keyed by product id
-  const prevCosts = {};
-  body.querySelectorAll('tr[data-prod-id]').forEach(tr => {
-    prevCosts[tr.dataset.prodId] = tr.querySelector('[data-uc-cost]')?.value || '';
-  });
-  body.innerHTML = '';
-  const valid = products.filter(p => p.name);
-  if (valid.length === 0) {
-    body.innerHTML = '<tr><td colspan="2" class="partner-q-empty">Define products in section 6.b to populate this table.</td></tr>';
-    return;
-  }
-  valid.forEach(p => {
-    const tr = document.createElement('tr');
-    tr.dataset.prodId = p.id;
-    tr.innerHTML = `
-      <td class="partner-q-readonly-cell">${escHtml(p.name)}</td>
-      <td><input type="text" class="partner-q-input partner-q-cell partner-q-money" data-uc-cost inputmode="decimal" autocomplete="off" placeholder="$ 0" value="${escHtml(prevCosts[p.id] || '')}" /></td>
-    `;
-    body.appendChild(tr);
-  });
-  bindMoneyInputs(body);
 }
 
 // â”€â”€ Wire add-row buttons â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -724,6 +747,7 @@ function collectLetsScale() {
       productName:  prod?.name || '',
       revenueType:  prod?.revenueType || '',
       price:        prod?.price || '',
+      cost:         tr.querySelector('[data-ls-cost]')?.value || '',
       q1:           tr.querySelector('[data-ls-q1]')?.value || '',
       q2:           tr.querySelector('[data-ls-q2]')?.value || '',
       q3:           tr.querySelector('[data-ls-q3]')?.value || '',
@@ -731,14 +755,6 @@ function collectLetsScale() {
       y2:           tr.querySelector('[data-ls-y2]')?.value || '',
     };
   });
-}
-
-function collectUnitCosts() {
-  return Array.from(document.querySelectorAll('tbody[data-unitcost-body] tr[data-prod-id]')).map(tr => ({
-    productId:   tr.dataset.prodId,
-    productName: tr.querySelector('.partner-q-readonly-cell')?.textContent || '',
-    cost:        tr.querySelector('[data-uc-cost]')?.value || '',
-  }));
 }
 
 // â”€â”€ Submit â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -773,7 +789,6 @@ qForm?.addEventListener('submit', async e => {
     customers: getCustomers(),
     products:  getProducts(),
     letsScale: collectLetsScale(),
-    unitCosts: collectUnitCosts(),
     fte,
   };
 
@@ -880,9 +895,25 @@ function populateFormFromSubmission(sub) {
     if (!products.length) pBody.appendChild(makeProductRow());
   }
 
-  // Year labels + cascading dropdowns + unit-cost rows
+  // Year labels + cascading dropdowns
   syncYearLabels();
   syncDerivedSections();
+
+  // Restore custom (free-text) Type / Territory values on customer rows.
+  // If the stored value isn't a known preset, surface the "Other (specify)"
+  // input and fill it.
+  document.querySelectorAll('tbody[data-customers-body] tr').forEach((tr, i) => {
+    const c = (Array.isArray(fd.customers) ? fd.customers[i] : null) || {};
+    const restoreCustom = (selectAttr, customAttr, preset, stored) => {
+      const sel = tr.querySelector(`[${selectAttr}]`);
+      const inp = tr.querySelector(`[${customAttr}]`);
+      if (!sel || !inp || !stored) return;
+      if (preset.includes(stored)) { sel.value = stored; inp.hidden = true; inp.value = ''; }
+      else { sel.value = CUSTOM_OPT; inp.hidden = false; inp.value = stored; }
+    };
+    restoreCustom('data-cust-type',      'data-cust-type-custom',      CUSTOMER_TYPES, c.type);
+    restoreCustom('data-cust-territory', 'data-cust-territory-custom', TERRITORIES,    c.territory);
+  });
 
   // Rebuild Let's Scale rows now that the dropdowns are populated with the
   // original customer/product ids.
@@ -902,24 +933,15 @@ function populateFormFromSubmission(sub) {
       if (s.productId)  prodSel.value = s.productId;
       updateLetsScaleRow(tr);
       const setCell = (sel, v) => { const el = tr.querySelector(sel); if (el && v != null) el.value = v; };
-      setCell('[data-ls-q1]', s.q1);
-      setCell('[data-ls-q2]', s.q2);
-      setCell('[data-ls-q3]', s.q3);
-      setCell('[data-ls-q4]', s.q4);
-      setCell('[data-ls-y2]', s.y2);
+      setCell('[data-ls-cost]', s.cost);
+      setCell('[data-ls-q1]',   s.q1);
+      setCell('[data-ls-q2]',   s.q2);
+      setCell('[data-ls-q3]',   s.q3);
+      setCell('[data-ls-q4]',   s.q4);
+      setCell('[data-ls-y2]',   s.y2);
     });
     if (!scale.length) lBody.appendChild(makeLetsScaleRow());
   }
-
-  // Unit costs — syncUnitCosts already built rows; inject saved costs by id.
-  const ucRows = document.querySelectorAll('tbody[data-unitcost-body] tr[data-prod-id]');
-  const ucMap = {};
-  (Array.isArray(fd.unitCosts) ? fd.unitCosts : []).forEach(u => { if (u.productId) ucMap[u.productId] = u.cost; });
-  ucRows.forEach(tr => {
-    const cost = ucMap[tr.dataset.prodId];
-    const inp = tr.querySelector('[data-uc-cost]');
-    if (inp && cost) inp.value = cost;
-  });
 
   // FTE
   const fte = fd.fte || {};

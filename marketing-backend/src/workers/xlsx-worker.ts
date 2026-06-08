@@ -42,47 +42,44 @@ const CELLS = {
   firstYear:     'I12',  // Section 5
 };
 
-// Section 6.a Customers — rows 17–26 (max 10).
+// Section 6.a Customers — v9 rows 17–28 (max 12).
 const CUSTOMERS = {
-  startRow: 17, maxRows: 10,
+  startRow: 17, maxRows: 12,
   cols: { name: 'H', type: 'I', territory: 'J' },
 };
 
-// Section 6.b Products — rows 30–39 (max 10).
+// Section 6.b Products — v9 rows 30–40 (max 11). Col K holds a per-product
+// cost column the template ships with example data; we explicitly clear it
+// per customer since cost is now collected per scaling row in Section 7.
 const PRODUCTS = {
-  startRow: 30, maxRows: 10,
-  cols: { name: 'H', revenueType: 'I', price: 'J' },
+  startRow: 30, maxRows: 11,
+  cols: { name: 'H', revenueType: 'I', price: 'J', cost: 'K' },
 };
 
-// Section 7 Let's Scale — split by revenueType.
-// Each block fills customerName in col I, productName in col L,
-// price in col M, and quarterly + 2027 numbers in cols N/O/P/Q/R.
-const LETSSCALE_HW = {
-  startRow: 44, maxRows: 6,
-  cols: { customerName: 'I', productName: 'L', price: 'M',
-          q1: 'N', q2: 'O', q3: 'P', q4: 'Q', y2: 'R' },
-};
-const LETSSCALE_SW = {
-  startRow: 52, maxRows: 6,
-  cols: { customerName: 'I', productName: 'L', price: 'M',
-          q1: 'N', q2: 'O', q3: 'P', q4: 'Q', y2: 'R' },
-};
-const LETSSCALE_OTHER = {
-  startRow: 60, maxRows: 5,
-  cols: { customerName: 'I', productName: 'L', price: 'M',
-          q1: 'N', q2: 'O', q3: 'P', q4: 'Q', y2: 'R' },
-};
-
-// Section 8 Unit Costs — rows 69–78 (10 rows).
-const UNITCOSTS = {
-  startRow: 69, maxRows: 10,
-  cols: { name: 'H', cost: 'I' },
+// Section 7 Let's Scale — v9 collapses the three v8 blocks (HW/SW/Other)
+// into one continuous table at rows 44–63 (20 rows). New layout:
+//   H = revenueType
+//   I = customerName
+//   J = type
+//   K = territory
+//   L = productName
+//   M = price
+//   N = cost           (NEW — was section 8 in v8)
+//   O/P/Q/R = Q1/Q2/Q3/Q4
+//   S       = Y2 (2027)
+const LETSSCALE = {
+  startRow: 44, maxRows: 20,
+  cols: {
+    revenueType: 'H', customerName: 'I', type: 'J', territory: 'K',
+    productName: 'L', price: 'M', cost: 'N',
+    q1: 'O', q2: 'P', q3: 'Q', q4: 'R', y2: 'S',
+  },
 };
 
-// Section 9 FTE — fixed 4 rows starting at 82: COGS, R&D, S&M, G&A.
+// Section 8 (was Section 9 in v8) FTE — v9 rows 68–71.
 // Col I = 2026 quantity (y1), col J = 2027 quantity (y2).
 const FTE = {
-  startRow: 82,
+  startRow: 68,
   cols: { y1: 'I', y2: 'J' },
 };
 
@@ -96,8 +93,10 @@ interface SubmissionFormData {
   letsScale?: Array<{
     customerName?: string; type?: string; territory?: string;
     productName?: string; revenueType?: string; price?: string;
+    cost?: string;
     q1?: string; q2?: string; q3?: string; q4?: string; y2?: string;
   }>;
+  /** v8 legacy — ignored in v9 (cost moved to letsScale[].cost). */
   unitCosts?: Array<{ productName?: string; cost?: string }>;
   fte?: {
     cogs_y1?: string; cogs_y2?: string;
@@ -566,59 +565,38 @@ async function run(input: WorkerInput): Promise<void> {
     set(`${CUSTOMERS.cols.territory}${r}`, c.territory);
   }
 
-  // 6.b Products — rows 30–39
+  // 6.b Products — rows 30–40. We explicitly clear col K (per-product cost)
+  // even when the customer has no products listed for that row, because v9
+  // ships with example values in column K and we never want them leaking
+  // into a customer's personalised model.
   for (let i = 0; i < PRODUCTS.maxRows; i++) {
     const r = PRODUCTS.startRow + i;
     const p = (input.formData.products || [])[i] || {};
     set(`${PRODUCTS.cols.name}${r}`,        p.name);
     set(`${PRODUCTS.cols.revenueType}${r}`, p.revenueType);
     set(`${PRODUCTS.cols.price}${r}`,       p.price);
+    set(`${PRODUCTS.cols.cost}${r}`,        null);  // clear template example
   }
 
-  // 7 Let's Scale — split rows by revenueType.
-  const all = input.formData.letsScale || [];
-  const hwRows    = all.filter((l) => l.revenueType === 'HW');
-  const swRows    = all.filter((l) => l.revenueType === 'SW');
-  const otherRows = all.filter((l) => l.revenueType === 'Other');
-
-  const writeBlock = (
-    block: {
-      startRow: number; maxRows: number;
-      cols: { customerName: string; productName: string; price: string;
-              q1: string; q2: string; q3: string; q4: string; y2: string };
-    },
-    items: Array<{
-      customerName?: string; productName?: string; price?: string;
-      q1?: string; q2?: string; q3?: string; q4?: string; y2?: string;
-    }>,
-  ): void => {
-    for (let i = 0; i < block.maxRows; i++) {
-      const r = block.startRow + i;
-      const l = items[i] || {};
-      set(`${block.cols.customerName}${r}`, l.customerName);
-      set(`${block.cols.productName}${r}`,  l.productName);
-      set(`${block.cols.price}${r}`,        l.price);
-      set(`${block.cols.q1}${r}`,           l.q1);
-      set(`${block.cols.q2}${r}`,           l.q2);
-      set(`${block.cols.q3}${r}`,           l.q3);
-      set(`${block.cols.q4}${r}`,           l.q4);
-      set(`${block.cols.y2}${r}`,           l.y2);
-    }
-  };
-
-  writeBlock(LETSSCALE_HW,    hwRows);     // 7.a — rows 44–49
-  writeBlock(LETSSCALE_SW,    swRows);     // 7.b — rows 52–57
-  writeBlock(LETSSCALE_OTHER, otherRows);  // 7.c — rows 60–64
-
-  // 8 Unit Costs — rows 69–78
-  for (let i = 0; i < UNITCOSTS.maxRows; i++) {
-    const r = UNITCOSTS.startRow + i;
-    const u = (input.formData.unitCosts || [])[i] || {};
-    set(`${UNITCOSTS.cols.name}${r}`, u.productName);
-    set(`${UNITCOSTS.cols.cost}${r}`, u.cost);
+  // 7 Let's Scale — v9 one continuous block, rows 44–63. Cost is per-row.
+  for (let i = 0; i < LETSSCALE.maxRows; i++) {
+    const r = LETSSCALE.startRow + i;
+    const l = (input.formData.letsScale || [])[i] || {};
+    set(`${LETSSCALE.cols.revenueType}${r}`,  l.revenueType);
+    set(`${LETSSCALE.cols.customerName}${r}`, l.customerName);
+    set(`${LETSSCALE.cols.type}${r}`,         l.type);
+    set(`${LETSSCALE.cols.territory}${r}`,    l.territory);
+    set(`${LETSSCALE.cols.productName}${r}`,  l.productName);
+    set(`${LETSSCALE.cols.price}${r}`,        l.price);
+    set(`${LETSSCALE.cols.cost}${r}`,         l.cost);
+    set(`${LETSSCALE.cols.q1}${r}`,           l.q1);
+    set(`${LETSSCALE.cols.q2}${r}`,           l.q2);
+    set(`${LETSSCALE.cols.q3}${r}`,           l.q3);
+    set(`${LETSSCALE.cols.q4}${r}`,           l.q4);
+    set(`${LETSSCALE.cols.y2}${r}`,           l.y2);
   }
 
-  // 9 FTE — fixed 4 rows starting at 82: COGS, R&D, S&M, G&A
+  // 8 FTE — v9 rows 68–71: COGS, R&D, S&M, G&A
   const f = input.formData.fte || {};
   set(`${FTE.cols.y1}${FTE.startRow + 0}`, f.cogs_y1);
   set(`${FTE.cols.y2}${FTE.startRow + 0}`, f.cogs_y2);
