@@ -2784,11 +2784,10 @@ async function generatePptxDeck(d) {
     `;
 
     // Excel row actions: Download + Regenerate + Reupload (when xlsx
-    // exists), or Generate (when missing). Reupload lets the admin
-    // replace the stored file with a manually-edited copy before
-    // finalizing for the customer. When finalized, the Finalize button
-    // is replaced by an Edit action that un-finalizes the submission so
-    // a correction can be made and re-finalized.
+    // exists), or Generate (when missing). Reupload doubles as the
+    // re-open-for-editing path: the backend auto-flips a finalized
+    // submission back to 'review' when a new file lands, so the
+    // Finalize button reappears for a re-finalize after the correction.
     const excelActions = `
       ${xlsxReady
         ? `<button type="button" class="partner-subs-action partner-subs-download" data-action="download" data-product="excel">⬇ Download</button>
@@ -2796,8 +2795,7 @@ async function generatePptxDeck(d) {
            <button type="button" class="partner-subs-action partner-subs-reupload" data-action="reupload">⤴ Reupload</button>`
         : `<button type="button" class="partner-subs-action partner-subs-generate" data-action="generate">Generate xlsx</button>`}
       ${isFinal
-        ? `<span class="partner-status-pill partner-status-finalized">Finalized</span>
-           <button type="button" class="partner-subs-action partner-subs-edit" data-action="edit">✎ Edit</button>`
+        ? `<span class="partner-status-pill partner-status-finalized">Finalized</span>`
         : `<button type="button" class="partner-subs-action partner-subs-finalize" data-action="finalize">Finalize</button>`}
     `;
 
@@ -2807,9 +2805,6 @@ async function generatePptxDeck(d) {
            <button type="button" class="partner-subs-action partner-subs-generate" data-action="generate" data-product="pptx">↻ Regenerate</button>
            <button type="button" class="partner-subs-action partner-subs-reupload" data-action="reupload" data-product="pptx">⤴ Reupload</button>`
         : `<button type="button" class="partner-subs-action partner-subs-generate" data-action="generate" data-product="pptx" ${xlsxReady ? '' : 'disabled'}>${xlsxReady ? 'Generate pptx' : 'Generate xlsx first'}</button>`}
-      ${isFinal
-        ? `<button type="button" class="partner-subs-action partner-subs-edit" data-action="edit" data-product="pptx">✎ Edit</button>`
-        : ''}
     `;
 
     return `
@@ -3123,33 +3118,6 @@ async function generatePptxDeck(d) {
       });
     });
 
-    // Edit — flip a finalized submission back to 'review' so a correction
-    // can be made and re-finalized. Same UX entry for either deliverable;
-    // the unfinalize action covers the whole submission.
-    card.querySelectorAll('[data-action="edit"]').forEach((editBtn) => {
-      editBtn.addEventListener('click', async (ev) => {
-        ev.stopPropagation();
-        const btn = ev.currentTarget;
-        if (!confirm('Re-open this submission for editing? The customer-facing Finalized download will be hidden until you finalize again.')) return;
-        const original = btn.textContent;
-        btn.disabled = true;
-        btn.textContent = 'Editing…';
-        try {
-          const res = await fetch(adminUrl(`/api/admin/submissions/${encodeURIComponent(sub.id)}/unfinalize`), {
-            method: 'POST',
-          });
-          if (!res.ok) {
-            const text = await res.text().catch(() => '');
-            throw new Error(`HTTP ${res.status} ${text.slice(0, 160)}`);
-          }
-          await loadSubmissions();
-        } catch (err) {
-          btn.disabled = false;
-          btn.textContent = original;
-          alert('Edit failed.\n\n' + (err && err.message ? err.message : ''));
-        }
-      });
-    });
 
     card.querySelectorAll('[data-action="download"]').forEach((btn) => {
       btn.addEventListener('click', async (ev) => {

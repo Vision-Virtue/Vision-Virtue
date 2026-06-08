@@ -688,7 +688,11 @@ export const partnerController = {
     }
     try {
       storeUploadedPptx(sub.id, sub.customerName, buf);
-      res.json({ success: true, submission: { id: sub.id, status: sub.status, hasPptx: true } });
+      // Reupload is also "re-open for editing" — flip a finalized
+      // submission back to 'review' so the admin can Finalize again.
+      if (sub.status === 'finalized') partnerSubmissionRepo.unfinalize(sub.id);
+      const after = partnerSubmissionRepo.getById(sub.id);
+      res.json({ success: true, submission: { id: after?.id, status: after?.status, hasPptx: true } });
     } catch (err) {
       console.error('[partner] pptx upload failed:', err);
       res.status(400).json({
@@ -739,13 +743,18 @@ export const partnerController = {
       return;
     }
     try {
-      const result  = storeUploadedXlsx(sub.id, sub.customerName, buf);
-      const updated = partnerSubmissionRepo.setXlsxPath(sub.id, result.fileName);
+      const result = storeUploadedXlsx(sub.id, sub.customerName, buf);
+      partnerSubmissionRepo.setXlsxPath(sub.id, result.fileName);
+      // Reupload is also the "re-open for editing" action — if the
+      // submission was finalized, flip it back to 'review' so the
+      // admin can Finalize again after the correction lands.
+      if (sub.status === 'finalized') partnerSubmissionRepo.unfinalize(sub.id);
+      const after = partnerSubmissionRepo.getById(sub.id);
       res.json({
         submission: {
-          id:      updated?.id,
-          status:  updated?.status,
-          hasXlsx: !!updated?.finalizedXlsxPath,
+          id:      after?.id,
+          status:  after?.status,
+          hasXlsx: !!after?.finalizedXlsxPath,
         },
       });
     } catch (err) {

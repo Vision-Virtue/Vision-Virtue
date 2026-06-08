@@ -155,6 +155,29 @@ async function renderTileState() {
   renderXlsxTile(xlsxTile, xlsxStatusEl, sub);
   if (pptxTile && pptxStatusEl) renderPptxTile(pptxTile, pptxStatusEl, sub);
   renderConsultTile(sub);
+  renderEditBanner(sub);
+}
+
+// One Edit Submission button shown above all three tiles — edits cascade to
+// the Financial Model, the Business Model Presentation, and the Ethan
+// consultation context, so they share a single entry point.
+function renderEditBanner(sub) {
+  const banner = document.getElementById('editBanner');
+  const btn    = document.getElementById('editBannerBtn');
+  if (!banner || !btn) return;
+  if (!sub) { banner.hidden = true; return; }
+  banner.hidden = false;
+  btn.onclick = async () => {
+    const orig = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Loadingâ€¦';
+    try {
+      await openEditFlow(sub.id);
+    } catch (err) {
+      alert('Could not open editor.\n\n' + (err && err.message ? err.message : ''));
+    } finally {
+      btn.disabled = false; btn.textContent = orig;
+    }
+  };
 }
 
 function renderConsultTile(sub) {
@@ -184,15 +207,10 @@ function renderXlsxTile(tile, statusEl, sub) {
     tile.classList.remove('is-review', 'is-finalized');
     return;
   }
-  // Edit button shows whenever a submission exists, even after finalization,
-  // so the customer can correct a missed input. Editing flips the status
-  // back to 'review' server-side.
-  const editBtn = `<button type="button" class="partner-tile-edit" data-edit-id="${sub.id}">Edit Submission</button>`;
   if (sub.status === 'finalized' && sub.hasFinalizedXlsx) {
     statusEl.innerHTML = `
       <span class="partner-status-pill partner-status-finalized">Finalized</span>
       <button type="button" class="partner-tile-download" data-download-id="${sub.id}">Download Model</button>
-      ${editBtn}
     `;
     tile.classList.add('is-finalized');
     tile.classList.remove('is-review');
@@ -210,26 +228,10 @@ function renderXlsxTile(tile, statusEl, sub) {
       }
     });
   } else {
-    statusEl.innerHTML = `
-      <span class="partner-status-pill partner-status-review">Under Visionâ€™s Review</span>
-      ${editBtn}
-    `;
+    statusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Under Visionâ€™s Review</span>';
     tile.classList.add('is-review');
     tile.classList.remove('is-finalized');
   }
-  statusEl.querySelector('[data-edit-id]')?.addEventListener('click', async (ev) => {
-    ev.stopPropagation();
-    const btn = ev.currentTarget;
-    const orig = btn.textContent;
-    btn.disabled = true; btn.textContent = 'Loadingâ€¦';
-    try {
-      await openEditFlow(sub.id);
-    } catch (err) {
-      alert('Could not open editor.\n\n' + (err && err.message ? err.message : ''));
-    } finally {
-      btn.disabled = false; btn.textContent = orig;
-    }
-  });
 }
 
 function renderPptxTile(tile, statusEl, sub) {
