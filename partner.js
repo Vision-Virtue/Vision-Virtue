@@ -73,6 +73,21 @@ async function apiSubmitQuestionnaire(customerName, formData) {
   return res.json();
 }
 
+async function apiUpdateMySubmission(submissionId, customerName, formData) {
+  const key = customerKey();
+  if (!key) throw new Error('Missing customer key');
+  const res = await fetch(`${PARTNER_API}/api/customer/me/submissions/${encodeURIComponent(submissionId)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', 'X-Customer-Key': key },
+    body: JSON.stringify({ customerName, formData }),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Update failed (${res.status}): ${body.slice(0, 200)}`);
+  }
+  return res.json();
+}
+
 // â”€â”€ Navbar scroll effect â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const navbar = document.getElementById('navbar');
 window.addEventListener('scroll', () => {
@@ -106,19 +121,23 @@ function bindMoneyInputs(scope) {
   });
 }
 
-// â”€â”€ Render submission state on the Financial Model tile â”€â”€â”€â”€â”€â”€
+// â”€â”€ Render submission state on the Financial Model + Business Deck tiles
 async function renderTileState() {
-  const statusEl = document.getElementById('statusFinancialModel');
-  const tile     = document.getElementById('tileFinancialModel');
-  if (!statusEl || !tile) return;
+  const xlsxStatusEl = document.getElementById('statusFinancialModel');
+  const xlsxTile     = document.getElementById('tileFinancialModel');
+  const pptxStatusEl = document.getElementById('statusBusinessDeck');
+  const pptxTile     = document.getElementById('tileBusinessDeck');
+  if (!xlsxStatusEl || !xlsxTile) return;
 
-  // Loading placeholder while we fetch
-  statusEl.innerHTML = '<span class="partner-status-pill partner-status-new">Loadingâ€¦</span>';
+  // Loading placeholders while we fetch
+  xlsxStatusEl.innerHTML = '<span class="partner-status-pill partner-status-new">Loadingâ€¦</span>';
+  if (pptxStatusEl) pptxStatusEl.innerHTML = '<span class="partner-status-pill partner-status-new">Loadingâ€¦</span>';
 
   let subs;
   try { subs = await apiFetchMySubmissions(); }
   catch (err) {
-    statusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Connection error â€” retry</span>';
+    xlsxStatusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Connection error â€” retry</span>';
+    if (pptxStatusEl) pptxStatusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Connection error â€” retry</span>';
     return;
   }
 
@@ -133,16 +152,47 @@ async function renderTileState() {
     if (welcome) welcome.textContent = `Welcome, ${knownName}. Select a product below to view its status.`;
   }
 
+  renderXlsxTile(xlsxTile, xlsxStatusEl, sub);
+  if (pptxTile && pptxStatusEl) renderPptxTile(pptxTile, pptxStatusEl, sub);
+  renderConsultTile(sub);
+}
+
+function renderConsultTile(sub) {
+  const statusEl = document.getElementById('statusEthanConsult');
+  const tile     = document.getElementById('tileEthanConsult');
+  if (!statusEl || !tile) return;
+
+  const finalized = !!(sub && sub.status === 'finalized');
+  if (finalized) {
+    statusEl.innerHTML = '<span class="partner-status-pill partner-status-finalized">Live</span>';
+    tile.classList.add('is-finalized');
+    tile.classList.remove('is-review');
+    tile.disabled = false;
+  } else {
+    statusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Available after finalization</span>';
+    tile.classList.add('is-review');
+    tile.classList.remove('is-finalized');
+    // Allow clicks even when not finalized — the click handler explains why
+    // consultation is gated and links the customer back to the relevant tile.
+    tile.disabled = false;
+  }
+}
+
+function renderXlsxTile(tile, statusEl, sub) {
   if (!sub) {
     statusEl.innerHTML = '<span class="partner-status-pill partner-status-new">Get Started</span>';
     tile.classList.remove('is-review', 'is-finalized');
     return;
   }
-
+  // Edit button shows whenever a submission exists, even after finalization,
+  // so the customer can correct a missed input. Editing flips the status
+  // back to 'review' server-side.
+  const editBtn = `<button type="button" class="partner-tile-edit" data-edit-id="${sub.id}">Edit Submission</button>`;
   if (sub.status === 'finalized' && sub.hasFinalizedXlsx) {
     statusEl.innerHTML = `
       <span class="partner-status-pill partner-status-finalized">Finalized</span>
       <button type="button" class="partner-tile-download" data-download-id="${sub.id}">Download Model</button>
+      ${editBtn}
     `;
     tile.classList.add('is-finalized');
     tile.classList.remove('is-review');
@@ -153,6 +203,55 @@ async function renderTileState() {
       btn.disabled = true; btn.textContent = 'Downloadingâ€¦';
       try {
         await downloadFinalizedXlsx(sub.id, sub.customerName);
+      } catch (err) {
+        alert('Download failed.\n\n' + (err && err.message ? err.message : ''));
+      } finally {
+        btn.disabled = false; btn.textContent = orig;
+      }
+    });
+  } else {
+    statusEl.innerHTML = `
+      <span class="partner-status-pill partner-status-review">Under Visionâ€™s Review</span>
+      ${editBtn}
+    `;
+    tile.classList.add('is-review');
+    tile.classList.remove('is-finalized');
+  }
+  statusEl.querySelector('[data-edit-id]')?.addEventListener('click', async (ev) => {
+    ev.stopPropagation();
+    const btn = ev.currentTarget;
+    const orig = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Loadingâ€¦';
+    try {
+      await openEditFlow(sub.id);
+    } catch (err) {
+      alert('Could not open editor.\n\n' + (err && err.message ? err.message : ''));
+    } finally {
+      btn.disabled = false; btn.textContent = orig;
+    }
+  });
+}
+
+function renderPptxTile(tile, statusEl, sub) {
+  if (!sub) {
+    statusEl.innerHTML = '<span class="partner-status-pill partner-status-new">Awaiting submission</span>';
+    tile.classList.remove('is-review', 'is-finalized');
+    return;
+  }
+  if (sub.status === 'finalized' && sub.hasFinalizedPptx) {
+    statusEl.innerHTML = `
+      <span class="partner-status-pill partner-status-finalized">Finalized</span>
+      <button type="button" class="partner-tile-download" data-download-pptx="${sub.id}">Download Presentation</button>
+    `;
+    tile.classList.add('is-finalized');
+    tile.classList.remove('is-review');
+    statusEl.querySelector('[data-download-pptx]')?.addEventListener('click', async (ev) => {
+      ev.stopPropagation();
+      const btn = ev.currentTarget;
+      const orig = btn.textContent;
+      btn.disabled = true; btn.textContent = 'Downloadingâ€¦';
+      try {
+        await downloadFinalizedPptx(sub.id, sub.customerName);
       } catch (err) {
         alert('Download failed.\n\n' + (err && err.message ? err.message : ''));
       } finally {
@@ -184,6 +283,24 @@ async function downloadFinalizedXlsx(submissionId, customerName) {
   URL.revokeObjectURL(url);
 }
 
+async function downloadFinalizedPptx(submissionId, customerName) {
+  const key = customerKey();
+  const res = await fetch(`${PARTNER_API}/api/customer/me/submissions/${encodeURIComponent(submissionId)}/pptx`, {
+    headers: { 'X-Customer-Key': key },
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`HTTP ${res.status} ${text.slice(0, 160)}`);
+  }
+  const blob = await res.blob();
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `${customerName || 'Customer'} - Investor Deck.pptx`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
 // â”€â”€ Tile click â†’ questionnaire or status view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const tile     = document.getElementById('tileFinancialModel');
 const products = document.querySelector('.partner-products-section');
@@ -197,6 +314,116 @@ tile?.addEventListener('click', () => {
   if (_latestSubmission) return;
   showQuestionnaire();
 });
+
+// The business-deck tile shares the same Customer's Questionnaire as the
+// Financial Model. Both deliverables are generated from one submission.
+document.getElementById('tileBusinessDeck')?.addEventListener('click', () => {
+  if (_latestSubmission) return;
+  showQuestionnaire();
+});
+
+// ─── Ethan Caldwell consultation modal ──────────────────────────────────────
+const consultOverlay = document.getElementById('consultOverlay');
+const consultBody    = document.getElementById('consultBody');
+const consultForm    = document.getElementById('consultForm');
+const consultInput   = document.getElementById('consultInput');
+const consultSend    = document.getElementById('consultSend');
+let _consultHistory = [];
+
+document.getElementById('tileEthanConsult')?.addEventListener('click', () => {
+  const sub = _latestSubmission;
+  if (!sub) {
+    alert('Submit your Customer’s Questionnaire first — Ethan needs your model to reason about your business.');
+    return;
+  }
+  if (sub.status !== 'finalized') {
+    alert('Ethan is available once Vision & Virtue finalizes your model and presentation. We’ll notify you as soon as it’s ready.');
+    return;
+  }
+  openConsult();
+});
+
+document.getElementById('consultClose')?.addEventListener('click', closeConsult);
+consultOverlay?.addEventListener('click', (ev) => {
+  if (ev.target === consultOverlay) closeConsult();
+});
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && consultOverlay && !consultOverlay.hidden) closeConsult();
+});
+
+function openConsult() {
+  if (!consultOverlay) return;
+  consultOverlay.hidden = false;
+  document.body.classList.add('is-consult-open');
+  if (!_consultHistory.length) {
+    appendConsultMsg('bot',
+      `I’m Ethan Caldwell, your VC / PE consultant. I’m wired live to your finalized model and presentation. ` +
+      `Ask me about sector dynamics, growth pacing, unit economics, margins, ARR build, use of proceeds, or anything ` +
+      `else an investor is going to push on. What’s on your mind?`);
+  }
+  setTimeout(() => consultInput?.focus(), 50);
+}
+
+function closeConsult() {
+  if (!consultOverlay) return;
+  consultOverlay.hidden = true;
+  document.body.classList.remove('is-consult-open');
+}
+
+function appendConsultMsg(role, text) {
+  if (!consultBody) return;
+  const div = document.createElement('div');
+  div.className = 'consult-msg consult-msg-' + role;
+  div.textContent = text;
+  consultBody.appendChild(div);
+  consultBody.scrollTop = consultBody.scrollHeight;
+  return div;
+}
+
+consultForm?.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const text = (consultInput?.value || '').trim();
+  if (!text) return;
+  appendConsultMsg('user', text);
+  _consultHistory.push({ role: 'user', content: text });
+  consultInput.value = '';
+  consultSend.disabled = true;
+  const pending = appendConsultMsg('system', 'Ethan is thinking…');
+  try {
+    const reply = await sendConsultMessage(text, _consultHistory.slice(0, -1));
+    pending?.remove();
+    appendConsultMsg('bot', reply);
+    _consultHistory.push({ role: 'assistant', content: reply });
+  } catch (err) {
+    pending?.remove();
+    appendConsultMsg('error', (err && err.message) ? err.message : 'Consultation failed. Please try again.');
+  } finally {
+    consultSend.disabled = false;
+    consultInput.focus();
+  }
+});
+
+async function sendConsultMessage(message, history) {
+  const key = customerKey();
+  if (!key) throw new Error('Session expired — please sign in again.');
+  const res = await fetch(`${PARTNER_API}/api/customer/me/consult`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Customer-Key': key },
+    body: JSON.stringify({ message, history, agent: 'vc_expert' }),
+  });
+  if (!res.ok) {
+    let detail = '';
+    try { const j = await res.json(); detail = j?.error?.message || ''; } catch {}
+    if (res.status === 401) {
+      sessionStorage.clear();
+      window.location.replace('index.html');
+      throw new Error('Session expired.');
+    }
+    throw new Error(detail || `HTTP ${res.status}`);
+  }
+  const j = await res.json();
+  return j?.data?.reply || '(empty response)';
+}
 
 function showQuestionnaire() {
   products.hidden = true;
@@ -550,20 +777,154 @@ qForm?.addEventListener('submit', async e => {
 
   const submitBtn = qForm.querySelector('.partner-q-submit');
   const originalText = submitBtn?.textContent;
-  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Submitting…'; }
+  const isEdit = !!_editingSubmissionId;
+  if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = isEdit ? 'Saving…' : 'Submitting…'; }
 
   try {
-    await apiSubmitQuestionnaire(name, formData);
+    if (isEdit) {
+      await apiUpdateMySubmission(_editingSubmissionId, name, formData);
+    } else {
+      await apiSubmitQuestionnaire(name, formData);
+    }
     sessionStorage.setItem('vv_customer_name', name);
+    _editingSubmissionId = null;
+    setSubmitButtonMode('submit');
     qForm.hidden = true;
     qThanks.hidden = false;
     await renderTileState();
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (err) {
     if (submitBtn) { submitBtn.disabled = false; submitBtn.textContent = originalText || 'Submit'; }
-    alert('Submission failed. Please check your connection and try again.\n\n' + (err && err.message ? err.message : ''));
+    alert((isEdit ? 'Save failed.' : 'Submission failed.') + ' Please check your connection and try again.\n\n' + (err && err.message ? err.message : ''));
   }
 });
+
+// ─── Edit flow: prefill questionnaire from existing submission ──────────────
+let _editingSubmissionId = null;
+
+function setSubmitButtonMode(mode) {
+  const submitBtn = qForm?.querySelector('.partner-q-submit');
+  if (!submitBtn) return;
+  submitBtn.textContent = mode === 'edit' ? 'Save Changes' : 'Submit';
+}
+
+async function openEditFlow(submissionId) {
+  const key = customerKey();
+  if (!key) throw new Error('Session expired — please sign in again.');
+  const res = await fetch(`${PARTNER_API}/api/customer/me/submissions/${encodeURIComponent(submissionId)}`, {
+    headers: { 'X-Customer-Key': key },
+  });
+  if (!res.ok) {
+    if (res.status === 401) { sessionStorage.clear(); window.location.replace('index.html'); }
+    throw new Error(`Failed to load submission (${res.status})`);
+  }
+  const { submission } = await res.json();
+  _editingSubmissionId = submission.id;
+  showQuestionnaire();
+  populateFormFromSubmission(submission);
+  setSubmitButtonMode('edit');
+}
+
+// Reset edit mode if the user backs out
+document.getElementById('questionnaireBack')?.addEventListener('click', () => {
+  _editingSubmissionId = null;
+  setSubmitButtonMode('submit');
+});
+
+function populateFormFromSubmission(sub) {
+  const fd = sub.formData || {};
+
+  // Name + general fields
+  const nameEl = document.getElementById('qName');
+  if (nameEl) nameEl.value = sub.customerName || '';
+  const g = fd.general || {};
+  const setVal = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+  setVal('qSector',          g.sector);
+  setVal('qRound',           g.round);
+  setVal('qCapitalGoal',     g.capitalGoal);
+  setVal('qYearsSinceFound', g.yearsSinceFound);
+  setVal('qFirstYear',       g.firstYear);
+
+  // Rebuild Customer rows with their original ids so letsScale references
+  // continue to resolve.
+  const cBody = document.querySelector('tbody[data-customers-body]');
+  if (cBody) {
+    cBody.innerHTML = '';
+    const customers = Array.isArray(fd.customers) ? fd.customers : [];
+    customers.forEach(c => {
+      const tr = makeCustomerRow();
+      if (c.id) tr.dataset.custId = c.id;
+      const inp = tr.querySelector('[data-cust-name]');     if (inp && c.name)      inp.value = c.name;
+      const sel = tr.querySelector('[data-cust-type]');     if (sel && c.type)      sel.value = c.type;
+      const ter = tr.querySelector('[data-cust-territory]');if (ter && c.territory) ter.value = c.territory;
+      cBody.appendChild(tr);
+    });
+    if (!customers.length) cBody.appendChild(makeCustomerRow());
+  }
+
+  // Rebuild Product rows with their original ids.
+  const pBody = document.querySelector('tbody[data-products-body]');
+  if (pBody) {
+    pBody.innerHTML = '';
+    const products = Array.isArray(fd.products) ? fd.products : [];
+    products.forEach(p => {
+      const tr = makeProductRow();
+      if (p.id) tr.dataset.prodId = p.id;
+      const inp = tr.querySelector('[data-prod-name]');    if (inp && p.name)        inp.value = p.name;
+      const sel = tr.querySelector('[data-prod-revtype]'); if (sel && p.revenueType) sel.value = p.revenueType;
+      const pri = tr.querySelector('[data-prod-price]');   if (pri && p.price)       pri.value = p.price;
+      pBody.appendChild(tr);
+    });
+    if (!products.length) pBody.appendChild(makeProductRow());
+  }
+
+  // Year labels + cascading dropdowns + unit-cost rows
+  syncYearLabels();
+  syncDerivedSections();
+
+  // Rebuild Let's Scale rows now that the dropdowns are populated with the
+  // original customer/product ids.
+  const lBody = document.querySelector('tbody[data-letsscale-body]');
+  if (lBody) {
+    lBody.innerHTML = '';
+    const scale = Array.isArray(fd.letsScale) ? fd.letsScale : [];
+    scale.forEach(s => {
+      const tr = makeLetsScaleRow();
+      lBody.appendChild(tr);
+      const custSel = tr.querySelector('[data-ls-cust]');
+      const prodSel = tr.querySelector('[data-ls-prod]');
+      // Populate the selects from the now-current customer/product lists
+      fillIdSelect(custSel, getCustomers());
+      fillIdSelect(prodSel, getProducts());
+      if (s.customerId) custSel.value = s.customerId;
+      if (s.productId)  prodSel.value = s.productId;
+      updateLetsScaleRow(tr);
+      const setCell = (sel, v) => { const el = tr.querySelector(sel); if (el && v != null) el.value = v; };
+      setCell('[data-ls-q1]', s.q1);
+      setCell('[data-ls-q2]', s.q2);
+      setCell('[data-ls-q3]', s.q3);
+      setCell('[data-ls-q4]', s.q4);
+      setCell('[data-ls-y2]', s.y2);
+    });
+    if (!scale.length) lBody.appendChild(makeLetsScaleRow());
+  }
+
+  // Unit costs — syncUnitCosts already built rows; inject saved costs by id.
+  const ucRows = document.querySelectorAll('tbody[data-unitcost-body] tr[data-prod-id]');
+  const ucMap = {};
+  (Array.isArray(fd.unitCosts) ? fd.unitCosts : []).forEach(u => { if (u.productId) ucMap[u.productId] = u.cost; });
+  ucRows.forEach(tr => {
+    const cost = ucMap[tr.dataset.prodId];
+    const inp = tr.querySelector('[data-uc-cost]');
+    if (inp && cost) inp.value = cost;
+  });
+
+  // FTE
+  const fte = fd.fte || {};
+  ['cogs_y1','cogs_y2','rd_y1','rd_y2','sm_y1','sm_y2','ga_y1','ga_y2'].forEach(k => {
+    if (qForm.elements['fte_' + k] && fte[k] != null) qForm.elements['fte_' + k].value = fte[k];
+  });
+}
 
 // ---- Initial render ------------------------------------------------------
 // Clean up any leftover localStorage from Phase 1 (now backend-backed).

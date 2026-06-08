@@ -316,7 +316,7 @@ export async function extractPlaceholdersFromXlsx(
 // downstream cleanup pass strips its <a:r> run + parent <a:p> paragraph.
 
 /** Dump every sheet in the workbook to a readable text block. */
-function readWorkbookAsText(xlsxPath: string): string {
+export function readWorkbookAsText(xlsxPath: string): string {
   const wb = XLSX.readFile(xlsxPath, { cellDates: true, cellNF: false, cellText: false });
   const parts: string[] = [];
   for (const sheetName of wb.SheetNames) {
@@ -1623,4 +1623,30 @@ export function resolveStoredPptx(fileName: string): string | null {
     ? fileName
     : path.join(customerPptxDir(), fileName);
   return fs.existsSync(candidate) ? candidate : null;
+}
+
+/**
+ * Replace the stored pptx for a submission with a manually-edited file
+ * uploaded by the admin (the Investor Deck Reupload action). Validates the
+ * zip magic bytes so the customer never downloads a corrupt or non-pptx
+ * file. Returns the bare filename.
+ */
+export function storeUploadedPptx(
+  submissionId: string,
+  customerName: string,
+  buffer: Buffer,
+): { filePath: string; fileName: string } {
+  if (
+    buffer.length < 4 ||
+    buffer[0] !== 0x50 || buffer[1] !== 0x4b ||
+    buffer[2] !== 0x03 || buffer[3] !== 0x04
+  ) {
+    throw new Error('Uploaded file is not a valid pptx (zip) file');
+  }
+  const outDir = customerPptxDir();
+  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+  const fileName = buildPptxFileName(customerName, submissionId);
+  const filePath = path.join(outDir, fileName);
+  fs.writeFileSync(filePath, buffer);
+  return { filePath, fileName };
 }

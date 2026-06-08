@@ -216,11 +216,20 @@ router.post('/submissions', asyncHandler(async (req, res) => { await partnerCont
 // List the authenticated customer's submissions
 router.get('/customer/me/submissions', (req, res) => partnerController.listMySubmissions(req, res));
 
+// Customer fetches one of their own submissions in full (incl. formData).
+router.get('/customer/me/submissions/:id', (req, res) => partnerController.getMySubmission(req, res));
+
 // Customer downloads their own finalized xlsx
 router.get('/customer/me/submissions/:id/xlsx', (req, res) => partnerController.downloadMyXlsx(req, res));
 
 // Customer downloads their own populated investor-deck pptx
 router.get('/customer/me/submissions/:id/pptx', (req, res) => partnerController.downloadMyPptx(req, res));
+
+// Customer-side edit of their own submission (resets status to 'review').
+router.patch('/customer/me/submissions/:id', (req, res) => partnerController.updateMySubmission(req, res));
+
+// Customer-facing consultation with Ethan Caldwell (live to finalized data).
+router.post('/customer/me/consult', asyncHandler(async (req, res) => { await partnerController.consultEthan(req, res); }));
 
 // Public count of pending submissions — used by the homepage notification
 // badge on the Authorized Personnel button. Returns just `{ pending: N }`,
@@ -425,6 +434,25 @@ router.post(
   requireAdminPin,
   raw({ type: '*/*', limit: '15mb' }),
   (req, res) => partnerController.adminUploadXlsx(req, res),
+);
+// Reupload — admin overwrites the stored pptx with a manually-edited deck.
+router.post(
+  '/admin/submissions/:id/upload-pptx',
+  requireAdminPin,
+  raw({ type: '*/*', limit: '25mb' }),
+  (req, res) => partnerController.adminUploadPptx(req, res),
+);
+// Edit — flip a finalized submission back to 'review' for corrections.
+router.post(
+  '/admin/submissions/:id/unfinalize',
+  requireAdminPin,
+  (req, res) => partnerController.adminUnfinalize(req, res),
+);
+// Admin chat — finance agents wired to all submitted customer data.
+router.post(
+  '/admin/chat/:agent',
+  requireAdminPin,
+  asyncHandler(async (req, res) => { await partnerController.adminChat(req, res); }),
 );
 router.get(
   '/admin/submissions/:id/xlsx',

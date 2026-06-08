@@ -18,11 +18,25 @@ import {
 } from '../services/deck-upload.service';
 import {
   generatePopulatedPptx, pptxTemplatePath, customerPptxDir,
-  buildPptxFileName, resolveStoredPptx,
+  buildPptxFileName, resolveStoredPptx, readWorkbookAsText, storeUploadedPptx,
 } from '../services/pptx-generator.service';
 import { INVESTOR_DECK_FIELDS, SECTIONS, InvestorDeckField } from '../data/investor-deck-schema';
+import { AIService } from '../services/ai.service';
+import Anthropic from '@anthropic-ai/sdk';
 import fs from 'fs';
 import { z } from 'zod';
+
+// Lazily instantiated singleton so we don't import-time crash when the API
+// key isn't set (e.g. local dev). Anthropic SDK creates a fresh HTTP client
+// per request internally so reusing one instance across requests is fine.
+let _aiServiceSingleton: AIService | null = null;
+function getAIService(): AIService {
+  if (_aiServiceSingleton) return _aiServiceSingleton;
+  const apiKey = process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error('ANTHROPIC_API_KEY is not configured on the server.');
+  _aiServiceSingleton = new AIService(new Anthropic({ apiKey }));
+  return _aiServiceSingleton;
+}
 
 // ─── Request validation schemas ──────────────────────────────────────────────
 
@@ -436,15 +450,47 @@ export const partnerController = {
 
     const subs = partnerSubmissionRepo.listByCustomerKeyId(keyRow.id);
     // Hide the absolute server path; expose a download URL only when finalized.
-    const safe = subs.map(s => ({
-      id:                s.id,
-      customerName:      s.customerName,
-      status:            s.status,
-      submittedAt:       s.submittedAt,
-      finalizedAt:       s.finalizedAt,
-      hasFinalizedXlsx:  !!s.finalizedXlsxPath,
-    }));
+    // hasFinalizedPptx is gated on BOTH status === finalized AND a populated
+    // pptx existing on disk — matches the customer Download Presentation flow.
+    const safe = subs.map(s => {
+      const pptxOnDisk = !!resolveStoredPptx(buildPptxFileName(s.customerName, s.id));
+      return {
+        id:                s.id,
+        customerName:      s.customerName,
+        status:            s.status,
+        submittedAt:       s.submittedAt,
+        finalizedAt:       s.finalizedAt,
+        hasFinalizedXlsx:  !!s.finalizedXlsxPath,
+        hasFinalizedPptx:  s.status === 'finalized' && pptxOnDisk,
+      };
+    });
     res.json({ submissions: safe });
+  },
+
+  /**
+   * GET /api/customer/me/submissions/:id
+   * Header: X-Customer-Key
+   * Returns one submission (incl. its formData) so the customer can
+   * pre-populate the Edit-flow questionnaire.
+   */
+  getMySubmission(req: Request, res: Response): void {
+    const keyRow = resolveCustomerKey(req);
+    if (!keyRow) { send401(res, 'Missing or invalid customer key.'); return; }
+    const sub = partnerSubmissionRepo.getById(req.params.id);
+    if (!sub || sub.customerKeyId !== keyRow.id) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
+      return;
+    }
+    res.json({
+      submission: {
+        id:           sub.id,
+        customerName: sub.customerName,
+        status:       sub.status,
+        submittedAt:  sub.submittedAt,
+        finalizedAt:  sub.finalizedAt,
+        formData:     sub.formData,
+      },
+    });
   },
 
   /**
@@ -622,6 +668,53 @@ export const partnerController = {
         },
       });
     }
+  },
+
+  /**
+   * POST /api/admin/submissions/:id/upload-pptx
+   * Replaces the stored populated investor-deck with a manually-edited
+   * pptx uploaded by the admin. Raw bytes in body (we validate zip magic).
+   */
+  adminUploadPptx(req: Request, res: Response): void {
+    const sub = partnerSubmissionRepo.getById(req.params.id);
+    if (!sub) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
+      return;
+    }
+    const buf = req.body;
+    if (!Buffer.isBuffer(buf) || buf.length === 0) {
+      res.status(400).json({ error: { code: 'EMPTY_BODY', message: 'Upload body is empty or not binary.' } });
+      return;
+    }
+    try {
+      storeUploadedPptx(sub.id, sub.customerName, buf);
+      res.json({ success: true, submission: { id: sub.id, status: sub.status, hasPptx: true } });
+    } catch (err) {
+      console.error('[partner] pptx upload failed:', err);
+      res.status(400).json({
+        error: { code: 'INVALID_PPTX', message: err instanceof Error ? err.message : 'Upload failed.' },
+      });
+    }
+  },
+
+  /**
+   * POST /api/admin/submissions/:id/unfinalize
+   * Flip a finalized submission back to 'review' so a correction can be
+   * made and re-finalized. The stored xlsx/pptx stay in place — the next
+   * Reupload or Regenerate overwrites them in the normal way.
+   */
+  adminUnfinalize(req: Request, res: Response): void {
+    const sub = partnerSubmissionRepo.getById(req.params.id);
+    if (!sub) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
+      return;
+    }
+    if (sub.status !== 'finalized') {
+      res.status(409).json({ error: { code: 'NOT_FINALIZED', message: 'Submission is not finalized.' } });
+      return;
+    }
+    const updated = partnerSubmissionRepo.unfinalize(sub.id);
+    res.json({ success: true, submission: { id: updated?.id, status: updated?.status } });
   },
 
   /**
@@ -843,6 +936,223 @@ export const partnerController = {
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
     res.setHeader('Content-Disposition', `attachment; filename="${downloadName.replace(/"/g, '')}"`);
     res.sendFile(abs);
+  },
+
+  /**
+   * PATCH /api/customer/me/submissions/:id
+   * Header: X-Customer-Key
+   * Body: { customerName?, formData }
+   *
+   * Customer-side edit of a previously-submitted Customer's Questionnaire.
+   * Updates form_data and resets status to 'review' so Raphael re-finalizes
+   * with the corrected inputs. Allowed regardless of current status (the
+   * user explicitly wanted to be able to fix a finalized submission).
+   */
+  updateMySubmission(req: Request, res: Response): void {
+    const keyRow = resolveCustomerKey(req);
+    if (!keyRow) { send401(res, 'Missing or invalid customer key.'); return; }
+
+    const sub = partnerSubmissionRepo.getById(req.params.id);
+    if (!sub || sub.customerKeyId !== keyRow.id) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
+      return;
+    }
+
+    const parsed = SubmissionBody.partial({ customerName: true }).safeParse(req.body);
+    if (!parsed.success || typeof parsed.data.formData === 'undefined') {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'formData is required.' } });
+      return;
+    }
+
+    const updated = partnerSubmissionRepo.updateFormData(sub.id, parsed.data.formData);
+    res.json({ success: true, submission: updated });
+  },
+
+  /**
+   * POST /api/admin/chat/:agent
+   * Header: X-Admin-Pin / ?pin=
+   * Body: { message, history, submissionId? }
+   *
+   * Authorized-personnel chat where the chosen agent (any of the 5 finance
+   * personas) is wired to all customer submissions. The system prompt
+   * always includes a brief catalogue of every submission (id + name +
+   * status); when submissionId is provided, the full xlsx dump + form
+   * data are spliced in so the agent can speak to actual numbers when
+   * Raphael consults on a specific customer.
+   */
+  async adminChat(req: Request, res: Response): Promise<void> {
+    const agent = String(req.params.agent || '');
+    const { message, history = [], submissionId } = (req.body || {}) as {
+      message?: string;
+      history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+      submissionId?: string;
+    };
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'message is required.' } });
+      return;
+    }
+    if (!Array.isArray(history)) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'history must be an array.' } });
+      return;
+    }
+
+    // Always-on catalogue of all submissions so the agent knows what
+    // customers Raphael can ask about, even before a specific one is
+    // selected. Kept short — id, name, status, finalized timestamp.
+    const allSubs = partnerSubmissionRepo.listAll();
+    const catalogue = allSubs.length === 0
+      ? '(No customer submissions on file yet.)'
+      : allSubs.map(s => `- ${s.customerName || '(unnamed)'} — id=${s.id} · status=${s.status}${s.finalizedAt ? ` · finalized ${s.finalizedAt}` : ''}`).join('\n');
+
+    let focusBlock = '';
+    if (submissionId) {
+      const sub = partnerSubmissionRepo.getById(submissionId);
+      if (!sub) {
+        res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Selected submission not found.' } });
+        return;
+      }
+      const formDataDump = (() => {
+        try { return JSON.stringify(sub.formData, null, 2); }
+        catch { return '[unparseable form data]'; }
+      })();
+      let workbookDump = '[Finalized xlsx not on disk for this submission.]';
+      if (sub.finalizedXlsxPath) {
+        const abs = resolveStoredXlsx(sub.finalizedXlsxPath);
+        if (abs && fs.existsSync(abs)) {
+          try {
+            workbookDump = readWorkbookAsText(abs).slice(0, 60_000);
+          } catch (err) {
+            workbookDump = `[Workbook read failed: ${(err as Error).message}]`;
+          }
+        }
+      }
+      focusBlock = [
+        '',
+        '=== FOCUSED CUSTOMER ===',
+        `Customer: ${sub.customerName || '(unnamed)'} (id=${sub.id})`,
+        `Status: ${sub.status}${sub.finalizedAt ? ` · finalized ${sub.finalizedAt}` : ''}`,
+        '',
+        '--- Questionnaire (formData) ---',
+        formDataDump,
+        '',
+        '--- Financial Model workbook dump ---',
+        workbookDump,
+      ].join('\n');
+    }
+
+    const contextBlock = [
+      'You are the Finance AI agent team for Vision & Virtue. You are speaking with Raphael (authorized personnel). Reference the submissions and numbers below when relevant.',
+      '',
+      '=== ALL CUSTOMER SUBMISSIONS ===',
+      catalogue,
+      focusBlock,
+    ].join('\n');
+
+    try {
+      const reply = await getAIService().agentChatWithContext(
+        agent,
+        contextBlock,
+        message.trim(),
+        history,
+      );
+      res.json({ success: true, data: { reply, agent } });
+    } catch (err) {
+      const status = err && typeof err === 'object' && 'status' in err && typeof (err as { status?: number }).status === 'number'
+        ? (err as { status: number }).status
+        : 502;
+      res.status(status).json({
+        error: { code: 'AI_ERROR', message: err instanceof Error ? err.message : String(err) },
+      });
+    }
+  },
+
+  /**
+   * POST /api/customer/me/consult
+   * Header: X-Customer-Key
+   * Body: { message, history?, agent? = 'vc_expert' }
+   *
+   * Customer-facing consultation with Ethan Caldwell (or another configured
+   * agent). The agent receives the customer's name + form data + finalized
+   * workbook dump as system-prompt context so it can speak to actual
+   * numbers — sector, growth, unit economics, margins, ARR, use of proceeds.
+   *
+   * Gated on a finalized submission: pre-finalize, customers shouldn't be
+   * critiquing draft numbers with an AI VC.
+   */
+  async consultEthan(req: Request, res: Response): Promise<void> {
+    const keyRow = resolveCustomerKey(req);
+    if (!keyRow) { send401(res, 'Missing or invalid customer key.'); return; }
+
+    const { message, history = [], agent = 'vc_expert' } = (req.body || {}) as {
+      message?: string;
+      history?: Array<{ role: 'user' | 'assistant'; content: string }>;
+      agent?: string;
+    };
+    if (!message || typeof message !== 'string' || !message.trim()) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'message is required.' } });
+      return;
+    }
+    if (message.trim().length > 4000) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'message must be 4000 characters or fewer.' } });
+      return;
+    }
+    if (!Array.isArray(history)) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'history must be an array.' } });
+      return;
+    }
+
+    const subs = partnerSubmissionRepo.listByCustomerKeyId(keyRow.id);
+    const sub = subs[0] || null;
+    if (!sub || sub.status !== 'finalized') {
+      res.status(409).json({
+        error: {
+          code: 'NOT_FINALIZED',
+          message: 'Consultation is available once Vision & Virtue finalizes your model and presentation.',
+        },
+      });
+      return;
+    }
+
+    const customerName = sub.customerName || keyRow.customer_name || 'the customer';
+    const formDataDump = (() => {
+      try { return JSON.stringify(sub.formData, null, 2); }
+      catch { return '[unparseable form data]'; }
+    })();
+
+    // Pull a workbook dump if the finalized xlsx is still on disk. Capped
+    // so a giant model doesn't blow past the Claude tier window; the dump
+    // is for context, not exhaustive citation.
+    let workbookDump = '[Finalized xlsx not available on disk.]';
+    if (sub.finalizedXlsxPath) {
+      const abs = resolveStoredXlsx(sub.finalizedXlsxPath);
+      if (abs && fs.existsSync(abs)) {
+        try {
+          workbookDump = readWorkbookAsText(abs).slice(0, 60_000);
+        } catch (err) {
+          workbookDump = `[Workbook read failed: ${(err as Error).message}]`;
+        }
+      }
+    }
+
+    const contextBlock = [
+      `Customer name: ${customerName}`,
+      `Submission id: ${sub.id}`,
+      `Finalized at: ${sub.finalizedAt || 'unknown'}`,
+      '',
+      '--- Questionnaire (formData) ---',
+      formDataDump,
+      '',
+      '--- Finalized Financial Model (workbook dump) ---',
+      workbookDump,
+    ].join('\n');
+
+    try {
+      const reply = await getAIService().agentChatWithContext(agent, contextBlock, message.trim(), history);
+      res.json({ success: true, data: { reply, agent } });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      res.status(502).json({ error: { code: 'AI_ERROR', message: msg } });
+    }
   },
 };
 

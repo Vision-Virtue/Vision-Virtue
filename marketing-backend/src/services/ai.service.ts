@@ -320,4 +320,57 @@ export class AIService {
       throw this.mapAnthropicError(err, 'Agent chat failed');
     }
   }
+
+  /**
+   * Agent chat with an injected customer-data context block. Used by the
+   * customer portal (Ethan Caldwell consultation) AND by the admin Finance
+   * AI when an authorized user is consulting any agent on a specific
+   * submission.
+   *
+   * The context is prepended as plain text to the system prompt so the
+   * agent can reference the customer's actual numbers when answering. Plain
+   * conversational replies — no XML envelope — to keep the customer-facing
+   * UX clean.
+   */
+  async agentChatWithContext(
+    agentKey: string,
+    contextBlock: string,
+    message: string,
+    history: Array<{ role: 'user' | 'assistant'; content: string }>,
+  ): Promise<string> {
+    const persona = AGENT_SYSTEM_PROMPTS[agentKey];
+    if (!persona) {
+      throw new ApiError(400, `Unknown agent: ${agentKey}`, 'INVALID_AGENT');
+    }
+    // Strip the XML response envelope instruction from the vc_expert prompt
+    // so the customer-facing replies come back as plain text. The persona
+    // (voice + analytical lens) stays intact.
+    const cleanedPersona = persona.replace(/Format your responses using this XML[\s\S]*?<\/response>\s*/i, '').trim();
+    const systemPrompt =
+      cleanedPersona +
+      '\n\n' +
+      'You are speaking directly with the customer in their own portal. Use plain prose. Be specific, concrete, and tie every answer back to the customer\'s actual data shown below.\n\n' +
+      '=== CUSTOMER DATA (live) ===\n' +
+      contextBlock +
+      '\n=== END CUSTOMER DATA ===';
+    const messages = [
+      ...history.map(h => ({ role: h.role, content: h.content })),
+      { role: 'user' as const, content: message },
+    ];
+    try {
+      const response = await this.client.messages.create({
+        model: MODEL,
+        max_tokens: 2048,
+        system: systemPrompt,
+        messages,
+      });
+      const content = response.content[0];
+      if (content.type !== 'text') {
+        throw new ApiError(500, 'Unexpected response type from Claude', 'AI_UNEXPECTED_RESPONSE');
+      }
+      return content.text.trim();
+    } catch (err) {
+      throw this.mapAnthropicError(err, 'Agent consultation failed');
+    }
+  }
 }

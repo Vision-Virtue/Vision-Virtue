@@ -198,6 +198,11 @@ function selectAgent(agentKey) {
   document.getElementById('chatAgentName').textContent  = agent.name;
   document.getElementById('chatAgentTitle').textContent = agent.title;
 
+  // Refresh the consultation-focus dropdown so the agent has up-to-date
+  // submissions to choose from. Fire-and-forget — if it fails the chat
+  // still works, the agent just won't have a focused customer.
+  refreshChatSubmissionFocus();
+
   // Set intro message
   document.getElementById('chatIntro').textContent = agent.intro;
 
@@ -277,24 +282,49 @@ async function sendMessage() {
 // ── Claude API call — routed through V&V backend (no CORS issues) ────────────
 // (BACKEND_URL is declared at the top of this file)
 
+// Populate the "Consult on:" select so the agent can be focused on a single
+// customer's submission. Runs every time an agent is opened; failures are
+// silent (the chat still works without a focus).
+async function refreshChatSubmissionFocus() {
+  const select = document.getElementById('chatSubmissionFocus');
+  if (!select) return;
+  const pin = sessionStorage.getItem('vv_admin_pin') || '';
+  if (!pin) return;
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/admin/submissions?pin=${encodeURIComponent(pin)}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const rows = Array.isArray(data.submissions) ? data.submissions : [];
+    const prev = select.value;
+    const opts = ['<option value="">All submissions (no specific focus)</option>'];
+    rows.forEach((s) => {
+      const lbl = `${s.customerName || '(unnamed)'} — ${s.status}${s.finalizedAt ? ' · finalized' : ''}`;
+      opts.push(`<option value="${esc(s.id)}">${esc(lbl)}</option>`);
+    });
+    select.innerHTML = opts.join('');
+    if (prev && rows.some((s) => s.id === prev)) select.value = prev;
+  } catch {
+    /* swallow — non-critical */
+  }
+}
+
 async function callClaude(agentKey, messages) {
   // messages is the full history including the latest user message at the end
   const history = messages.slice(0, -1);
   const message = messages[messages.length - 1].content;
 
-  const headers = { 'Content-Type': 'application/json' };
-  // Pass user's key as fallback in case the backend env key is missing
-  const apiKey = sessionStorage.getItem('vv_key') || '';
-  if (apiKey && apiKey.startsWith('sk-ant-')) {
-    headers['x-api-key'] = apiKey;
-  }
+  // Admin chat — agent sees every submission in context, optionally focused
+  // on the one Raphael selected in the "Consult on" picker.
+  const submissionId = document.getElementById('chatSubmissionFocus')?.value || '';
+  const pin = sessionStorage.getItem('vv_admin_pin') || '';
+  const url = `${BACKEND_URL}/api/admin/chat/${agentKey}?pin=${encodeURIComponent(pin)}`;
 
   let res;
   try {
-    res = await fetch(`${BACKEND_URL}/api/chat/${agentKey}`, {
-      method:  'POST',
-      headers,
-      body: JSON.stringify({ message, history })
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, history, submissionId: submissionId || undefined }),
     });
   } catch (networkErr) {
     throw new Error(
@@ -311,7 +341,7 @@ async function callClaude(agentKey, messages) {
     if (res.status === 500 && msg.includes('ANTHROPIC_API_KEY')) {
       throw new Error(
         'The backend API key is not configured.\n\n' +
-        'Enter your Claude API key (sk-ant-...) at the access gate to use it as a fallback.'
+        'Re-enter your access PIN to verify, or contact Raphael.'
       );
     }
     throw new Error(`${msg} (HTTP ${res.status})`);
@@ -394,7 +424,7 @@ function extractXml(text, tag) {
 // ─── PowerPoint Template — direct download of static file ────
 document.getElementById('downloadPptBtn').addEventListener('click', () => {
   const a = document.createElement('a');
-  a.href = 'VisionVirtue_PPT_Template.pptx';
+  a.href = 'VisionVirtue_InvestorDeck (1).pptx';
   a.download = 'VisionVirtue Business & Financial Model.pptx';
   document.body.appendChild(a);
   a.click();
@@ -2756,7 +2786,9 @@ async function generatePptxDeck(d) {
     // Excel row actions: Download + Regenerate + Reupload (when xlsx
     // exists), or Generate (when missing). Reupload lets the admin
     // replace the stored file with a manually-edited copy before
-    // finalizing for the customer.
+    // finalizing for the customer. When finalized, the Finalize button
+    // is replaced by an Edit action that un-finalizes the submission so
+    // a correction can be made and re-finalized.
     const excelActions = `
       ${xlsxReady
         ? `<button type="button" class="partner-subs-action partner-subs-download" data-action="download" data-product="excel">⬇ Download</button>
@@ -2764,8 +2796,20 @@ async function generatePptxDeck(d) {
            <button type="button" class="partner-subs-action partner-subs-reupload" data-action="reupload">⤴ Reupload</button>`
         : `<button type="button" class="partner-subs-action partner-subs-generate" data-action="generate">Generate xlsx</button>`}
       ${isFinal
-        ? `<span class="partner-status-pill partner-status-finalized">Finalized</span>`
+        ? `<span class="partner-status-pill partner-status-finalized">Finalized</span>
+           <button type="button" class="partner-subs-action partner-subs-edit" data-action="edit">✎ Edit</button>`
         : `<button type="button" class="partner-subs-action partner-subs-finalize" data-action="finalize">Finalize</button>`}
+    `;
+
+    const pptxActions = `
+      ${sub.hasPptx === true
+        ? `<button type="button" class="partner-subs-action partner-subs-download" data-action="download" data-product="pptx">⬇ Download</button>
+           <button type="button" class="partner-subs-action partner-subs-generate" data-action="generate" data-product="pptx">↻ Regenerate</button>
+           <button type="button" class="partner-subs-action partner-subs-reupload" data-action="reupload" data-product="pptx">⤴ Reupload</button>`
+        : `<button type="button" class="partner-subs-action partner-subs-generate" data-action="generate" data-product="pptx" ${xlsxReady ? '' : 'disabled'}>${xlsxReady ? 'Generate pptx' : 'Generate xlsx first'}</button>`}
+      ${isFinal
+        ? `<button type="button" class="partner-subs-action partner-subs-edit" data-action="edit" data-product="pptx">✎ Edit</button>`
+        : ''}
     `;
 
     return `
@@ -2796,12 +2840,7 @@ async function generatePptxDeck(d) {
             <div class="partner-subs-deliverable-title">Investor Deck</div>
             <div class="partner-subs-deliverable-sub">PowerPoint populated from xlsx · regenerate after refreshing calculations in Excel</div>
           </div>
-          <div class="partner-subs-deliverable-actions">
-            ${sub.hasPptx === true
-              ? `<button type="button" class="partner-subs-action partner-subs-download" data-action="download" data-product="pptx">⬇ Download</button>
-                 <button type="button" class="partner-subs-action partner-subs-generate" data-action="generate" data-product="pptx">↻ Regenerate</button>`
-              : `<button type="button" class="partner-subs-action partner-subs-generate" data-action="generate" data-product="pptx" ${xlsxReady ? '' : 'disabled'}>${xlsxReady ? 'Generate pptx' : 'Generate xlsx first'}</button>`}
-          </div>
+          <div class="partner-subs-deliverable-actions">${pptxActions}</div>
         </div>
       </div>
     `;
@@ -3042,41 +3081,74 @@ async function generatePptxDeck(d) {
       });
     });
 
-    card.querySelector('[data-action="reupload"]')?.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      const btn = ev.currentTarget;
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-      input.style.display = 'none';
-      input.addEventListener('change', async () => {
-        const file = input.files && input.files[0];
-        if (!file) return;
+    // Reupload — wired per-product (xlsx OR pptx) via data-product attr.
+    card.querySelectorAll('[data-action="reupload"]').forEach((reBtn) => {
+      reBtn.addEventListener('click', (ev) => {
+        ev.stopPropagation();
+        const btn = ev.currentTarget;
+        const product = btn.getAttribute('data-product') || 'xlsx';
+        const isPptx  = product === 'pptx';
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = isPptx
+          ? '.pptx,application/vnd.openxmlformats-officedocument.presentationml.presentation'
+          : '.xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+        input.style.display = 'none';
+        input.addEventListener('change', async () => {
+          const file = input.files && input.files[0];
+          if (!file) return;
+          const original = btn.textContent;
+          btn.disabled = true;
+          btn.textContent = 'Uploading…';
+          try {
+            const endpoint = isPptx ? 'upload-pptx' : 'upload-xlsx';
+            const res = await fetch(adminUrl(`/api/admin/submissions/${encodeURIComponent(sub.id)}/${endpoint}`), {
+              method: 'POST',
+              body: file,
+            });
+            if (!res.ok) {
+              const text = await res.text().catch(() => '');
+              throw new Error(`HTTP ${res.status} ${text.slice(0, 200)}`);
+            }
+            await loadSubmissions();
+          } catch (err) {
+            btn.disabled = false;
+            btn.textContent = original;
+            alert('Reupload failed.\n\n' + (err && err.message ? err.message : ''));
+          }
+        });
+        document.body.appendChild(input);
+        input.click();
+        setTimeout(() => input.remove(), 0);
+      });
+    });
+
+    // Edit — flip a finalized submission back to 'review' so a correction
+    // can be made and re-finalized. Same UX entry for either deliverable;
+    // the unfinalize action covers the whole submission.
+    card.querySelectorAll('[data-action="edit"]').forEach((editBtn) => {
+      editBtn.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        const btn = ev.currentTarget;
+        if (!confirm('Re-open this submission for editing? The customer-facing Finalized download will be hidden until you finalize again.')) return;
         const original = btn.textContent;
         btn.disabled = true;
-        btn.textContent = 'Uploading…';
+        btn.textContent = 'Editing…';
         try {
-          const res = await fetch(adminUrl(`/api/admin/submissions/${encodeURIComponent(sub.id)}/upload-xlsx`), {
+          const res = await fetch(adminUrl(`/api/admin/submissions/${encodeURIComponent(sub.id)}/unfinalize`), {
             method: 'POST',
-            // Browser sends as application/octet-stream — backend accepts
-            // any content-type and validates the zip magic bytes.
-            body: file,
           });
           if (!res.ok) {
             const text = await res.text().catch(() => '');
-            throw new Error(`HTTP ${res.status} ${text.slice(0, 200)}`);
+            throw new Error(`HTTP ${res.status} ${text.slice(0, 160)}`);
           }
           await loadSubmissions();
         } catch (err) {
           btn.disabled = false;
           btn.textContent = original;
-          alert('Reupload failed.\n\n' + (err && err.message ? err.message : ''));
+          alert('Edit failed.\n\n' + (err && err.message ? err.message : ''));
         }
       });
-      document.body.appendChild(input);
-      input.click();
-      // Defer cleanup so the file picker can settle first.
-      setTimeout(() => input.remove(), 0);
     });
 
     card.querySelectorAll('[data-action="download"]').forEach((btn) => {

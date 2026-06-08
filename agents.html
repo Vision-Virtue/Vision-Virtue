@@ -128,6 +128,13 @@
             <button class="chat-close-btn" id="chatCloseBtn" title="Close chat">&#x2715;</button>
           </div>
         </div>
+        <div class="chat-context-bar">
+          <label class="chat-context-label" for="chatSubmissionFocus">Consult on:</label>
+          <select id="chatSubmissionFocus" class="chat-context-select">
+            <option value="">All submissions (no specific focus)</option>
+          </select>
+          <span class="chat-context-hint">Agent sees every submission; pick one to drill into its model.</span>
+        </div>
         <div class="chat-messages" id="chatMessages">
           <div class="chat-intro" id="chatIntro"></div>
         </div>
@@ -151,8 +158,8 @@
       <div class="fin-templates-container">
 
         <div class="fin-section-header">
-          <span class="fin-section-eyebrow">Resources</span>
-          <h2 class="fin-section-title">Financial Templates</h2>
+          <span class="fin-section-eyebrow">My Resources</span>
+          <h2 class="fin-section-title">Generic Templates</h2>
           <p class="fin-section-sub">Vision &amp; Virtue branded templates for client presentations and financial modeling. Download and customise for each engagement.</p>
         </div>
 
@@ -199,81 +206,12 @@
                 <span class="fin-tag">Formulas included</span>
               </div>
             </div>
-            <a class="fin-download-btn" id="downloadXlsBtn" href="Financial%20Model%20v5.xlsx" download="Financial Model v5.xlsx" role="button">
+            <a class="fin-download-btn" id="downloadXlsBtn" href="Financial%20Model%20v8.xlsx" download="Financial Model v8.xlsx" role="button">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
               Download Model
             </a>
           </div>
 
-        </div>
-
-        <!-- STRUCTURED COMPANY CONTEXT BAR -->
-        <div class="fin-context-section" id="finContextSection">
-          <div class="fin-upload-header">
-            <h3 class="fin-upload-title">Company Context</h3>
-            <p class="fin-upload-sub">Provide structured company data before uploading materials. These inputs are used by the Finance AI workflow to inform analysis, assumptions, and deliverables.</p>
-          </div>
-
-          <div class="fin-context-grid">
-            <div class="fin-ctx-field">
-              <label class="fin-ctx-label" for="ctxIndustry">Industry</label>
-              <select id="ctxIndustry" class="fin-ctx-select">
-                <option value="">— Select —</option>
-                <option>Hi-Tech</option><option>Bio-Tech</option><option>Med-Tech</option>
-                <option>Fin-Tech</option><option>Ag-Tech</option><option>Automotive</option>
-                <option>Telematics</option><option>Industrial</option><option>Food-Tech</option>
-                <option>SaaS</option><option>Cybersecurity</option><option>AI / Machine Learning</option>
-                <option>Digital Health</option><option>Consumer Tech</option><option>Climate Tech</option>
-                <option>Other</option>
-              </select>
-            </div>
-            <div class="fin-ctx-field">
-              <label class="fin-ctx-label" for="ctxStage">Stage of Company</label>
-              <select id="ctxStage" class="fin-ctx-select">
-                <option value="">— Select —</option>
-                <option>Seed Stage / Validation</option>
-                <option>Early Stage / Series A-B</option>
-                <option>Expansion Stage</option>
-                <option>Maturity</option>
-              </select>
-            </div>
-            <div class="fin-ctx-field">
-              <label class="fin-ctx-label" for="ctxRound">Round</label>
-              <select id="ctxRound" class="fin-ctx-select">
-                <option value="">— Select —</option>
-                <option>Pre-Seed</option><option>Seed</option><option>Round A</option>
-                <option>Round B</option><option>Round C</option><option>Growth Round</option>
-                <option>Pre-IPO</option><option>Public Follow-On</option><option>Other</option>
-              </select>
-            </div>
-            <div class="fin-ctx-field">
-              <label class="fin-ctx-label" for="ctxPublic">Public</label>
-              <select id="ctxPublic" class="fin-ctx-select">
-                <option value="">— Select —</option>
-                <option>Yes</option>
-                <option>No</option>
-              </select>
-            </div>
-            <div class="fin-ctx-field">
-              <label class="fin-ctx-label" for="ctxLastRaise">Last Capital Raise (USD)</label>
-              <input type="text" id="ctxLastRaise" class="fin-ctx-input fin-money-input" placeholder="$ 0" autocomplete="off" inputmode="numeric" />
-            </div>
-            <div class="fin-ctx-field">
-              <label class="fin-ctx-label" for="ctxEV">Company Last Enterprise Value (USD)</label>
-              <input type="text" id="ctxEV" class="fin-ctx-input fin-money-input" placeholder="$ 0" autocomplete="off" inputmode="numeric" />
-            </div>
-          </div>
-        </div>
-
-        <!-- Customer files have moved to the customer portal (Section 10
-             of the Customer's Questionnaire). The drag-and-drop is no longer
-             on the admin side — admins now review files inside each
-             submission's folder below. -->
-        <div class="fin-upload-section">
-          <div class="fin-upload-header">
-            <h3 class="fin-upload-title">Customer Files</h3>
-            <p class="fin-upload-sub">Customers now upload their supporting materials (PDF, Word, PPT, Excel) directly from the partner portal as part of the Customer's Questionnaire. You can review each customer's files inside their submission folder under <strong>Customer Submissions</strong>.</p>
-          </div>
         </div>
 
         <!-- CUSTOMER KEYS (mint new VV-XXXXXX keys) -->
