@@ -174,24 +174,43 @@
 }
 .partner-tile-download:hover { color: var(--accent-light, #5b8de0); }
 
-.partner-tile-edit {
-  font-size: 0.78rem;
+.partner-edit-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 0 1.2rem;
+  padding: 0.75rem 1rem;
+  background: #fff;
+  border: 1px solid var(--gray-100, #e5e7eb);
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(8, 15, 32, 0.04);
+  flex-wrap: wrap;
+}
+.partner-edit-banner-text {
+  flex: 1 1 320px;
+  font-size: 0.85rem;
   color: var(--gray-600, #4b5563);
+  line-height: 1.45;
+}
+.partner-edit-banner-btn {
+  flex: 0 0 auto;
+  font-size: 0.82rem;
   font-weight: 600;
-  background: transparent;
-  border: 1px solid currentColor;
-  padding: 0.18rem 0.55rem;
-  border-radius: 5px;
-  cursor: pointer;
-  letter-spacing: 0.01em;
-  transition: color 0.14s, border-color 0.14s, background 0.14s;
-  margin-left: 0.45rem;
-}
-.partner-tile-edit:hover {
   color: var(--navy-900, #0a1226);
-  border-color: var(--navy-900, #0a1226);
-  background: rgba(13, 24, 48, 0.04);
+  background: transparent;
+  border: 1px solid var(--navy-900, #0a1226);
+  padding: 0.42rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: background 0.14s, color 0.14s;
 }
+.partner-edit-banner-btn:hover {
+  background: var(--navy-900, #0a1226);
+  color: #fff;
+}
+.partner-edit-banner-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
 /* ── QUESTIONNAIRE SECTION ──────────────────────────────── */
 .partner-questionnaire-section {
