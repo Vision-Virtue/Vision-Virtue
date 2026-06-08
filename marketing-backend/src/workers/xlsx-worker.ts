@@ -89,7 +89,7 @@ interface SubmissionFormData {
     yearsSinceFound?: string; firstYear?: string;
   };
   customers?: Array<{ name?: string; type?: string; territory?: string }>;
-  products?: Array<{ name?: string; revenueType?: string; price?: string }>;
+  products?: Array<{ name?: string; revenueType?: string; price?: string; cost?: string }>;
   letsScale?: Array<{
     customerName?: string; type?: string; territory?: string;
     productName?: string; revenueType?: string; price?: string;
@@ -565,17 +565,16 @@ async function run(input: WorkerInput): Promise<void> {
     set(`${CUSTOMERS.cols.territory}${r}`, c.territory);
   }
 
-  // 6.b Products — rows 30–40. We explicitly clear col K (per-product cost)
-  // even when the customer has no products listed for that row, because v9
-  // ships with example values in column K and we never want them leaking
-  // into a customer's personalised model.
+  // 6.b Products — rows 30–40. v9 has a per-product cost column at K;
+  // we explicitly write null when the customer hasn't entered one so the
+  // template's example values don't leak into the customer's file.
   for (let i = 0; i < PRODUCTS.maxRows; i++) {
     const r = PRODUCTS.startRow + i;
     const p = (input.formData.products || [])[i] || {};
     set(`${PRODUCTS.cols.name}${r}`,        p.name);
     set(`${PRODUCTS.cols.revenueType}${r}`, p.revenueType);
     set(`${PRODUCTS.cols.price}${r}`,       p.price);
-    set(`${PRODUCTS.cols.cost}${r}`,        null);  // clear template example
+    set(`${PRODUCTS.cols.cost}${r}`,        p.cost);
   }
 
   // 7 Let's Scale — v9 one continuous block, rows 44–63. Cost is per-row.
