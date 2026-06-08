@@ -31,11 +31,15 @@ function ensureDir(p: string): void {
 }
 
 function templatePath(): string {
-  // Bumped v7 → v8 (2026-06-02). v8 ships with the Investor_Deck_Calculations
-  // sheet pre-built — the customer's questionnaire inputs flow into the
-  // existing "Customer's Questionnaire" sheet, and the deck-questionnaire
-  // sheet is added by our xlsx-worker on submit.
-  return path.resolve(process.cwd(), 'templates', 'Financial Model v8.xlsx');
+  // Bumped v8 → v9 (2026-06-08). v9 changes:
+  //  * Section 8 (Unit Costs) removed; cost is now a per-row column in
+  //    Section 7 (Let's Scale).
+  //  * Section 7 collapsed from three revenue-type blocks (HW/SW/Other)
+  //    into one continuous block at rows 44-63 with Revenue Type as the
+  //    leading column.
+  //  * Old Section 9 (FTE) renumbered to Section 8 and moved to rows 68-71.
+  //  * Definitions sheet ships a much richer revenue-type list.
+  return path.resolve(process.cwd(), 'templates', 'Financial Model v9.xlsx');
 }
 
 function workerPath(): string {
