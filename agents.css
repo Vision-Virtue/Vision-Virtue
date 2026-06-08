@@ -405,6 +405,41 @@
   background: rgba(255,255,255,0.1);
 }
 
+.chat-context-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.55rem 1.4rem;
+  border-bottom: 1px solid rgba(255,255,255,0.07);
+  background: rgba(13, 24, 48, 0.55);
+  color: rgba(255,255,255,0.7);
+  flex-wrap: wrap;
+}
+.chat-context-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.chat-context-select {
+  flex: 1 1 220px;
+  min-width: 0;
+  padding: 0.32rem 0.55rem;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: rgba(255,255,255,0.9);
+  font-size: 0.82rem;
+  outline: none;
+}
+.chat-context-select:focus {
+  border-color: var(--accent, #3a6bc4);
+}
+.chat-context-hint {
+  font-size: 0.72rem;
+  color: rgba(255,255,255,0.45);
+  flex: 1 1 100%;
+}
+
 .chat-messages {
   flex: 1;
   padding: 1.5rem;
@@ -1653,6 +1688,16 @@
 }
 .partner-subs-reupload:hover:not(:disabled) {
   background: rgba(196, 134, 58, 0.32);
+  transform: translateY(-1px);
+}
+
+.partner-subs-edit {
+  background: rgba(155, 100, 196, 0.18);
+  color: #d4b3f2;
+  border: 1px solid rgba(155, 100, 196, 0.4);
+}
+.partner-subs-edit:hover:not(:disabled) {
+  background: rgba(155, 100, 196, 0.32);
   transform: translateY(-1px);
 }
 

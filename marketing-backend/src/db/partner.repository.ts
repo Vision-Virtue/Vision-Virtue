@@ -211,4 +211,38 @@ export const partnerSubmissionRepo = {
       .run(new Date().toISOString(), xlsxPath, notes ?? null, id);
     return this.getById(id);
   },
+
+  /**
+   * Replace form_data on an existing submission and reset its workflow
+   * status to 'review' so the admin re-finalizes (the old finalized
+   * xlsx/pptx stay on disk for reference but are no longer customer-
+   * downloadable because the customer-side gates check status). Used by
+   * the customer Edit flow.
+   */
+  updateFormData(id: string, formData: unknown): PartnerSubmission | null {
+    getDb()
+      .prepare(
+        `UPDATE partner_submissions
+           SET form_data = ?, status = 'review', finalized_at = NULL
+           WHERE id = ?`,
+      )
+      .run(JSON.stringify(formData), id);
+    return this.getById(id);
+  },
+
+  /**
+   * Flip a finalized submission back to 'review' without touching form_data
+   * or the stored xlsx/pptx — used by the admin Finance AI Edit action so a
+   * correction can be made before re-finalizing.
+   */
+  unfinalize(id: string): PartnerSubmission | null {
+    getDb()
+      .prepare(
+        `UPDATE partner_submissions
+           SET status = 'review', finalized_at = NULL
+           WHERE id = ?`,
+      )
+      .run(id);
+    return this.getById(id);
+  },
 };
