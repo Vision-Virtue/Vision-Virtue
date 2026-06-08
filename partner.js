@@ -505,16 +505,29 @@ function makeCustomerRow() {
     </td>
     <td><button type="button" class="partner-q-rmrow" aria-label="Remove row">&#x2715;</button></td>
   `;
-  // Toggle the free-text input when the customer picks "Other (specify)".
+  // When the user picks "Other (specify)" we swap the select OUT of the cell
+  // and put the free-text input in its place (same row, same cell — not a
+  // new line below). Clearing the input on blur reverts to the dropdown.
   const wireCustomToggle = (selectAttr, inputAttr) => {
     const sel = tr.querySelector(`[${selectAttr}]`);
     const inp = tr.querySelector(`[${inputAttr}]`);
     if (!sel || !inp) return;
+    const showInput = () => {
+      sel.hidden = true;
+      inp.hidden = false;
+      setTimeout(() => inp.focus(), 0);
+    };
+    const showSelect = () => {
+      inp.hidden = true;
+      inp.value = '';
+      sel.hidden = false;
+      sel.value = '';
+    };
     sel.addEventListener('change', () => {
-      const open = sel.value === CUSTOM_OPT;
-      inp.hidden = !open;
-      if (open) setTimeout(() => inp.focus(), 0);
-      else inp.value = '';
+      if (sel.value === CUSTOM_OPT) showInput();
+    });
+    inp.addEventListener('blur', () => {
+      if (!inp.value.trim()) showSelect();
     });
   };
   wireCustomToggle('data-cust-type',      'data-cust-type-custom');
@@ -551,6 +564,7 @@ function makeProductRow() {
       </select>
     </td>
     <td><input type="text" class="partner-q-input partner-q-cell partner-q-money" data-prod-price inputmode="decimal" autocomplete="off" placeholder="$ 0" /></td>
+    <td><input type="text" class="partner-q-input partner-q-cell partner-q-money" data-prod-cost inputmode="decimal" autocomplete="off" placeholder="$ 0" /></td>
     <td><button type="button" class="partner-q-rmrow" aria-label="Remove row">&#x2715;</button></td>
   `;
   tr.querySelector('.partner-q-rmrow').addEventListener('click', () => {
@@ -589,7 +603,7 @@ function makeLetsScaleRow() {
     </td>
     <td><span class="partner-q-readonly" data-ls-revtype>—</span></td>
     <td><span class="partner-q-readonly" data-ls-price>—</span></td>
-    <td><input type="text" class="partner-q-input partner-q-cell partner-q-money" data-ls-cost inputmode="decimal" autocomplete="off" placeholder="$ 0" /></td>
+    <td><span class="partner-q-readonly" data-ls-cost>—</span></td>
     <td><input type="number" class="partner-q-input partner-q-cell" data-ls-q1 min="0" step="1" placeholder="0" /></td>
     <td><input type="number" class="partner-q-input partner-q-cell" data-ls-q2 min="0" step="1" placeholder="0" /></td>
     <td><input type="number" class="partner-q-input partner-q-cell" data-ls-q3 min="0" step="1" placeholder="0" /></td>
@@ -641,6 +655,7 @@ function getProducts() {
       name:        tr.querySelector('[data-prod-name]')?.value.trim() || '',
       revenueType: tr.querySelector('[data-prod-revtype]')?.value || '',
       price:       tr.querySelector('[data-prod-price]')?.value || '',
+      cost:        tr.querySelector('[data-prod-cost]')?.value  || '',
     }));
 }
 
@@ -664,6 +679,7 @@ function updateLetsScaleRow(tr) {
   tr.querySelector('[data-ls-territory]').textContent = cust?.territory || '—';
   tr.querySelector('[data-ls-revtype]').textContent   = prod?.revenueType || '—';
   tr.querySelector('[data-ls-price]').textContent     = prod?.price ? formatPriceDisplay(prod.price) : '—';
+  tr.querySelector('[data-ls-cost]').textContent      = prod?.cost  ? formatPriceDisplay(prod.cost)  : '—';
 }
 
 // â”€â”€ Reactive sync: 6.a/6.b â†’ section 7 dropdowns + section 8 â”€
@@ -747,7 +763,7 @@ function collectLetsScale() {
       productName:  prod?.name || '',
       revenueType:  prod?.revenueType || '',
       price:        prod?.price || '',
-      cost:         tr.querySelector('[data-ls-cost]')?.value || '',
+      cost:         prod?.cost  || '',
       q1:           tr.querySelector('[data-ls-q1]')?.value || '',
       q2:           tr.querySelector('[data-ls-q2]')?.value || '',
       q3:           tr.querySelector('[data-ls-q3]')?.value || '',
@@ -890,6 +906,7 @@ function populateFormFromSubmission(sub) {
       const inp = tr.querySelector('[data-prod-name]');    if (inp && p.name)        inp.value = p.name;
       const sel = tr.querySelector('[data-prod-revtype]'); if (sel && p.revenueType) sel.value = p.revenueType;
       const pri = tr.querySelector('[data-prod-price]');   if (pri && p.price)       pri.value = p.price;
+      const cst = tr.querySelector('[data-prod-cost]');    if (cst && p.cost)        cst.value = p.cost;
       pBody.appendChild(tr);
     });
     if (!products.length) pBody.appendChild(makeProductRow());
@@ -933,7 +950,6 @@ function populateFormFromSubmission(sub) {
       if (s.productId)  prodSel.value = s.productId;
       updateLetsScaleRow(tr);
       const setCell = (sel, v) => { const el = tr.querySelector(sel); if (el && v != null) el.value = v; };
-      setCell('[data-ls-cost]', s.cost);
       setCell('[data-ls-q1]',   s.q1);
       setCell('[data-ls-q2]',   s.q2);
       setCell('[data-ls-q3]',   s.q3);

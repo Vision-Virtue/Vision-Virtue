@@ -330,7 +330,7 @@
 .partner-q-table tbody tr:last-child td { border-bottom: none; }
 .partner-q-cell { padding: 0.45rem 0.55rem; font-size: 0.83rem; }
 .partner-q-cell[type="number"] { text-align: right; }
-.partner-q-custom { margin-top: 0.35rem; display: block; width: 100%; }
+.partner-q-custom { display: block; width: 100%; }
 
 .partner-q-rmrow {
   background: transparent;
