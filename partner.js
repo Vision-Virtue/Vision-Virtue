@@ -1,5 +1,5 @@
 /* ============================================================
-   VISION & VIRTUE â€” Partner Customer Area
+   VISION & VIRTUE — Partner Customer Area
    Phase 2: submissions live on the backend
    (vv-marketing-api.onrender.com), keyed by customer key.
    ============================================================ */
@@ -130,14 +130,14 @@ async function renderTileState() {
   if (!xlsxStatusEl || !xlsxTile) return;
 
   // Loading placeholders while we fetch
-  xlsxStatusEl.innerHTML = '<span class="partner-status-pill partner-status-new">Loadingâ€¦</span>';
-  if (pptxStatusEl) pptxStatusEl.innerHTML = '<span class="partner-status-pill partner-status-new">Loadingâ€¦</span>';
+  xlsxStatusEl.innerHTML = '<span class="partner-status-pill partner-status-new">Loading...</span>';
+  if (pptxStatusEl) pptxStatusEl.innerHTML = '<span class="partner-status-pill partner-status-new">Loading...</span>';
 
   let subs;
   try { subs = await apiFetchMySubmissions(); }
   catch (err) {
-    xlsxStatusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Connection error â€” retry</span>';
-    if (pptxStatusEl) pptxStatusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Connection error â€” retry</span>';
+    xlsxStatusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Connection error — retry</span>';
+    if (pptxStatusEl) pptxStatusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Connection error — retry</span>';
     return;
   }
 
@@ -169,7 +169,7 @@ function renderEditBanner(sub) {
   banner.hidden = false;
   btn.onclick = async () => {
     const orig = btn.textContent;
-    btn.disabled = true; btn.textContent = 'Loadingâ€¦';
+    btn.disabled = true; btn.textContent = 'Loading...';
     try {
       await openEditFlow(sub.id);
     } catch (err) {
@@ -218,7 +218,7 @@ function renderXlsxTile(tile, statusEl, sub) {
       ev.stopPropagation();
       const btn = ev.currentTarget;
       const orig = btn.textContent;
-      btn.disabled = true; btn.textContent = 'Downloadingâ€¦';
+      btn.disabled = true; btn.textContent = 'Downloading...';
       try {
         await downloadFinalizedXlsx(sub.id, sub.customerName);
       } catch (err) {
@@ -228,7 +228,7 @@ function renderXlsxTile(tile, statusEl, sub) {
       }
     });
   } else {
-    statusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Under Visionâ€™s Review</span>';
+    statusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Under Vision’s Review</span>';
     tile.classList.add('is-review');
     tile.classList.remove('is-finalized');
   }
@@ -251,7 +251,7 @@ function renderPptxTile(tile, statusEl, sub) {
       ev.stopPropagation();
       const btn = ev.currentTarget;
       const orig = btn.textContent;
-      btn.disabled = true; btn.textContent = 'Downloadingâ€¦';
+      btn.disabled = true; btn.textContent = 'Downloading...';
       try {
         await downloadFinalizedPptx(sub.id, sub.customerName);
       } catch (err) {
@@ -261,7 +261,7 @@ function renderPptxTile(tile, statusEl, sub) {
       }
     });
   } else {
-    statusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Under Visionâ€™s Review</span>';
+    statusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Under Vision’s Review</span>';
     tile.classList.add('is-review');
     tile.classList.remove('is-finalized');
   }
@@ -311,7 +311,7 @@ const qForm    = document.getElementById('customerQuestionnaire');
 const qThanks  = document.getElementById('questionnaireThanks');
 
 tile?.addEventListener('click', () => {
-  // If a submission already exists, keep them on the products view â€”
+  // If a submission already exists, keep them on the products view —
   // the tile pill already shows status.
   if (_latestSubmission) return;
   showQuestionnaire();
@@ -471,13 +471,13 @@ function makeCustomerRow() {
     <td><input type="text" class="partner-q-input partner-q-cell" data-cust-name placeholder="Customer name" /></td>
     <td>
       <select class="partner-q-select partner-q-cell" data-cust-type>
-        <option value="">â€” Select â€”</option>
+        <option value="">— Select —</option>
         ${CUSTOMER_TYPES.map(o => `<option value="${o}">${o}</option>`).join('')}
       </select>
     </td>
     <td>
       <select class="partner-q-select partner-q-cell" data-cust-territory>
-        <option value="">â€” Select â€”</option>
+        <option value="">— Select —</option>
         ${TERRITORIES.map(o => `<option value="${o}">${o}</option>`).join('')}
       </select>
     </td>
@@ -509,7 +509,7 @@ function makeProductRow() {
     <td><input type="text" class="partner-q-input partner-q-cell" data-prod-name placeholder="Product name" /></td>
     <td>
       <select class="partner-q-select partner-q-cell" data-prod-revtype>
-        <option value="">â€” Select â€”</option>
+        <option value="">— Select —</option>
         ${REVENUE_TYPES.map(o => `<option value="${o}">${o}</option>`).join('')}
       </select>
     </td>
@@ -540,18 +540,18 @@ function makeLetsScaleRow() {
   tr.innerHTML = `
     <td>
       <select class="partner-q-select partner-q-cell" data-ls-cust>
-        <option value="">â€” Select â€”</option>
+        <option value="">— Select —</option>
       </select>
     </td>
-    <td><span class="partner-q-readonly" data-ls-type>â€”</span></td>
-    <td><span class="partner-q-readonly" data-ls-territory>â€”</span></td>
+    <td><span class="partner-q-readonly" data-ls-type>—</span></td>
+    <td><span class="partner-q-readonly" data-ls-territory>—</span></td>
     <td>
       <select class="partner-q-select partner-q-cell" data-ls-prod>
-        <option value="">â€” Select â€”</option>
+        <option value="">— Select —</option>
       </select>
     </td>
-    <td><span class="partner-q-readonly" data-ls-revtype>â€”</span></td>
-    <td><span class="partner-q-readonly" data-ls-price>â€”</span></td>
+    <td><span class="partner-q-readonly" data-ls-revtype>—</span></td>
+    <td><span class="partner-q-readonly" data-ls-price>—</span></td>
     <td><input type="number" class="partner-q-input partner-q-cell" data-ls-q1 min="0" step="1" placeholder="0" /></td>
     <td><input type="number" class="partner-q-input partner-q-cell" data-ls-q2 min="0" step="1" placeholder="0" /></td>
     <td><input type="number" class="partner-q-input partner-q-cell" data-ls-q3 min="0" step="1" placeholder="0" /></td>
@@ -595,7 +595,7 @@ function getProducts() {
 // â”€â”€ Refill a <select> with id-keyed options for named items â”€â”€
 function fillIdSelect(select, items) {
   const prev = select.value;
-  const opts = ['<option value="">â€” Select â€”</option>']
+  const opts = ['<option value="">— Select —</option>']
     .concat(items.filter(i => i.name).map(i => `<option value="${i.id}">${escHtml(i.name)}</option>`));
   select.innerHTML = opts.join('');
   if (prev && items.some(i => i.id === prev && i.name)) select.value = prev;
@@ -608,10 +608,10 @@ function updateLetsScaleRow(tr) {
   const products  = getProducts();
   const cust = customers.find(c => c.id === tr.querySelector('[data-ls-cust]').value);
   const prod = products.find(p => p.id === tr.querySelector('[data-ls-prod]').value);
-  tr.querySelector('[data-ls-type]').textContent      = cust?.type      || 'â€”';
-  tr.querySelector('[data-ls-territory]').textContent = cust?.territory || 'â€”';
-  tr.querySelector('[data-ls-revtype]').textContent   = prod?.revenueType || 'â€”';
-  tr.querySelector('[data-ls-price]').textContent     = prod?.price ? formatPriceDisplay(prod.price) : 'â€”';
+  tr.querySelector('[data-ls-type]').textContent      = cust?.type      || '—';
+  tr.querySelector('[data-ls-territory]').textContent = cust?.territory || '—';
+  tr.querySelector('[data-ls-revtype]').textContent   = prod?.revenueType || '—';
+  tr.querySelector('[data-ls-price]').textContent     = prod?.price ? formatPriceDisplay(prod.price) : '—';
 }
 
 // â”€â”€ Reactive sync: 6.a/6.b â†’ section 7 dropdowns + section 8 â”€
@@ -631,7 +631,7 @@ function syncDerivedSections() {
 // â”€â”€ Format a stored money string for read-only display â”€â”€â”€â”€â”€â”€â”€
 function formatPriceDisplay(raw) {
   const cleaned = String(raw).replace(/[^\d.]/g, '');
-  if (!cleaned || cleaned === '.') return 'â€”';
+  if (!cleaned || cleaned === '.') return '—';
   const [intPart, decPart] = cleaned.split('.');
   const intFmt = parseInt(intPart || '0', 10).toLocaleString('en-US');
   return '$ ' + (decPart !== undefined ? `${intFmt}.${decPart}` : intFmt);
