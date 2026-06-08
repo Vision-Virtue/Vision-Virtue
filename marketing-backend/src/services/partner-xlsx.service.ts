@@ -14,6 +14,9 @@
 import { fork } from 'child_process';
 import path from 'path';
 import fs from 'fs';
+import {
+  extractBusinessCalcs, appendBusinessCalcsSheet, listWorkbookSheetNames,
+} from './business-calcs.service';
 
 // ─── Storage location for generated xlsx ─────────────────────────────────────
 
@@ -89,13 +92,39 @@ export function generateFinalizedXlsx(
   submissionId: string,
   customerName: string,
   formData: SubmissionFormData,
+  customerKeyId?: string,
 ): Promise<PopulateResult> {
   const next = xlsxQueue.then(
-    () => generateInChild(submissionId, customerName, formData),
-    () => generateInChild(submissionId, customerName, formData),
+    () => generateAndPostProcess(submissionId, customerName, formData, customerKeyId),
+    () => generateAndPostProcess(submissionId, customerName, formData, customerKeyId),
   );
   xlsxQueue = next.catch(() => undefined);
   return next;
+}
+
+// After the worker produces the base xlsx, append the supplemental
+// "Business Presentation Calcs" sheet if the customer has uploaded
+// supporting docs. Best-effort — a failure here never blocks the
+// xlsx itself; the customer/admin still gets the standard workbook.
+async function generateAndPostProcess(
+  submissionId: string,
+  customerName: string,
+  formData: SubmissionFormData,
+  customerKeyId?: string,
+): Promise<PopulateResult> {
+  const result = await generateInChild(submissionId, customerName, formData);
+  if (!customerKeyId) return result;
+  try {
+    const sheetNames = await listWorkbookSheetNames(result.filePath);
+    const calcs = await extractBusinessCalcs({ customerKeyId, workbookSheetNames: sheetNames, customerName });
+    if (calcs.length) {
+      await appendBusinessCalcsSheet(result.filePath, calcs);
+      console.log(`[partner-xlsx] appended Business Presentation Calcs (${calcs.length} rows) for ${customerName}`);
+    }
+  } catch (err) {
+    console.warn('[partner-xlsx] business-calcs post-process failed:', err);
+  }
+  return result;
 }
 
 // ─── Worker supervision ──────────────────────────────────────────────────────
