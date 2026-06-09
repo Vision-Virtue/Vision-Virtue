@@ -687,6 +687,10 @@ export interface PptxGenStats {
   };
   /** Number of chart placeholders successfully rendered + embedded as PNGs. */
   chartsInjected?: number;
+  /** True when the yield guard skipped Phase 3 sparse-slide deletion. */
+  sparseDeleteSkipped?: boolean;
+  /** Populated when the AI extractor threw — e.g. credit balance, key missing. */
+  extractionFailureReason?: string;
 }
 
 // ─── Smart cleanup: strip empty {{X}} + empty runs, mark sparse slides ───────
@@ -1346,12 +1350,32 @@ export async function generatePopulatedPptx(opts: {
   // text, see the placeholder list from the template, return one
   // ready-to-replace map with values already formatted ($12M / 73% / 3.5x).
   // No more rigid sheet-name + column-letter lookups.
+  //
+  // Soft-fail policy: when the extractor throws (Anthropic credit-balance
+  // 400, network blip, API key missing, parse error), we continue with
+  // empty maps. The downstream Phase 3 sparse-slide guard will detect the
+  // low yield and skip slide deletion, producing a full template-with-
+  // placeholders deck that the admin can complete manually rather than a
+  // 1-slide ghost (only the protected closing slide surviving deletion).
   const uploadsText = opts.customerKeyId ? await gatherUploadsText(opts.customerKeyId) : '';
-  const { values: valueMap, charts: chartMap } = await extractPlaceholdersWithClaude(
-    opts.customerXlsxPath,
-    opts.templatePptxPath,
-    uploadsText,
-  );
+  let valueMap: Map<string, string>;
+  let chartMap: Map<string, ChartData>;
+  let extractionFailureReason: string | null = null;
+  try {
+    const result = await extractPlaceholdersWithClaude(
+      opts.customerXlsxPath,
+      opts.templatePptxPath,
+      uploadsText,
+    );
+    valueMap = result.values;
+    chartMap = result.charts;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    extractionFailureReason = msg;
+    valueMap = new Map();
+    chartMap = new Map();
+    console.warn('[pptx-gen] extractor failed (continuing with empty maps):', msg);
+  }
 
   const pptxBuf = await fs.promises.readFile(opts.templatePptxPath);
   const zip = await JSZip.loadAsync(pptxBuf);
@@ -1517,6 +1541,28 @@ export async function generatePopulatedPptx(opts: {
   // ship a deck PowerPoint refuses to open at all.
   const slidesToDelete: string[] = [];
   let invalidSlidesDropped = 0;
+
+  // Yield guard: when the extractor returned very few values (failure or
+  // a workbook that hasn't been recalc'd in Excel yet), every slide other
+  // than the protected closing slide hits the >70% unfilled threshold and
+  // gets pruned, leaving a one-slide deck. That's a worse outcome than
+  // shipping the full template with `{{X}}` markers still visible so the
+  // admin can fix them in PowerPoint. Cutoff: 20% extractor yield.
+  const totalOriginalCount = slideStates.reduce((s, x) => s + x.originalCount, 0);
+  const extractionYield    = totalOriginalCount > 0
+    ? valueMap.size / Math.max(1, totalOriginalCount)
+    : 1;
+  const sparseDeleteEnabled = !extractionFailureReason && extractionYield >= 0.2;
+  if (!sparseDeleteEnabled) {
+    console.warn(
+      `[pptx-gen] preserving all template slides (extractionFailed=${!!extractionFailureReason}, ` +
+      `valueMap=${valueMap.size}, totalPlaceholders=${totalOriginalCount}, ` +
+      `yield=${(extractionYield * 100).toFixed(1)}%) — slides keep their {{X}} markers for manual fill.`,
+    );
+    stats.sparseDeleteSkipped = true;
+    if (extractionFailureReason) stats.extractionFailureReason = extractionFailureReason;
+  }
+
   for (const slide of slideStates) {
     const { xml: cleaned, stats: slideStats } =
       cleanupSlideXml(slide.afterReplace, slide.originalCount);
@@ -1536,7 +1582,7 @@ export async function generatePopulatedPptx(opts: {
 
     // The final (closing) slide is exempt from the unfilled-threshold drop;
     // we always want the deck to end on the CTA / thank-you slide.
-    if (slide.key !== finalSlidePath && slide.originalCount > 0) {
+    if (sparseDeleteEnabled && slide.key !== finalSlidePath && slide.originalCount > 0) {
       const unfilledRatio = slideStats.unfilledPlaceholders / slide.originalCount;
       if (unfilledRatio > SLIDE_DELETE_THRESHOLD) {
         slidesToDelete.push(slide.key);
