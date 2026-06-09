@@ -447,20 +447,23 @@ const EXTRACTOR_SYSTEM_PROMPT =
   '\n  - If neither the Excel nor the uploads support a placeholder, set its value to' +
   ' "" (empty string). Never write "TBD", "N/A", "Unknown", "various", or any filler.' +
   ' Never invent facts.' +
-  '\n\nSOURCE-OF-TRUTH PRECEDENCE (strict):' +
-  '\n  - The Excel financial model is the AUTHORITATIVE source for any financial' +
-  ' number. If a value appears in both the Excel and the uploaded materials, the' +
-  ' Excel value WINS. Use the cell value as-is; do not recompute, infer, or' +
-  ' "correct" it.' +
-  '\n  - Example: if Investor_Deck_Calculations shows GROSS_MARGIN = 0.5,' +
-  ' return "50%" -- even if you can compute a different blended margin from the' +
-  ' raw Section 6.b cost / price data. The Excel cached value is what the deck' +
-  ' must reflect. Mismatches between the Excel and the brief are the operator\'s' +
-  ' job to reconcile, not yours.' +
-  '\n  - Use uploaded materials ONLY for qualitative placeholders (company description,' +
-  ' founders, problem narrative, market thesis, etc.) AND for quantitative values' +
-  ' that the Excel does not provide at all (e.g. headquarters city, year founded' +
-  ' when missing from the model).' +
+  '\n\nSOURCE-OF-TRUTH PRECEDENCE:' +
+  '\n  - When BOTH the Excel financial model AND the uploaded materials carry the' +
+  ' same financial number, the Excel value WINS. Use the Excel cell as-is. Do' +
+  ' not recompute, infer, or "correct" it -- even if your own calculation from raw' +
+  ' inputs would give a different answer. Example: if Investor_Deck_Calculations' +
+  ' shows GROSS_MARGIN = 0.5, return "50%" even if you can compute 80% from the' +
+  ' Section 6.b cost / price data.' +
+  '\n  - When the Excel does NOT carry a value for a placeholder (empty cell, no' +
+  ' corresponding row, or value clearly absent from every sheet), USE THE UPLOADED' +
+  ' MATERIALS. This applies to BOTH qualitative content (founders, problem, market,' +
+  ' tagline) AND quantitative content the model doesn\'t track (current ARR, NRR,' +
+  ' logo retention, CAC, LTV payback months, TAM/SAM/SOM, headquarters city, etc.).' +
+  ' Many investor-deck KPIs live only in customer narratives -- "Excel prevails"' +
+  ' must not become "uploads ignored".' +
+  '\n  - Quick decision rule: for any financial placeholder, look at the Excel first.' +
+  ' If a cell value is there, return it formatted. If not, fall back to the' +
+  ' brief / pitch / one-pager.' +
   '\n\nCHART PLACEHOLDERS (starts with {{CHART_):' +
   '\n  - If you can construct a sensible chart from the Excel/upload data, return' +
   ' a JSON OBJECT (not a string) with this exact shape:' +
