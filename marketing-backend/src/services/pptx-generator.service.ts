@@ -315,20 +315,69 @@ export async function extractPlaceholdersFromXlsx(
 // and any placeholder with no supporting data resolves to an empty string so the
 // downstream cleanup pass strips its <a:r> run + parent <a:p> paragraph.
 
-/** Dump every sheet in the workbook to a readable text block. */
+// Sheets the extractor explicitly skips. Benchmark_Table in Financial Model
+// v9 is ~350K chars of generic comparable-company reference data — it's the
+// same across every customer, dwarfs every other sheet, and would crowd the
+// real customer data out of the 35K-char extractor budget if dumped.
+const WORKBOOK_DUMP_SKIP = new Set<string>([
+  'Benchmark_Table',
+]);
+
+// Priority order for the workbook dump: customer-specific + placeholder-
+// mapping data first, generic / structural last. Sheets not in this list
+// are appended after the priority block in their natural workbook order.
+const WORKBOOK_DUMP_PRIORITY = [
+  "Customer's Questionnaire",      // raw customer input
+  'Investor_Deck_Calculations',    // explicit {{PLACEHOLDER}} -> value rows
+  'Dashboard',                     // headline KPIs
+  'Qualitative Assumptions',
+  'P&L',
+  'Rev. Build',
+  'COGS',
+  'OPEX',
+  'Your Company',
+  'Definitions',
+  'Cover Page',
+];
+
+/**
+ * Dump every (non-skipped) sheet to a readable text block. Priority sheets
+ * are emitted first so the most extractor-relevant data survives the 35K
+ * char clip in `clipForBudget`. Defensive trimming on individual sheets
+ * (40K cap each) prevents any future giant sheet from monopolising the
+ * budget before downstream sheets get a turn.
+ */
 export function readWorkbookAsText(xlsxPath: string): string {
   const wb = XLSX.readFile(xlsxPath, { cellDates: true, cellNF: false, cellText: false });
+  const present = new Set(wb.SheetNames);
+  const ordered: string[] = [];
+  for (const name of WORKBOOK_DUMP_PRIORITY) {
+    // Match case-insensitively + trim trailing spaces (the v9 template has
+    // "Your Company " with a trailing space — we still want it included).
+    const hit = wb.SheetNames.find((n) => n.trim().toLowerCase() === name.trim().toLowerCase());
+    if (hit && !ordered.includes(hit) && !WORKBOOK_DUMP_SKIP.has(hit)) ordered.push(hit);
+  }
+  for (const name of wb.SheetNames) {
+    if (WORKBOOK_DUMP_SKIP.has(name)) continue;
+    if (ordered.includes(name)) continue;
+    ordered.push(name);
+  }
+
   const parts: string[] = [];
-  for (const sheetName of wb.SheetNames) {
+  for (const sheetName of ordered) {
     const sheet = wb.Sheets[sheetName];
     if (!sheet) continue;
-    // sheet_to_csv gives a flat readable dump (tab-separated would be cleaner
-    // but CSV is unambiguous and Claude tolerates either). Empty rows at the
-    // tail are auto-trimmed by sheet_to_csv with skipHidden=false.
-    const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
-    if (!csv.trim()) continue;
-    parts.push(`### Sheet: ${sheetName}\n${csv.trim()}`);
+    let csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false }).trim();
+    if (!csv) continue;
+    // Per-sheet cap so no single sheet can consume the whole budget.
+    if (csv.length > 40_000) {
+      csv = csv.slice(0, 40_000) +
+            `\n\n[... ${csv.length - 40_000} chars truncated from sheet "${sheetName}" ...]`;
+    }
+    parts.push(`### Sheet: ${sheetName}\n${csv}`);
   }
+  // Suppress 'present' lint -- it's there as a guard for future sheet checks.
+  void present;
   return parts.join('\n\n---\n\n');
 }
 
@@ -718,16 +767,29 @@ interface SlideCleanupStats {
  *
  * Returns the cleaned XML and per-slide stats.
  */
-function cleanupSlideXml(slideXml: string, originalCount: number): { xml: string; stats: SlideCleanupStats } {
+function cleanupSlideXml(
+  slideXml: string,
+  originalCount: number,
+  opts: { keepUnfilledMarkers?: boolean } = {},
+): { xml: string; stats: SlideCleanupStats } {
   let stats: SlideCleanupStats = {
     originalPlaceholders: originalCount,
     unfilledPlaceholders: 0,
     emptyRunsStripped:    0,
   };
 
-  // (1) Strip remaining {{X}} tokens, counting how many we erased.
+  // (1) Strip remaining {{X}} tokens (or leave them visible when the caller
+  //     asked us to — used by the low-yield fallback path so the admin can
+  //     find/replace markers in PowerPoint instead of guessing where the
+  //     missing values should go).
   let xml = slideXml.replace(/<a:t([^>]*)>([\s\S]*?)<\/a:t>/g, (_m, attrs: string, text: string) => {
     const decoded = decodeXmlEntities(text);
+    if (opts.keepUnfilledMarkers) {
+      // Just count, don't rewrite — preserves the original entity-encoded text.
+      const markerMatches = decoded.match(/\{\{([A-Z0-9_]+)\}\}/g);
+      stats.unfilledPlaceholders += markerMatches ? markerMatches.length : 0;
+      return `<a:t${attrs}>${text}</a:t>`;
+    }
     const cleaned = decoded.replace(/\{\{([A-Z0-9_]+)\}\}/g, () => {
       stats.unfilledPlaceholders += 1;
       return '';
@@ -1565,7 +1627,11 @@ export async function generatePopulatedPptx(opts: {
 
   for (const slide of slideStates) {
     const { xml: cleaned, stats: slideStats } =
-      cleanupSlideXml(slide.afterReplace, slide.originalCount);
+      cleanupSlideXml(slide.afterReplace, slide.originalCount, {
+        // Low yield → keep `{{X}}` markers visible so admin can do
+        // find/replace in PowerPoint. Normal yield → strip them.
+        keepUnfilledMarkers: !sparseDeleteEnabled,
+      });
     zip.file(slide.key, cleaned);
     stats.slidesProcessed   += 1;
     stats.emptyRunsStripped  = (stats.emptyRunsStripped || 0) + slideStats.emptyRunsStripped;
