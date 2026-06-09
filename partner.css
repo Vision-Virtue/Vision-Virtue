@@ -52,10 +52,53 @@
   padding: 4rem 2rem 5rem;
   max-width: 1200px;
   margin: 0 auto;
+  position: relative;
 }
 .partner-section-head {
   text-align: center;
   margin-bottom: 2.5rem;
+}
+
+/* Customer name chip — sits in the upper-left of the products section so
+   the customer sees which account they're signed into without having to
+   scroll back to the hero. Driven by partner.js renderTileState. */
+.partner-customer-badge {
+  position: absolute;
+  top: 4.4rem;
+  left: 2rem;
+  background: #fff;
+  border: 1px solid var(--gray-100, #e5e7eb);
+  border-radius: 10px;
+  padding: 0.7rem 1rem;
+  box-shadow: 0 1px 3px rgba(8, 15, 32, 0.05);
+  max-width: 260px;
+  line-height: 1.2;
+  z-index: 2;
+}
+.partner-customer-badge-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gray-600, #6b7280);
+  margin-bottom: 0.25rem;
+}
+.partner-customer-badge-name {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--navy-900, #0a1226);
+}
+@media (max-width: 900px) {
+  /* Stack the chip above the centered header on narrower viewports
+     so it never overlaps the title. */
+  .partner-customer-badge {
+    position: static;
+    margin: 0 auto 1.25rem;
+    max-width: 100%;
+    text-align: center;
+  }
 }
 .partner-section-title {
   font-family: var(--font-head);
@@ -331,6 +374,12 @@
 .partner-q-cell { padding: 0.45rem 0.55rem; font-size: 0.83rem; }
 .partner-q-cell[type="number"] { text-align: right; }
 .partner-q-custom { display: block; width: 100%; }
+/* HTML5 `hidden` attribute would normally collapse the element, but our
+   class above sets a non-default `display`, which clobbers it. Restore
+   the hide behaviour explicitly so the input only appears when JS shows
+   it after the customer picks "Other (specify)". */
+.partner-q-custom[hidden] { display: none; }
+.partner-q-select[hidden] { display: none; }
 
 .partner-q-rmrow {
   background: transparent;

@@ -151,11 +151,24 @@ async function renderTileState() {
     const welcome = document.getElementById('partnerWelcome');
     if (welcome) welcome.textContent = `Welcome, ${knownName}. Select a product below to view its status.`;
   }
+  renderCustomerBadge(knownName);
 
   renderXlsxTile(xlsxTile, xlsxStatusEl, sub);
   if (pptxTile && pptxStatusEl) renderPptxTile(pptxTile, pptxStatusEl, sub);
   renderConsultTile(sub);
   renderEditBanner(sub);
+}
+
+// Customer name chip in the upper-left of the Products section — gives
+// signed-in customers a persistent reminder of which account they're on.
+function renderCustomerBadge(name) {
+  const el = document.getElementById('partnerCustomerBadge');
+  if (!el) return;
+  if (!name) { el.hidden = true; el.innerHTML = ''; return; }
+  el.hidden = false;
+  el.innerHTML =
+    '<span class="partner-customer-badge-label">Customer</span>' +
+    '<span class="partner-customer-badge-name">' + escHtml(name) + '</span>';
 }
 
 // One Edit Submission button shown above all three tiles — edits cascade to
