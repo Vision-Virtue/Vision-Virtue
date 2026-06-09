@@ -463,6 +463,22 @@ const EXTRACTOR_SYSTEM_PROMPT =
   '\n  - Stacked charts (e.g. {{CHART_ARR_5Y}} = "ARR build, new vs expansion"):' +
   ' two series stacked. Single-series charts: one entry in series[].' +
   '\n  - If the data isn\'t there, return "" for the chart placeholder (a string).' +
+  '\n\nPAIRED LABEL / VALUE PLACEHOLDERS:' +
+  '\n  - Many slides have a "label" placeholder right next to a fixed-meaning ' +
+  '"value" placeholder, e.g. {{KPI_3_LABEL}} sits above {{KPI_GM_VALUE}}.' +
+  '\n  - The label MUST describe what the paired value placeholder actually renders.' +
+  ' Do NOT relabel a tile to a customer-specific metric just because the brief ' +
+  'mentions one. The value cell binds to the workbook; the label has to match.' +
+  '\n  - Slide 12 KPI tile labels (fixed): ' +
+  '{{KPI_1_LABEL}} → "ARR" (pairs with {{KPI_ARR_VALUE}}); ' +
+  '{{KPI_2_LABEL}} → "Net Dollar Retention" (with {{KPI_NRR_VALUE}}); ' +
+  '{{KPI_3_LABEL}} → "Gross Margin" (with {{KPI_GM_VALUE}}); ' +
+  '{{KPI_4_LABEL}} → "Net Burn" (with {{KPI_BURN_VALUE}}).' +
+  '\n  - {{KPI_PERIOD_LABEL}}, {{KPI_PERIOD}}, {{KPI_HEADLINE}}, ' +
+  '{{KPI_CURRENCY_NOTE}}, {{KPI_BURN_NOTE}} stay neutral / period-only.' +
+  '\n  - Cohort labels ({{COHORT_*_LABEL}}) and allocation labels ' +
+  '({{ALLOC_*_LABEL}}) CAN be customer-specific (e.g. "Year 1 cohort", ' +
+  '"R&D", "Sales & Marketing") since they describe customer-supplied buckets.' +
   '\n\nOUTPUT RULES:' +
   '\n  - Return ONLY the JSON object. No markdown fences, no commentary, no preface.' +
   '\n  - Start with "{" and end with "}".' +
