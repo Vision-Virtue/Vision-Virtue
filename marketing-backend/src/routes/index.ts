@@ -521,6 +521,23 @@ router.post(
   (req, res) => partnerController.adminRevokeInvestorKey(req, res),
 );
 
+// ─── Admin: Agreements (signed NDAs from the Investors Marketplace) ──────────
+router.get(
+  '/admin/nda-signatures',
+  requireAdminPin,
+  (req, res) => partnerController.adminListNdaSignatures(req, res),
+);
+router.get(
+  '/admin/nda-signatures/:id/pdf',
+  requireAdminPin,
+  asyncHandler(async (req, res) => { await partnerController.adminDownloadNdaPdf(req, res); }),
+);
+router.delete(
+  '/admin/nda-signatures/:id',
+  requireAdminPin,
+  (req, res) => partnerController.adminDeleteNda(req, res),
+);
+
 // ─── LinkedIn Routes ──────────────────────────────────────────────────────────
 
 // Get organization profile (cached or live)

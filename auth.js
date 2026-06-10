@@ -73,6 +73,17 @@ if (podcastCard) {
   });
 }
 
+// ── Agreements card → open gate then redirect to signed-NDA listing ──
+const agreementsCard = document.getElementById('agreementsCard');
+if (agreementsCard) {
+  agreementsCard.addEventListener('click', () => {
+    authDropdown.classList.remove('open');
+    authMenuBtn.setAttribute('aria-expanded', 'false');
+    apEnterBtn.dataset.target = 'agreements';
+    openGate();
+  });
+}
+
 // Mobile: tap Authorized Personnel → open gate directly
 if (mobileAuthBtn) {
   mobileAuthBtn.addEventListener('click', openGate);
@@ -137,8 +148,9 @@ async function tryAuth() {
     const PODCAST_URL = 'https://podcast.visionvirtuepartnership.com';
     const podcastHref = `${PODCAST_URL}/?pin=${encodeURIComponent(pin)}`;
     window.location.href =
-      target === 'marketing' ? 'marketing.html'
-      : target === 'podcast' ? podcastHref
+      target === 'marketing'  ? 'marketing.html'
+      : target === 'podcast'  ? podcastHref
+      : target === 'agreements' ? 'agreements.html'
       : 'agents.html';
   } catch {
     apError.textContent = 'Could not reach server. Please try again.';

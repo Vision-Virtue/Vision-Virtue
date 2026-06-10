@@ -16,6 +16,7 @@ import {
 import {
   storeDeckPdf, readDeckPdf, MAX_DECK_PDF_BYTES,
 } from '../services/marketplace-deck.service';
+import { generatePopulatedNdaPdf } from '../services/nda-pdf-generator.service';
 import { generateFinalizedXlsx, resolveStoredXlsx, storeUploadedXlsx } from '../services/partner-xlsx.service';
 import {
   storeAsset, resolveAsset, contentTypeForFilename, MAX_ASSET_BYTES,
@@ -1220,6 +1221,69 @@ export const partnerController = {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', 'private, max-age=300');
     res.end(buf);
+  },
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Phase 4 — Agreements (admin view of signed NDAs)
+  // Wired to the 'Agreements' tile under Authorized Personnel. Lists every
+  // signed NDA with download + delete actions.
+  // ────────────────────────────────────────────────────────────────────────────
+
+  /** GET /api/admin/nda-signatures — list all signed NDAs (admin PIN required). */
+  adminListNdaSignatures(_req: Request, res: Response): void {
+    const rows = ndaSignatureRepo.listAll();
+    res.json({
+      signatures: rows.map(r => ({
+        id:             r.id,
+        investorKeyId:  r.investorKeyId,
+        investorName:   r.investorName,
+        listingId:      r.listingId,
+        customerName:   r.customerName,
+        fullName:       r.fullName,
+        fundName:       r.fundName,
+        title:          r.title,
+        businessEmail:  r.businessEmail,
+        signDate:       r.signDate,
+        signedAt:       r.signedAt,
+        signatureType:  r.signatureType,
+        // Note: signatureValue (large base64 PNG for drawn) intentionally
+        // omitted from the list payload — fetched only on the download path.
+      })),
+    });
+  },
+
+  /** GET /api/admin/nda-signatures/:id/pdf — populated NDA PDF download. */
+  async adminDownloadNdaPdf(req: Request, res: Response): Promise<void> {
+    const id = String(req.params.id || '').trim();
+    const nda = ndaSignatureRepo.findById(id);
+    if (!nda) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'NDA not found.' } });
+      return;
+    }
+    try {
+      const buf = await generatePopulatedNdaPdf(nda);
+      const filename = ('VV_NDA_' + nda.fundName + '_' + nda.signDate)
+        .replace(/[^A-Za-z0-9_-]+/g, '_') + '.pdf';
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'attachment; filename="' + filename + '"');
+      res.setHeader('Cache-Control', 'private, no-store');
+      res.end(buf);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'PDF generation failed';
+      res.status(500).json({ error: { code: 'PDF_FAILED', message: msg } });
+    }
+  },
+
+  /** DELETE /api/admin/nda-signatures/:id — purge a signed NDA from the record. */
+  adminDeleteNda(req: Request, res: Response): void {
+    const id = String(req.params.id || '').trim();
+    const nda = ndaSignatureRepo.findById(id);
+    if (!nda) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'NDA not found.' } });
+      return;
+    }
+    ndaSignatureRepo.delete(id);
+    res.json({ ok: true });
   },
 
   // ────────────────────────────────────────────────────────────────────────────
