@@ -203,6 +203,27 @@ body {
 
 .nav-cta:hover { background: var(--accent-light) !important; }
 
+/* ── Investors Marketplace nav button ── */
+.nav-investor-link {
+  background: rgba(58, 167, 167, 0.18);
+  color: #9fe2e2;
+  padding: 0.4rem 1.1rem;
+  border-radius: 3px;
+  border: 1px solid rgba(58, 167, 167, 0.4);
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.2s, color 0.2s;
+  white-space: nowrap;
+}
+.nav-investor-link:hover {
+  background: rgba(58, 167, 167, 0.35);
+  color: var(--white);
+}
+
 /* ── Authorized Personnel nav button ── */
 .nav-auth-wrap {
   position: relative;

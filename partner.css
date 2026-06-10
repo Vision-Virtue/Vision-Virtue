@@ -217,6 +217,17 @@
 }
 .partner-tile-download:hover { color: var(--accent-light, #5b8de0); }
 
+/* Secondary marketplace action (Attach/Update Deck PDF) — subtler than the
+   primary Unpublish / Publish actions on the Investors Marketplace tile. */
+.partner-tile-download.partner-tile-secondary {
+  color: var(--gray-600, #4a5568);
+  font-weight: 500;
+  border-bottom-style: dashed;
+}
+.partner-tile-download.partner-tile-secondary:hover {
+  color: var(--navy-700, #112045);
+}
+
 .partner-edit-banner {
   display: flex;
   align-items: center;

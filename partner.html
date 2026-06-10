@@ -382,72 +382,8 @@
 
   </section>
 
-  <!-- INVESTORS MARKETPLACE — PUBLISH MODAL -->
-  <div class="consult-overlay mkt-overlay" id="mktOverlay" hidden>
-    <div class="consult-modal mkt-modal" role="dialog" aria-labelledby="mktTitle" aria-modal="true">
-      <div class="consult-head">
-        <div class="consult-head-meta">
-          <div class="consult-avatar" aria-hidden="true">IM</div>
-          <div>
-            <h3 class="consult-title" id="mktTitle">Publish to Investors Marketplace</h3>
-            <p class="consult-sub">Build a public tile from your finalized model. You can pull it back at any time.</p>
-          </div>
-        </div>
-        <button type="button" class="consult-close" id="mktClose" aria-label="Close">&times;</button>
-      </div>
-      <form class="mkt-form" id="mktForm" autocomplete="off" style="padding:1.2rem 1.6rem 1.4rem;display:flex;flex-direction:column;gap:0.9rem">
-        <p id="mktStatusLine" style="margin:0;font-size:0.82rem;color:#5b6b85"></p>
-
-        <div class="partner-q-field">
-          <label class="partner-q-label" for="mktSector">Sector</label>
-          <select id="mktSector" name="sector" class="partner-q-select" required>
-            <option value="">— Select —</option>
-            <option>AI / GenAI</option><option>Hi-Tech</option><option>Bio-Tech</option>
-            <option>Med-Tech</option><option>Fin-Tech</option><option>Ag-Tech</option>
-            <option>Automotive</option><option>Telematics</option><option>Industrial</option>
-            <option>Food-Tech</option><option>SaaS</option><option>Cybersecurity</option>
-            <option>Digital Health</option><option>Consumer Tech</option><option>Climate Tech</option>
-            <option>Other</option>
-          </select>
-        </div>
-
-        <div class="partner-q-field">
-          <label class="partner-q-label" for="mktDescription">Public description <span style="color:#9aa4b8;font-weight:400">(shown on the tile)</span></label>
-          <textarea id="mktDescription" name="description" class="partner-q-input" rows="2" maxlength="600" placeholder="One or two sentences. What you do, who you serve."></textarea>
-        </div>
-
-        <div class="partner-q-field">
-          <label class="partner-q-label" for="mktAsk">Ask amount <span style="color:#9aa4b8;font-weight:400">(free-form, e.g. "$10M Series A")</span></label>
-          <input type="text" id="mktAsk" name="askAmountText" class="partner-q-input" maxlength="40" placeholder="$10M Series A" />
-        </div>
-
-        <div class="partner-q-field">
-          <label class="partner-q-label" for="mktDeckPdf">Deck PDF <span style="color:#9aa4b8;font-weight:400">(view-only — investors cannot download)</span></label>
-          <input type="file" id="mktDeckPdf" accept="application/pdf,.pdf" class="partner-q-input" style="padding:0.55rem 0.7rem" />
-          <p id="mktDeckPdfHint" style="margin:0.35rem 0 0;font-size:0.78rem;color:#5b6b85">Upload your latest investor deck as PDF. Optional now — you can come back later to attach it. Max 30 MB.</p>
-        </div>
-
-        <div style="margin-top:0.4rem">
-          <div style="font-weight:600;color:#1a2d5e;margin-bottom:0.4rem;font-size:0.92rem">Hover KPIs (shown on tile mouseover)</div>
-          <div class="partner-q-grid" style="grid-template-columns:1fr 1fr;gap:0.6rem">
-            <div class="partner-q-field"><label class="partner-q-label" for="kpiGmY1">GM % YR 1</label><input type="text" id="kpiGmY1" class="partner-q-input" placeholder="e.g. 62%" /></div>
-            <div class="partner-q-field"><label class="partner-q-label" for="kpiGmY5">GM % YR 5</label><input type="text" id="kpiGmY5" class="partner-q-input" placeholder="e.g. 78%" /></div>
-            <div class="partner-q-field"><label class="partner-q-label" for="kpiArrY1">ARR YR 1</label><input type="text" id="kpiArrY1" class="partner-q-input" placeholder="e.g. $2.4M" /></div>
-            <div class="partner-q-field"><label class="partner-q-label" for="kpiArrY5">ARR YR 5</label><input type="text" id="kpiArrY5" class="partner-q-input" placeholder="e.g. $48M" /></div>
-            <div class="partner-q-field"><label class="partner-q-label" for="kpiTopY1">Top-Line YR 1</label><input type="text" id="kpiTopY1" class="partner-q-input" placeholder="e.g. $3M" /></div>
-            <div class="partner-q-field"><label class="partner-q-label" for="kpiTopY5">Top-Line YR 5</label><input type="text" id="kpiTopY5" class="partner-q-input" placeholder="e.g. $60M" /></div>
-            <div class="partner-q-field"><label class="partner-q-label" for="kpiEbitdaY5">Adjusted EBITDA YR 5</label><input type="text" id="kpiEbitdaY5" class="partner-q-input" placeholder="e.g. $14M" /></div>
-            <div class="partner-q-field"><label class="partner-q-label" for="kpiNrr">NRR</label><input type="text" id="kpiNrr" class="partner-q-input" placeholder="e.g. 124%" /></div>
-          </div>
-        </div>
-
-        <div style="display:flex;gap:0.8rem;justify-content:flex-end;margin-top:0.8rem;flex-wrap:wrap">
-          <button type="button" class="partner-q-back-btn" id="mktWithdrawBtn" hidden>Pull from Marketplace</button>
-          <button type="submit" class="partner-q-submit" id="mktPublishBtn">Publish</button>
-        </div>
-      </form>
-    </div>
-  </div>
+  <!-- Hidden file input for the marketplace tile's "Attach Deck PDF" action. -->
+  <input type="file" id="mktDeckPdfInput" accept="application/pdf,.pdf" style="display:none" />
 
   <script src="partner.js"></script>
 </body>

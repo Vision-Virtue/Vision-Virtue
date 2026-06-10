@@ -228,14 +228,15 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 (function setupInvestorKeyGate() {
   const IV_BACKEND = 'https://vv-marketing-api.onrender.com';
 
-  const ivOverlay  = document.getElementById('ivOverlay');
-  const ivClose    = document.getElementById('ivClose');
-  const ivKey      = document.getElementById('ivKey');
-  const ivEnterBtn = document.getElementById('ivEnterBtn');
-  const ivError    = document.getElementById('ivError');
-  const investorCta = document.getElementById('investorMarketplaceCta');
+  const ivOverlay     = document.getElementById('ivOverlay');
+  const ivClose       = document.getElementById('ivClose');
+  const ivKey         = document.getElementById('ivKey');
+  const ivEnterBtn    = document.getElementById('ivEnterBtn');
+  const ivError       = document.getElementById('ivError');
+  const investorCta   = document.getElementById('investorMarketplaceCta');
+  const mobileInvBtn  = document.getElementById('mobileInvestorBtn');
 
-  if (!ivOverlay || !investorCta) return;
+  if (!ivOverlay || (!investorCta && !mobileInvBtn)) return;
 
   function openIv() {
     ivOverlay.classList.add('open');
@@ -287,7 +288,8 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     }
   }
 
-  investorCta.addEventListener('click', openIv);
+  investorCta?.addEventListener('click', openIv);
+  mobileInvBtn?.addEventListener('click', openIv);
   ivClose.addEventListener('click', closeIv);
   ivOverlay.addEventListener('click', e => { if (e.target === ivOverlay) closeIv(); });
   ivEnterBtn.addEventListener('click', submitInvestorKey);
