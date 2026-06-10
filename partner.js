@@ -156,8 +156,219 @@ async function renderTileState() {
   renderXlsxTile(xlsxTile, xlsxStatusEl, sub);
   if (pptxTile && pptxStatusEl) renderPptxTile(pptxTile, pptxStatusEl, sub);
   renderConsultTile(sub);
+  renderMarketplaceTile(sub);
   renderEditBanner(sub);
 }
+
+// ─── Investors Marketplace — publish / withdraw API + tile renderer ─────────
+let _myListings = []; // most recent fetch of /api/customer/me/marketplace-listings
+
+async function apiListMyListings() {
+  const key = customerKey();
+  if (!key) return [];
+  try {
+    const res = await fetch(`${PARTNER_API}/api/customer/me/marketplace-listings`, {
+      headers: { 'X-Customer-Key': key },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.listings) ? data.listings : [];
+  } catch { return []; }
+}
+
+async function apiPublishListing(payload) {
+  const key = customerKey();
+  if (!key) throw new Error('Missing customer key');
+  const res = await fetch(`${PARTNER_API}/api/customer/me/marketplace-listings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Customer-Key': key },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Publish failed (${res.status}): ${body.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  return data.listing;
+}
+
+async function apiWithdrawListing(listingId) {
+  const key = customerKey();
+  if (!key) throw new Error('Missing customer key');
+  const res = await fetch(
+    `${PARTNER_API}/api/customer/me/marketplace-listings/${encodeURIComponent(listingId)}/withdraw`,
+    { method: 'POST', headers: { 'X-Customer-Key': key } },
+  );
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Withdraw failed (${res.status}): ${body.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  return data.listing;
+}
+
+/** Find the marketplace listing matching the current submission, if any. */
+function listingForSubmission(subId) {
+  if (!subId) return null;
+  return _myListings.find(l => l.submissionId === subId) || null;
+}
+
+async function renderMarketplaceTile(sub) {
+  const statusEl = document.getElementById('statusInvestorsMarketplace');
+  const tile     = document.getElementById('tileInvestorsMarketplace');
+  if (!statusEl || !tile) return;
+
+  const finalized = !!(sub && sub.status === 'finalized');
+  if (!finalized) {
+    statusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Available after finalization</span>';
+    tile.classList.add('is-review');
+    tile.classList.remove('is-finalized');
+    tile.disabled = false;
+    return;
+  }
+
+  _myListings = await apiListMyListings();
+  const listing = listingForSubmission(sub.id);
+
+  if (listing && listing.status === 'active') {
+    statusEl.innerHTML = '<span class="partner-status-pill partner-status-finalized">Live on marketplace</span>';
+    tile.classList.add('is-finalized');
+    tile.classList.remove('is-review');
+  } else {
+    statusEl.innerHTML = '<span class="partner-status-pill partner-status-new">Ready to publish</span>';
+    tile.classList.remove('is-finalized', 'is-review');
+  }
+  tile.disabled = false;
+}
+
+document.getElementById('tileInvestorsMarketplace')?.addEventListener('click', () => {
+  const sub = _latestSubmission;
+  if (!sub) {
+    alert('Submit your Customer’s Questionnaire first — the marketplace tile is built from your model.');
+    return;
+  }
+  if (sub.status !== 'finalized') {
+    alert('Investors Marketplace opens once Vision & Virtue finalizes your model and presentation. We’ll notify you when ready.');
+    return;
+  }
+  openMarketplaceModal(sub, listingForSubmission(sub.id));
+});
+
+// ─── Marketplace modal ──────────────────────────────────────────────────────
+const mktOverlay      = document.getElementById('mktOverlay');
+const mktForm         = document.getElementById('mktForm');
+const mktClose        = document.getElementById('mktClose');
+const mktStatusLine   = document.getElementById('mktStatusLine');
+const mktSector       = document.getElementById('mktSector');
+const mktDescription  = document.getElementById('mktDescription');
+const mktAsk          = document.getElementById('mktAsk');
+const mktPublishBtn   = document.getElementById('mktPublishBtn');
+const mktWithdrawBtn  = document.getElementById('mktWithdrawBtn');
+const _kpiFields = ['kpiGmY1','kpiGmY5','kpiArrY1','kpiArrY5','kpiTopY1','kpiTopY5','kpiEbitdaY5','kpiNrr'];
+let _activeMktSubmission = null;
+let _activeMktListing    = null;
+
+function openMarketplaceModal(sub, existingListing) {
+  if (!mktOverlay) return;
+  _activeMktSubmission = sub;
+  _activeMktListing    = existingListing || null;
+
+  const formSector = sub?.formData?.sector || '';
+  if (existingListing) {
+    mktStatusLine.textContent = existingListing.status === 'active'
+      ? `Listing is LIVE on the marketplace (published ${new Date(existingListing.publishedAt).toLocaleDateString()}). Update and re-publish, or pull it down.`
+      : `Listing was withdrawn ${existingListing.withdrawnAt ? 'on ' + new Date(existingListing.withdrawnAt).toLocaleDateString() : ''}. Publish to make it live again.`;
+    mktSector.value      = existingListing.sector || formSector || '';
+    mktDescription.value = existingListing.description || sub?.formData?.oneLineDescription || '';
+    mktAsk.value         = existingListing.askAmountText || '';
+    const k = existingListing.kpis || {};
+    document.getElementById('kpiGmY1').value     = k.gmPctY1   ?? '';
+    document.getElementById('kpiGmY5').value     = k.gmPctY5   ?? '';
+    document.getElementById('kpiArrY1').value    = k.arrY1     ?? '';
+    document.getElementById('kpiArrY5').value    = k.arrY5     ?? '';
+    document.getElementById('kpiTopY1').value    = k.topLineY1 ?? '';
+    document.getElementById('kpiTopY5').value    = k.topLineY5 ?? '';
+    document.getElementById('kpiEbitdaY5').value = k.ebitdaY5  ?? '';
+    document.getElementById('kpiNrr').value      = k.nrr       ?? '';
+    mktPublishBtn.textContent = existingListing.status === 'active' ? 'Update & Re-publish' : 'Re-publish';
+    mktWithdrawBtn.hidden = existingListing.status !== 'active';
+  } else {
+    mktStatusLine.textContent = 'Build your tile. You can edit or pull it down anytime.';
+    mktSector.value      = formSector || '';
+    mktDescription.value = sub?.formData?.oneLineDescription || '';
+    mktAsk.value         = '';
+    _kpiFields.forEach(id => { document.getElementById(id).value = ''; });
+    mktPublishBtn.textContent = 'Publish';
+    mktWithdrawBtn.hidden = true;
+  }
+  mktOverlay.hidden = false;
+  document.body.classList.add('is-consult-open');
+  setTimeout(() => mktSector.focus(), 50);
+}
+
+function closeMarketplaceModal() {
+  if (!mktOverlay) return;
+  mktOverlay.hidden = true;
+  document.body.classList.remove('is-consult-open');
+  _activeMktSubmission = null;
+  _activeMktListing = null;
+}
+
+mktClose?.addEventListener('click', closeMarketplaceModal);
+mktOverlay?.addEventListener('click', (ev) => { if (ev.target === mktOverlay) closeMarketplaceModal(); });
+document.addEventListener('keydown', (ev) => {
+  if (ev.key === 'Escape' && mktOverlay && !mktOverlay.hidden) closeMarketplaceModal();
+});
+
+mktForm?.addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  if (!_activeMktSubmission) return;
+  const orig = mktPublishBtn.textContent;
+  mktPublishBtn.disabled = true; mktPublishBtn.textContent = 'Publishing…';
+  try {
+    const payload = {
+      submissionId: _activeMktSubmission.id,
+      sector:        mktSector.value || 'Other',
+      description:   mktDescription.value || '',
+      askAmountText: mktAsk.value || '',
+      kpis: {
+        gmPctY1:   document.getElementById('kpiGmY1').value,
+        gmPctY5:   document.getElementById('kpiGmY5').value,
+        arrY1:     document.getElementById('kpiArrY1').value,
+        arrY5:     document.getElementById('kpiArrY5').value,
+        topLineY1: document.getElementById('kpiTopY1').value,
+        topLineY5: document.getElementById('kpiTopY5').value,
+        ebitdaY5:  document.getElementById('kpiEbitdaY5').value,
+        nrr:       document.getElementById('kpiNrr').value,
+      },
+    };
+    await apiPublishListing(payload);
+    await renderTileState();
+    closeMarketplaceModal();
+    alert('Your tile is live on the Investors Marketplace.');
+  } catch (err) {
+    alert('Publish failed.\n\n' + (err && err.message ? err.message : ''));
+  } finally {
+    mktPublishBtn.disabled = false; mktPublishBtn.textContent = orig;
+  }
+});
+
+mktWithdrawBtn?.addEventListener('click', async () => {
+  if (!_activeMktListing) return;
+  if (!confirm('Pull this submission from the Investors Marketplace? Investors will no longer see it. You can re-publish later.')) return;
+  const orig = mktWithdrawBtn.textContent;
+  mktWithdrawBtn.disabled = true; mktWithdrawBtn.textContent = 'Pulling…';
+  try {
+    await apiWithdrawListing(_activeMktListing.id);
+    await renderTileState();
+    closeMarketplaceModal();
+    alert('Pulled from the Investors Marketplace.');
+  } catch (err) {
+    alert('Pull failed.\n\n' + (err && err.message ? err.message : ''));
+  } finally {
+    mktWithdrawBtn.disabled = false; mktWithdrawBtn.textContent = orig;
+  }
+});
 
 // Customer name chip in the upper-left of the Products section — gives
 // signed-in customers a persistent reminder of which account they're on.
