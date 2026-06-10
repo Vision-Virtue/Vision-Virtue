@@ -148,6 +148,10 @@ router.post(
 // Validate a customer key and return basic info
 router.post('/customer/auth', (req, res) => partnerController.auth(req, res));
 
+// Validate an investor key (Investors Marketplace gate). Same shape as
+// /customer/auth but checked against the investor_keys table.
+router.post('/investor/auth', (req, res) => partnerController.investorAuth(req, res));
+
 // Investor-deck placeholder schema — used by the customer questionnaire UI
 // to render the deck-specific sections. Single source of truth shared with
 // the xlsx writer.
@@ -473,6 +477,23 @@ router.get(
   '/admin/customer-keys',
   requireAdminPin,
   (req, res) => partnerController.adminListKeys(req, res),
+);
+
+// ─── Admin: Investor Keys (Investors Marketplace) ────────────────────────────
+router.post(
+  '/admin/investor-keys',
+  requireAdminPin,
+  (req, res) => partnerController.adminCreateInvestorKey(req, res),
+);
+router.get(
+  '/admin/investor-keys',
+  requireAdminPin,
+  (req, res) => partnerController.adminListInvestorKeys(req, res),
+);
+router.post(
+  '/admin/investor-keys/:id/revoke',
+  requireAdminPin,
+  (req, res) => partnerController.adminRevokeInvestorKey(req, res),
 );
 
 // ─── LinkedIn Routes ──────────────────────────────────────────────────────────

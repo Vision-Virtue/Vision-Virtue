@@ -224,6 +224,79 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
   });
 })();
 
+// ---------- Investor Key gate (Investors Marketplace CTA) ----------
+(function setupInvestorKeyGate() {
+  const IV_BACKEND = 'https://vv-marketing-api.onrender.com';
+
+  const ivOverlay  = document.getElementById('ivOverlay');
+  const ivClose    = document.getElementById('ivClose');
+  const ivKey      = document.getElementById('ivKey');
+  const ivEnterBtn = document.getElementById('ivEnterBtn');
+  const ivError    = document.getElementById('ivError');
+  const investorCta = document.getElementById('investorMarketplaceCta');
+
+  if (!ivOverlay || !investorCta) return;
+
+  function openIv() {
+    ivOverlay.classList.add('open');
+    ivOverlay.setAttribute('aria-hidden', 'false');
+    ivKey.value = '';
+    ivError.textContent = '';
+    setTimeout(() => ivKey.focus(), 50);
+  }
+
+  function closeIv() {
+    ivOverlay.classList.remove('open');
+    ivOverlay.setAttribute('aria-hidden', 'true');
+  }
+
+  async function submitInvestorKey() {
+    const key = ivKey.value.trim();
+    if (!key) {
+      ivError.textContent = 'Please enter your Investor Key.';
+      ivKey.focus();
+      return;
+    }
+    ivEnterBtn.disabled = true;
+    ivError.textContent = '';
+
+    try {
+      const res = await fetch(`${IV_BACKEND}/api/investor/auth`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.valid) {
+          sessionStorage.setItem('vv_investor_auth', '1');
+          sessionStorage.setItem('vv_investor_key', key);
+          sessionStorage.setItem('vv_investor_name', data.investorName || '');
+          closeIv();
+          window.location.href = 'investors-marketplace.html';
+          return;
+        }
+      }
+      ivError.textContent = 'Invalid Investor Key. Please try again.';
+      ivKey.value = '';
+      ivKey.focus();
+    } catch {
+      ivError.textContent = 'Could not reach server. Please try again.';
+    } finally {
+      ivEnterBtn.disabled = false;
+    }
+  }
+
+  investorCta.addEventListener('click', openIv);
+  ivClose.addEventListener('click', closeIv);
+  ivOverlay.addEventListener('click', e => { if (e.target === ivOverlay) closeIv(); });
+  ivEnterBtn.addEventListener('click', submitInvestorKey);
+  ivKey.addEventListener('keydown', e => { if (e.key === 'Enter') submitInvestorKey(); });
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape' && ivOverlay.classList.contains('open')) closeIv();
+  });
+})();
+
 // ---------- Authorized Personnel notification badge ----------
 // Fetches the count of pending partner submissions from the public
 // /api/notifications/pending-count endpoint and shows a small red bubble
@@ -277,5 +350,47 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) stop();
     else start();
+  });
+})();
+
+/* ============================================================
+   VISIBILITY DEMO — Video modal
+   ============================================================ */
+(function () {
+  var playBtn  = document.getElementById('visibilityPlayBtn');
+  var modal    = document.getElementById('vdemoModal');
+  var closeBtn = document.getElementById('vdemoClose');
+  var video    = document.getElementById('vdemoVideo');
+
+  if (!playBtn || !modal || !video) return;
+
+  function openModal() {
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    video.play();
+    closeBtn.focus();
+  }
+
+  function closeModal() {
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    video.pause();
+    video.currentTime = 0;
+    playBtn.focus();
+  }
+
+  playBtn.addEventListener('click', openModal);
+  closeBtn.addEventListener('click', closeModal);
+
+  // Close when clicking the dark backdrop (not the video box itself)
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal) closeModal();
+  });
+
+  // Close on Escape key
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
   });
 })();

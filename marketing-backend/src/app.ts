@@ -106,6 +106,18 @@ app.use(
   }),
 );
 
+// Same protection for the investor key gate.
+app.use(
+  '/api/investor/auth',
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: { code: 'RATE_LIMITED', message: 'Too many auth requests, please try again later.' } },
+  }),
+);
+
 // Stricter limit on AI chat endpoints (cost protection)
 app.use(
   '/api/chat',

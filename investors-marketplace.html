@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Investors Marketplace — Vision & Virtue</title>
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body { background: #0a1533; color: #f4f8ff; min-height: 100vh; font-family: 'Inter', system-ui, sans-serif; }
+    .iv-shell { max-width: 1180px; margin: 0 auto; padding: 6rem 1.5rem 4rem; }
+    .iv-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2.5rem; }
+    .iv-logo { display: flex; align-items: center; gap: 0.65rem; text-decoration: none; color: inherit; }
+    .iv-logo-v { width: 38px; height: 38px; border-radius: 8px; background: linear-gradient(135deg, #40c4c4, #122440); display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 22px; }
+    .iv-logo-text { font-size: 0.95rem; letter-spacing: 0.16em; font-weight: 700; }
+    .iv-signout { background: transparent; color: #c8d7eb; border: 1px solid rgba(200, 215, 235, 0.3); border-radius: 999px; padding: 0.45rem 1.05rem; font-size: 0.82rem; cursor: pointer; }
+    .iv-signout:hover { background: rgba(255,255,255,0.05); }
+    .iv-tag { display: inline-block; background: rgba(64, 196, 196, 0.15); color: #40c4c4; padding: 0.32rem 0.85rem; border-radius: 999px; font-size: 0.72rem; letter-spacing: 0.14em; font-weight: 700; margin-bottom: 1.1rem; }
+    .iv-title { font-size: 2.6rem; font-weight: 700; margin: 0 0 0.7rem; }
+    .iv-sub { color: #c8d7eb; font-size: 1.05rem; max-width: 720px; line-height: 1.55; margin: 0 0 3rem; }
+    .iv-welcome { color: #f6e7a5; font-weight: 600; margin-bottom: 0.75rem; font-size: 0.95rem; letter-spacing: 0.05em; }
+    .iv-placeholder { background: rgba(255,255,255,0.04); border: 1px dashed rgba(200, 215, 235, 0.25); border-radius: 16px; padding: 3rem 2rem; text-align: center; }
+    .iv-placeholder-title { font-size: 1.25rem; font-weight: 600; margin: 0 0 0.6rem; }
+    .iv-placeholder-body { color: #c8d7eb; line-height: 1.6; max-width: 640px; margin: 0 auto; }
+    .iv-placeholder-list { text-align: left; max-width: 540px; margin: 1.5rem auto 0; padding-left: 1.2rem; color: #c8d7eb; line-height: 1.8; }
+    .iv-placeholder-list li::marker { color: #40c4c4; }
+  </style>
+</head>
+<body>
+  <div class="iv-shell">
+    <div class="iv-topbar">
+      <a href="index.html" class="iv-logo">
+        <span class="iv-logo-v">V</span>
+        <span class="iv-logo-text">VISION &amp; VIRTUE</span>
+      </a>
+      <button type="button" class="iv-signout" id="ivSignOut">Sign out</button>
+    </div>
+
+    <div class="iv-welcome" id="ivWelcome"></div>
+    <span class="iv-tag">Investors Marketplace</span>
+    <h1 class="iv-title">Browse Vision's Customers Raising Capital</h1>
+    <p class="iv-sub">Vision &amp; Virtue's Partner customers have opted in to share their investor materials with verified VCs, PEs and family offices. Browse tiles below, request access to a deck, and sign the standard NDA inline.</p>
+
+    <div class="iv-placeholder">
+      <h2 class="iv-placeholder-title">Customer tiles coming online soon</h2>
+      <p class="iv-placeholder-body">You're authenticated. The marketplace shell is live and ready — customer tiles, hover KPIs, deck viewer, and the NDA flow ship in the next phase.</p>
+      <ul class="iv-placeholder-list">
+        <li>Customer name, logo, sector and ask amount on every tile</li>
+        <li>Hover preview: GM% YR1→YR5, ARR YR1→YR5, Top-Line YR1→YR5 with CAGR, Adjusted EBITDA YR5, NRR</li>
+        <li>Click → NDA (V&amp;V standard), then view the investor deck (no download)</li>
+      </ul>
+    </div>
+  </div>
+
+  <script>
+    (function gateInvestorPage() {
+      const authed = sessionStorage.getItem('vv_investor_auth') === '1';
+      const key    = sessionStorage.getItem('vv_investor_key') || '';
+      if (!authed || !key) {
+        window.location.replace('index.html');
+        return;
+      }
+      const name = sessionStorage.getItem('vv_investor_name') || '';
+      const welcome = document.getElementById('ivWelcome');
+      if (welcome && name) welcome.textContent = `Welcome, ${name}`;
+
+      document.getElementById('ivSignOut').addEventListener('click', () => {
+        sessionStorage.removeItem('vv_investor_auth');
+        sessionStorage.removeItem('vv_investor_key');
+        sessionStorage.removeItem('vv_investor_name');
+        window.location.href = 'index.html';
+      });
+    })();
+  </script>
+</body>
+</html>

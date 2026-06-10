@@ -86,6 +86,17 @@ function initializeSchema(database: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_customer_keys_key ON customer_keys(key);
 
+    CREATE TABLE IF NOT EXISTS investor_keys (
+      id              TEXT PRIMARY KEY,
+      key             TEXT NOT NULL UNIQUE,
+      investor_name   TEXT NOT NULL DEFAULT '',
+      created_at      TEXT NOT NULL,
+      created_by      TEXT NOT NULL DEFAULT 'admin',
+      revoked         INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_investor_keys_key ON investor_keys(key);
+
     CREATE TABLE IF NOT EXISTS partner_submissions (
       id                   TEXT PRIMARY KEY,
       customer_key_id      TEXT,

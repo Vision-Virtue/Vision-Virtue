@@ -87,9 +87,10 @@ export const customerKeyRepo = {
   },
 };
 
-/** Random VV-XXXXXX key (6 chars, A-Z+0-9, unambiguous).
- *  Uses crypto.randomBytes for a cryptographically secure source. */
-function generateKey(): string {
+/** Random {PREFIX}-XXXXXX key (6 chars, A-Z+0-9, unambiguous).
+ *  Uses crypto.randomBytes for a cryptographically secure source.
+ *  Default prefix 'VV' = customer key. 'IV' is used for investor keys. */
+function generateKey(prefix: string = 'VV'): string {
   const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // skip ambiguous chars (I,O,0,1)
   const len = alphabet.length; // 32
   let s = '';
@@ -103,8 +104,60 @@ function generateKey(): string {
       if (buf[i] < cutoff) s += alphabet[buf[i] % len];
     }
   }
-  return `VV-${s}`;
+  return `${prefix}-${s}`;
 }
+
+// ─── Investor Keys ────────────────────────────────────────────────────────────
+
+export interface InvestorKeyRow {
+  id: string;
+  key: string;
+  investor_name: string;
+  created_at: string;
+  created_by: string;
+  revoked: number; // 0 | 1
+}
+
+export const investorKeyRepo = {
+  findByKey(key: string): InvestorKeyRow | null {
+    const row = getDb()
+      .prepare('SELECT * FROM investor_keys WHERE key = ?')
+      .get(key) as InvestorKeyRow | undefined;
+    if (!row || row.revoked === 1) return null;
+    return row;
+  },
+
+  findById(id: string): InvestorKeyRow | null {
+    const row = getDb()
+      .prepare('SELECT * FROM investor_keys WHERE id = ?')
+      .get(id) as InvestorKeyRow | undefined;
+    return row ?? null;
+  },
+
+  create(input: { investorName: string; createdBy?: string; key?: string }): InvestorKeyRow {
+    const id = uuidv4();
+    const key = input.key || generateKey('IV');
+    const createdAt = new Date().toISOString();
+    const createdBy = input.createdBy || 'admin';
+    getDb()
+      .prepare(
+        `INSERT INTO investor_keys (id, key, investor_name, created_at, created_by, revoked)
+         VALUES (?, ?, ?, ?, ?, 0)`,
+      )
+      .run(id, key, input.investorName, createdAt, createdBy);
+    return this.findById(id) as InvestorKeyRow;
+  },
+
+  list(): InvestorKeyRow[] {
+    return getDb()
+      .prepare('SELECT * FROM investor_keys ORDER BY created_at DESC')
+      .all() as InvestorKeyRow[];
+  },
+
+  revoke(id: string): void {
+    getDb().prepare('UPDATE investor_keys SET revoked = 1 WHERE id = ?').run(id);
+  },
+};
 
 // ─── Partner Submissions ──────────────────────────────────────────────────────
 

@@ -7,7 +7,7 @@
 
 import { Request, Response } from 'express';
 import path from 'path';
-import { customerKeyRepo, partnerSubmissionRepo, CustomerKeyRow } from '../db/partner.repository';
+import { customerKeyRepo, partnerSubmissionRepo, CustomerKeyRow, investorKeyRepo } from '../db/partner.repository';
 import { generateFinalizedXlsx, resolveStoredXlsx, storeUploadedXlsx } from '../services/partner-xlsx.service';
 import {
   storeAsset, resolveAsset, contentTypeForFilename, MAX_ASSET_BYTES,
@@ -839,6 +839,88 @@ export const partnerController = {
         revoked:      r.revoked === 1,
       })),
     });
+  },
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Investor Marketplace — Keys & Gate (Phase 1)
+  // VC/PE/Investor accesses the Investors Marketplace area via an IV-XXXXXX
+  // key minted from Finance AI. Same shape as the Customer Key flow, but a
+  // distinct table + prefix so the two audiences never cross over.
+  // ────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * POST /api/investor/auth
+   * Body: { key }
+   * Validates an investor key (IV-XXXXXX). Mirrors customer auth.
+   */
+  investorAuth(req: Request, res: Response): void {
+    const parsed = AuthBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ valid: false, error: { code: 'BAD_REQUEST', message: 'Key is required.' } });
+      return;
+    }
+    const row = investorKeyRepo.findByKey(parsed.data.key.trim());
+    if (!row) {
+      res.status(401).json({ valid: false });
+      return;
+    }
+    res.json({
+      valid: true,
+      investorKeyId: row.id,
+      investorName: row.investor_name,
+    });
+  },
+
+  /**
+   * POST /api/admin/investor-keys
+   * Body: { investorName }   →  generates a new IV-XXXXXX key.
+   */
+  adminCreateInvestorKey(req: Request, res: Response): void {
+    const parsed = z.object({ investorName: z.string().trim().min(1).max(200) }).safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'investorName is required.' } });
+      return;
+    }
+    const row = investorKeyRepo.create({ investorName: parsed.data.investorName });
+    res.status(201).json({
+      id:           row.id,
+      key:          row.key,
+      investorName: row.investor_name,
+      createdAt:    row.created_at,
+    });
+  },
+
+  /**
+   * GET /api/admin/investor-keys
+   */
+  adminListInvestorKeys(_req: Request, res: Response): void {
+    const rows = investorKeyRepo.list();
+    res.json({
+      keys: rows.map(r => ({
+        id:           r.id,
+        key:          r.key,
+        investorName: r.investor_name,
+        createdAt:    r.created_at,
+        revoked:      r.revoked === 1,
+      })),
+    });
+  },
+
+  /**
+   * POST /api/admin/investor-keys/:id/revoke
+   */
+  adminRevokeInvestorKey(req: Request, res: Response): void {
+    const id = String(req.params.id || '').trim();
+    if (!id) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'id is required.' } });
+      return;
+    }
+    if (!investorKeyRepo.findById(id)) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Investor key not found.' } });
+      return;
+    }
+    investorKeyRepo.revoke(id);
+    res.json({ ok: true });
   },
 
   // ────────────────────────────────────────────────────────────────────────────
