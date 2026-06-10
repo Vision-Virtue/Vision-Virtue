@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Investor Deck — Vision & Virtue Marketplace</title>
+  <link rel="icon" href="favicon.ico">
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; background: #0a1533; color: #f4f8ff; font-family: 'Inter', system-ui, sans-serif; overflow: hidden; }
+    .dv-shell { display: flex; flex-direction: column; height: 100vh; }
+    .dv-topbar { display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1.4rem; background: #08182f; border-bottom: 1px solid rgba(64,196,196,0.25); gap: 1rem; flex-wrap: wrap; }
+    .dv-logo { display: flex; align-items: center; gap: 0.55rem; text-decoration: none; color: inherit; }
+    .dv-logo-v { width: 32px; height: 32px; border-radius: 7px; background: linear-gradient(135deg,#40c4c4,#122440); display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 18px; }
+    .dv-logo-text { font-size: 0.78rem; letter-spacing: 0.18em; font-weight: 700; }
+    .dv-mid { flex: 1; text-align: center; min-width: 0; }
+    .dv-customer { font-size: 1.05rem; font-weight: 700; color: #fff; }
+    .dv-sub { font-size: 0.72rem; color: #c8d7eb; letter-spacing: 0.12em; text-transform: uppercase; }
+    .dv-actions { display: flex; align-items: center; gap: 0.6rem; }
+    .dv-back { background: transparent; color: #c8d7eb; border: 1px solid rgba(200,215,235,0.3); border-radius: 999px; padding: 0.4rem 0.95rem; cursor: pointer; font-size: 0.82rem; }
+    .dv-back:hover { background: rgba(255,255,255,0.05); }
+    .dv-watermark { position: fixed; inset: 0; pointer-events: none; z-index: 5; display: grid; place-items: center; }
+    .dv-watermark-text { transform: rotate(-22deg); font-size: 5rem; color: rgba(255,255,255,0.04); font-weight: 800; letter-spacing: 0.2em; user-select: none; }
+    .dv-pdf-wrap { flex: 1; position: relative; background: #08182f; }
+    .dv-pdf { width: 100%; height: 100%; border: none; background: #fff; }
+    .dv-status { position: absolute; inset: 0; display: grid; place-items: center; color: #c8d7eb; font-size: 0.95rem; padding: 1rem; text-align: center; }
+    .dv-foot { padding: 0.4rem 1.4rem; font-size: 0.72rem; color: #6b7c97; text-align: center; background: #08182f; border-top: 1px solid rgba(200,215,235,0.08); }
+  </style>
+</head>
+<body oncontextmenu="return false">
+  <div class="dv-shell">
+    <div class="dv-topbar">
+      <a href="investors-marketplace.html" class="dv-logo">
+        <span class="dv-logo-v">V</span>
+        <span class="dv-logo-text">VISION &amp; VIRTUE</span>
+      </a>
+      <div class="dv-mid">
+        <div class="dv-customer" id="dvCustomer">Loading…</div>
+        <div class="dv-sub">Investor Deck — View Only</div>
+      </div>
+      <div class="dv-actions">
+        <button type="button" class="dv-back" id="dvBack">← Back to marketplace</button>
+      </div>
+    </div>
+
+    <div class="dv-pdf-wrap">
+      <iframe class="dv-pdf" id="dvPdf" title="Investor deck" hidden></iframe>
+      <div class="dv-status" id="dvStatus">Preparing deck…</div>
+    </div>
+
+    <div class="dv-foot">View-only access — your session is logged against your signed NDA. Downloads, printing and copying are disabled.</div>
+  </div>
+
+  <div class="dv-watermark" aria-hidden="true">
+    <div class="dv-watermark-text" id="dvWatermark">CONFIDENTIAL</div>
+  </div>
+
+  <script>
+    const DV_BACKEND = 'https://vv-marketing-api.onrender.com';
+
+    function ivKey() { return sessionStorage.getItem('vv_investor_key') || ''; }
+    function escHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
+    // Auth gate
+    if (sessionStorage.getItem('vv_investor_auth') !== '1' || !ivKey()) {
+      window.location.replace('index.html');
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const listingId   = params.get('listing') || '';
+    const customerNm  = params.get('name')    || '';
+    if (!listingId) {
+      window.location.replace('investors-marketplace.html');
+    }
+
+    const customerEl  = document.getElementById('dvCustomer');
+    const watermark   = document.getElementById('dvWatermark');
+    if (customerNm) {
+      customerEl.textContent = customerNm;
+      const investorName = sessionStorage.getItem('vv_investor_name') || '';
+      watermark.textContent = investorName
+        ? ('CONFIDENTIAL · ' + investorName.toUpperCase())
+        : 'CONFIDENTIAL';
+    }
+
+    document.getElementById('dvBack').addEventListener('click', () => {
+      window.location.href = 'investors-marketplace.html';
+    });
+
+    // Soft view-only deterrents (won't stop a determined download, but block
+    // the casual paths: right-click, Ctrl+S/P, drag, common dev shortcuts).
+    document.addEventListener('keydown', (ev) => {
+      const ctrl = ev.ctrlKey || ev.metaKey;
+      const k = ev.key.toLowerCase();
+      if (ctrl && (k === 's' || k === 'p' || k === 'u')) { ev.preventDefault(); }
+      if (ev.key === 'F12') { ev.preventDefault(); }
+    }, true);
+    document.addEventListener('dragstart', (ev) => ev.preventDefault());
+
+    async function loadDeck() {
+      const statusEl = document.getElementById('dvStatus');
+      const iframeEl = document.getElementById('dvPdf');
+      try {
+        const res = await fetch(DV_BACKEND + '/api/investor/marketplace/listings/' + encodeURIComponent(listingId) + '/deck', {
+          headers: { 'X-Investor-Key': ivKey() },
+        });
+        if (res.status === 401) { sessionStorage.clear(); window.location.replace('index.html'); return; }
+        if (res.status === 403) {
+          statusEl.innerHTML = 'You need to sign the NDA before viewing this deck. <br><a href="investors-marketplace.html" style="color:#40c4c4;font-weight:600">Back to marketplace</a>';
+          return;
+        }
+        if (res.status === 404) {
+          statusEl.innerHTML = 'Deck not available yet. <br><a href="investors-marketplace.html" style="color:#40c4c4;font-weight:600">Back to marketplace</a>';
+          return;
+        }
+        if (!res.ok) {
+          statusEl.textContent = 'Could not load deck (HTTP ' + res.status + ').';
+          return;
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        // The #toolbar=0&navpanes=0 fragments tell most browsers to hide the
+        // built-in PDF download/print toolbar.
+        iframeEl.src = url + '#toolbar=0&navpanes=0&statusbar=0&view=FitH';
+        iframeEl.hidden = false;
+        statusEl.style.display = 'none';
+      } catch (err) {
+        statusEl.textContent = 'Could not load deck: ' + (err && err.message ? err.message : 'network error');
+      }
+    }
+    loadDeck();
+  </script>
+</body>
+</html>

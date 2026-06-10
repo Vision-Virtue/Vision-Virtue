@@ -207,6 +207,28 @@ async function apiWithdrawListing(listingId) {
   return data.listing;
 }
 
+async function apiUploadDeckPdf(listingId, file) {
+  const key = customerKey();
+  if (!key) throw new Error('Missing customer key');
+  if (!file || file.size === 0) throw new Error('No file selected');
+  if (file.size > 30 * 1024 * 1024) throw new Error('PDF exceeds 30 MB');
+  const buf = await file.arrayBuffer();
+  const res = await fetch(
+    `${PARTNER_API}/api/customer/me/marketplace-listings/${encodeURIComponent(listingId)}/deck-pdf`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/pdf', 'X-Customer-Key': key },
+      body: buf,
+    },
+  );
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Deck PDF upload failed (${res.status}): ${body.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  return data.listing;
+}
+
 /** Find the marketplace listing matching the current submission, if any. */
 function listingForSubmission(subId) {
   if (!subId) return null;
@@ -272,6 +294,18 @@ function openMarketplaceModal(sub, existingListing) {
   if (!mktOverlay) return;
   _activeMktSubmission = sub;
   _activeMktListing    = existingListing || null;
+
+  // Reset PDF file input + hint when (re)opening the modal
+  const fileEl = document.getElementById('mktDeckPdf');
+  const hintEl = document.getElementById('mktDeckPdfHint');
+  if (fileEl) fileEl.value = '';
+  if (hintEl) {
+    if (existingListing && existingListing.deckPdfPath) {
+      hintEl.innerHTML = '<span style="color:#1f8a52;font-weight:600">✓ Deck PDF on file.</span> Upload a new one to replace it. Max 30 MB.';
+    } else {
+      hintEl.textContent = 'Upload your latest investor deck as PDF. Optional now — you can come back later to attach it. Max 30 MB.';
+    }
+  }
 
   const formSector = sub?.formData?.sector || '';
   if (existingListing) {
@@ -342,10 +376,25 @@ mktForm?.addEventListener('submit', async (ev) => {
         nrr:       document.getElementById('kpiNrr').value,
       },
     };
-    await apiPublishListing(payload);
+    const listing = await apiPublishListing(payload);
+    // Optional deck PDF upload after publish
+    const fileEl = document.getElementById('mktDeckPdf');
+    const file   = fileEl && fileEl.files && fileEl.files[0];
+    let deckMsg = '';
+    if (file) {
+      mktPublishBtn.textContent = 'Uploading PDF…';
+      try {
+        await apiUploadDeckPdf(listing.id, file);
+        deckMsg = ' Investors will see the deck (view-only) after signing the NDA.';
+      } catch (upErr) {
+        deckMsg = ' (Tile published, but PDF upload failed: ' + (upErr.message || 'unknown') + ')';
+      }
+    } else if (!listing.deckPdfPath) {
+      deckMsg = ' Tip: attach your deck PDF later to enable the investor view.';
+    }
     await renderTileState();
     closeMarketplaceModal();
-    alert('Your tile is live on the Investors Marketplace.');
+    alert('Your tile is live on the Investors Marketplace.' + deckMsg);
   } catch (err) {
     alert('Publish failed.\n\n' + (err && err.message ? err.message : ''));
   } finally {
