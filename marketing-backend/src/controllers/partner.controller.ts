@@ -11,7 +11,11 @@ import {
   customerKeyRepo, partnerSubmissionRepo, CustomerKeyRow,
   investorKeyRepo, InvestorKeyRow,
   marketplaceListingRepo, MarketplaceListingKpis,
+  ndaSignatureRepo,
 } from '../db/partner.repository';
+import {
+  storeDeckPdf, readDeckPdf, MAX_DECK_PDF_BYTES,
+} from '../services/marketplace-deck.service';
 import { generateFinalizedXlsx, resolveStoredXlsx, storeUploadedXlsx } from '../services/partner-xlsx.service';
 import {
   storeAsset, resolveAsset, contentTypeForFilename, MAX_ASSET_BYTES,
@@ -1046,6 +1050,8 @@ export const partnerController = {
    * GET /api/investor/marketplace/listings/:id
    * Header: X-Investor-Key
    * Returns a single active tile's full detail (KPIs, etc.) for the popover.
+   * Also reports whether this investor has signed the NDA for this listing
+   * and whether a view-only deck PDF is available.
    */
   investorGetListing(req: Request, res: Response): void {
     const keyRow = resolveInvestorKey(req);
@@ -1056,7 +1062,164 @@ export const partnerController = {
       res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Listing not available.' } });
       return;
     }
-    res.json({ listing });
+    const nda = ndaSignatureRepo.findByInvestorAndListing(keyRow.id, listing.id);
+    res.json({
+      listing,
+      ndaSigned: !!nda,
+      deckAvailable: !!listing.deckPdfPath,
+    });
+  },
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Phase 3 — NDA flow + Deck PDF
+  // ────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * POST /api/customer/me/marketplace-listings/:id/deck-pdf
+   * Header: X-Customer-Key
+   * Body: raw application/pdf bytes (≤ 30 MB)
+   *
+   * Customer attaches a view-only PDF of their investor deck to their listing.
+   * Investors only see it after signing the NDA. Replaces any previous PDF.
+   */
+  customerUploadDeckPdf(req: Request, res: Response): void {
+    const keyRow = resolveCustomerKey(req);
+    if (!keyRow) { send401(res, 'Missing or invalid customer key.'); return; }
+    const id = String(req.params.id || '').trim();
+    const listing = marketplaceListingRepo.findById(id);
+    if (!listing || listing.customerKeyId !== keyRow.id) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Listing not found.' } });
+      return;
+    }
+    const body = req.body as Buffer | undefined;
+    if (!body || !Buffer.isBuffer(body) || body.length === 0) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Empty PDF body.' } });
+      return;
+    }
+    if (body.length > MAX_DECK_PDF_BYTES) {
+      res.status(413).json({ error: { code: 'PDF_TOO_LARGE', message: 'PDF exceeds 30 MB.' } });
+      return;
+    }
+    try {
+      const ref = storeDeckPdf(listing.id, body);
+      const updated = marketplaceListingRepo.setDeckPdfPath(listing.id, ref);
+      res.status(201).json({ listing: updated });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Upload failed.';
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: msg } });
+    }
+  },
+
+  /**
+   * POST /api/investor/nda/sign
+   * Header: X-Investor-Key
+   * Body: { listingId, fullName, fundName, title, businessEmail, signDate,
+   *         signatureType: 'typed' | 'drawn', signatureValue }
+   *
+   * Persists the investor's NDA acceptance for a specific listing. The next
+   * deck-view request from this investor for this listing will pass the
+   * NDA gate. Re-signing overwrites the previous record (rare; e.g. company
+   * updates their fund name).
+   */
+  investorSignNda(req: Request, res: Response): void {
+    const keyRow = resolveInvestorKey(req);
+    if (!keyRow) { send401Investor(res, 'Missing or invalid investor key.'); return; }
+    const Body = z.object({
+      listingId:      z.string().trim().min(1),
+      fullName:       z.string().trim().min(2).max(200),
+      fundName:       z.string().trim().min(1).max(200),
+      title:          z.string().trim().min(1).max(120),
+      businessEmail:  z.string().trim().email().max(200),
+      signDate:       z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD'),
+      signatureType:  z.enum(['typed', 'drawn']),
+      signatureValue: z.string().trim().min(1).max(500_000), // data-URL PNG can be large
+      confirmed:      z.literal(true).optional(),            // checkbox state, advisory
+    });
+    const parsed = Body.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid NDA fields.', details: parsed.error.flatten() } });
+      return;
+    }
+    const listing = marketplaceListingRepo.findById(parsed.data.listingId);
+    if (!listing || listing.status !== 'active') {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Listing not available.' } });
+      return;
+    }
+    const ip = (req.ip || req.headers['x-forwarded-for'] as string || '').toString().slice(0, 60);
+    const ua = (req.headers['user-agent'] || '').toString().slice(0, 400);
+    const nda = ndaSignatureRepo.create({
+      investorKeyId:  keyRow.id,
+      investorName:   keyRow.investor_name,
+      listingId:      listing.id,
+      customerName:   listing.customerName,
+      fullName:       parsed.data.fullName,
+      fundName:       parsed.data.fundName,
+      title:          parsed.data.title,
+      businessEmail:  parsed.data.businessEmail,
+      signDate:       parsed.data.signDate,
+      signatureType:  parsed.data.signatureType,
+      signatureValue: parsed.data.signatureValue,
+      ipAddress:      ip || null,
+      userAgent:      ua || null,
+    });
+    res.status(201).json({ ndaId: nda.id, signedAt: nda.signedAt });
+  },
+
+  /**
+   * GET /api/investor/nda/status?listingId=...
+   * Header: X-Investor-Key
+   * Quick check the marketplace UI calls before opening a tile.
+   */
+  investorNdaStatus(req: Request, res: Response): void {
+    const keyRow = resolveInvestorKey(req);
+    if (!keyRow) { send401Investor(res, 'Missing or invalid investor key.'); return; }
+    const listingId = String(req.query.listingId || '').trim();
+    if (!listingId) { res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'listingId required.' } }); return; }
+    const nda = ndaSignatureRepo.findByInvestorAndListing(keyRow.id, listingId);
+    res.json({
+      signed:   !!nda,
+      signedAt: nda?.signedAt ?? null,
+      ndaId:    nda?.id       ?? null,
+    });
+  },
+
+  /**
+   * GET /api/investor/marketplace/listings/:id/deck
+   * Header: X-Investor-Key
+   * Streams the customer's view-only deck PDF inline. Gated by:
+   *   1. Active listing
+   *   2. NDA signed by this investor for this listing
+   *   3. Deck PDF actually uploaded
+   * Sends X-Content-Type-Options: nosniff and Content-Disposition: inline.
+   */
+  investorViewDeck(req: Request, res: Response): void {
+    const keyRow = resolveInvestorKey(req);
+    if (!keyRow) { send401Investor(res, 'Missing or invalid investor key.'); return; }
+    const id = String(req.params.id || '').trim();
+    const listing = marketplaceListingRepo.findById(id);
+    if (!listing || listing.status !== 'active') {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Listing not available.' } });
+      return;
+    }
+    const nda = ndaSignatureRepo.findByInvestorAndListing(keyRow.id, listing.id);
+    if (!nda) {
+      res.status(403).json({ error: { code: 'NDA_REQUIRED', message: 'Sign the NDA before viewing the deck.' } });
+      return;
+    }
+    if (!listing.deckPdfPath) {
+      res.status(404).json({ error: { code: 'DECK_MISSING', message: 'Deck PDF has not been provided yet.' } });
+      return;
+    }
+    const buf = readDeckPdf(listing.id);
+    if (!buf) {
+      res.status(404).json({ error: { code: 'DECK_MISSING', message: 'Deck PDF file not found.' } });
+      return;
+    }
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${listing.customerName.replace(/[^A-Za-z0-9_-]+/g, '_')}_deck.pdf"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    res.end(buf);
   },
 
   // ────────────────────────────────────────────────────────────────────────────

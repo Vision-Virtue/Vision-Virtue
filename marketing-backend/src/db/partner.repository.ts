@@ -182,6 +182,7 @@ export interface MarketplaceListingRow {
   sector: string;
   ask_amount_text: string;
   kpis: string; // JSON
+  deck_pdf_path: string | null;
   published_at: string;
   withdrawn_at: string | null;
   status: 'active' | 'withdrawn';
@@ -197,6 +198,7 @@ export interface MarketplaceListing {
   sector: string;
   askAmountText: string;
   kpis: MarketplaceListingKpis;
+  deckPdfPath: string | null;
   publishedAt: string;
   withdrawnAt: string | null;
   status: 'active' | 'withdrawn';
@@ -215,6 +217,7 @@ function rowToListing(row: MarketplaceListingRow): MarketplaceListing {
     sector: row.sector,
     askAmountText: row.ask_amount_text,
     kpis,
+    deckPdfPath: row.deck_pdf_path,
     publishedAt: row.published_at,
     withdrawnAt: row.withdrawn_at,
     status: row.status,
@@ -330,6 +333,157 @@ export const marketplaceListingRepo = {
       )
       .all(customerKeyId) as MarketplaceListingRow[];
     return rows.map(rowToListing);
+  },
+
+  /** Attach the customer's uploaded view-only deck PDF to a listing. */
+  setDeckPdfPath(id: string, pdfPath: string | null): MarketplaceListing | null {
+    getDb()
+      .prepare('UPDATE marketplace_listings SET deck_pdf_path = ? WHERE id = ?')
+      .run(pdfPath, id);
+    return this.findById(id);
+  },
+};
+
+// ─── NDA Signatures ───────────────────────────────────────────────────────────
+
+export interface NdaSignatureRow {
+  id: string;
+  investor_key_id: string;
+  investor_name: string;
+  listing_id: string;
+  customer_name: string;
+  full_name: string;
+  fund_name: string;
+  title: string;
+  business_email: string;
+  sign_date: string;
+  signature_type: 'typed' | 'drawn';
+  signature_value: string;
+  signed_at: string;
+  ip_address: string | null;
+  user_agent: string | null;
+}
+
+export interface NdaSignature {
+  id: string;
+  investorKeyId: string;
+  investorName: string;
+  listingId: string;
+  customerName: string;
+  fullName: string;
+  fundName: string;
+  title: string;
+  businessEmail: string;
+  signDate: string;
+  signatureType: 'typed' | 'drawn';
+  signatureValue: string;
+  signedAt: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+}
+
+function rowToNda(row: NdaSignatureRow): NdaSignature {
+  return {
+    id: row.id,
+    investorKeyId: row.investor_key_id,
+    investorName: row.investor_name,
+    listingId: row.listing_id,
+    customerName: row.customer_name,
+    fullName: row.full_name,
+    fundName: row.fund_name,
+    title: row.title,
+    businessEmail: row.business_email,
+    signDate: row.sign_date,
+    signatureType: row.signature_type,
+    signatureValue: row.signature_value,
+    signedAt: row.signed_at,
+    ipAddress: row.ip_address,
+    userAgent: row.user_agent,
+  };
+}
+
+export interface CreateNdaInput {
+  investorKeyId: string;
+  investorName: string;
+  listingId: string;
+  customerName: string;
+  fullName: string;
+  fundName: string;
+  title: string;
+  businessEmail: string;
+  signDate: string;
+  signatureType: 'typed' | 'drawn';
+  signatureValue: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+}
+
+export const ndaSignatureRepo = {
+  findById(id: string): NdaSignature | null {
+    const row = getDb()
+      .prepare('SELECT * FROM nda_signatures WHERE id = ?')
+      .get(id) as NdaSignatureRow | undefined;
+    return row ? rowToNda(row) : null;
+  },
+
+  findByInvestorAndListing(investorKeyId: string, listingId: string): NdaSignature | null {
+    const row = getDb()
+      .prepare('SELECT * FROM nda_signatures WHERE investor_key_id = ? AND listing_id = ?')
+      .get(investorKeyId, listingId) as NdaSignatureRow | undefined;
+    return row ? rowToNda(row) : null;
+  },
+
+  /** Upsert — a (investor, listing) pair has at most one signature. */
+  create(input: CreateNdaInput): NdaSignature {
+    const existing = this.findByInvestorAndListing(input.investorKeyId, input.listingId);
+    const signedAt = new Date().toISOString();
+    if (existing) {
+      getDb()
+        .prepare(
+          `UPDATE nda_signatures
+             SET investor_name = ?, customer_name = ?, full_name = ?, fund_name = ?,
+                 title = ?, business_email = ?, sign_date = ?,
+                 signature_type = ?, signature_value = ?, signed_at = ?,
+                 ip_address = ?, user_agent = ?
+             WHERE id = ?`,
+        )
+        .run(
+          input.investorName, input.customerName, input.fullName, input.fundName,
+          input.title, input.businessEmail, input.signDate,
+          input.signatureType, input.signatureValue, signedAt,
+          input.ipAddress ?? null, input.userAgent ?? null,
+          existing.id,
+        );
+      return this.findById(existing.id) as NdaSignature;
+    }
+    const id = uuidv4();
+    getDb()
+      .prepare(
+        `INSERT INTO nda_signatures
+           (id, investor_key_id, investor_name, listing_id, customer_name,
+            full_name, fund_name, title, business_email, sign_date,
+            signature_type, signature_value, signed_at, ip_address, user_agent)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        id, input.investorKeyId, input.investorName, input.listingId, input.customerName,
+        input.fullName, input.fundName, input.title, input.businessEmail, input.signDate,
+        input.signatureType, input.signatureValue, signedAt,
+        input.ipAddress ?? null, input.userAgent ?? null,
+      );
+    return this.findById(id) as NdaSignature;
+  },
+
+  /** All signatures (newest first) — admin view drives the Agreements tile. */
+  listAll(): NdaSignature[] {
+    const rows = getDb()
+      .prepare('SELECT * FROM nda_signatures ORDER BY signed_at DESC')
+      .all() as NdaSignatureRow[];
+    return rows.map(rowToNda);
+  },
+
+  delete(id: string): void {
+    getDb().prepare('DELETE FROM nda_signatures WHERE id = ?').run(id);
   },
 };
 

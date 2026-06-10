@@ -161,6 +161,22 @@ router.post(  '/customer/me/marketplace-listings',              (req, res) => pa
 router.get(   '/customer/me/marketplace-listings',              (req, res) => partnerController.customerListMyListings(req, res));
 router.post(  '/customer/me/marketplace-listings/:id/withdraw', (req, res) => partnerController.customerWithdrawListing(req, res));
 
+// Investors Marketplace — Customer uploads the view-only investor deck PDF
+// (raw body, application/pdf only). Gated by X-Customer-Key.
+router.post(
+  '/customer/me/marketplace-listings/:id/deck-pdf',
+  raw({ type: 'application/pdf', limit: '30mb' }),
+  (req, res) => partnerController.customerUploadDeckPdf(req, res),
+);
+
+// Investors Marketplace — NDA flow (gated by X-Investor-Key)
+router.post('/investor/nda/sign',    (req, res) => partnerController.investorSignNda(req, res));
+router.get( '/investor/nda/status',  (req, res) => partnerController.investorNdaStatus(req, res));
+router.get(
+  '/investor/marketplace/listings/:id/deck',
+  (req, res) => partnerController.investorViewDeck(req, res),
+);
+
 // Investor-deck placeholder schema — used by the customer questionnaire UI
 // to render the deck-specific sections. Single source of truth shared with
 // the xlsx writer.

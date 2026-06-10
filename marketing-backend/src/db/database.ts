@@ -111,6 +111,9 @@ function initializeSchema(database: Database.Database): void {
       ask_amount_text      TEXT NOT NULL DEFAULT '',
       -- KPIs as JSON: { gmPctY1, gmPctY5, arrY1, arrY5, topLineY1, topLineY5, ebitdaY5, nrr }
       kpis                 TEXT NOT NULL DEFAULT '{}',
+      -- Customer-uploaded PDF of the investor deck for view-only marketplace
+      -- access. Served only after an investor has signed the NDA.
+      deck_pdf_path        TEXT,
       published_at         TEXT NOT NULL,
       withdrawn_at         TEXT,
       status               TEXT NOT NULL DEFAULT 'active',
@@ -121,6 +124,34 @@ function initializeSchema(database: Database.Database): void {
     CREATE INDEX IF NOT EXISTS idx_marketplace_status   ON marketplace_listings(status);
     CREATE INDEX IF NOT EXISTS idx_marketplace_customer ON marketplace_listings(customer_key_id);
     CREATE INDEX IF NOT EXISTS idx_marketplace_submission ON marketplace_listings(submission_id);
+
+    -- NDA signatures — one row per (investor_key, listing) pair. Created when
+    -- the investor accepts the standard V&V NDA before viewing a customer's
+    -- investor deck. Drives the Agreements tile in Finance AI (Phase 4).
+    CREATE TABLE IF NOT EXISTS nda_signatures (
+      id                   TEXT PRIMARY KEY,
+      investor_key_id      TEXT NOT NULL,
+      investor_name        TEXT NOT NULL DEFAULT '',  -- snapshot of investor key name
+      listing_id           TEXT NOT NULL,
+      customer_name        TEXT NOT NULL DEFAULT '',  -- snapshot of listing customer name
+      full_name            TEXT NOT NULL,
+      fund_name            TEXT NOT NULL,
+      title                TEXT NOT NULL,
+      business_email       TEXT NOT NULL,
+      sign_date            TEXT NOT NULL,             -- date entered by investor (YYYY-MM-DD)
+      signature_type       TEXT NOT NULL DEFAULT 'typed',  -- 'typed' | 'drawn'
+      signature_value      TEXT NOT NULL DEFAULT '',  -- typed: name string; drawn: data-URL PNG
+      signed_at            TEXT NOT NULL,             -- server timestamp ISO
+      ip_address           TEXT,
+      user_agent           TEXT,
+      UNIQUE (investor_key_id, listing_id),
+      FOREIGN KEY (investor_key_id) REFERENCES investor_keys(id)         ON DELETE CASCADE,
+      FOREIGN KEY (listing_id)      REFERENCES marketplace_listings(id)  ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_nda_signatures_investor ON nda_signatures(investor_key_id);
+    CREATE INDEX IF NOT EXISTS idx_nda_signatures_listing  ON nda_signatures(listing_id);
+    CREATE INDEX IF NOT EXISTS idx_nda_signatures_signedat ON nda_signatures(signed_at);
 
     CREATE TABLE IF NOT EXISTS partner_submissions (
       id                   TEXT PRIMARY KEY,
@@ -475,6 +506,10 @@ function initializeSchema(database: Database.Database): void {
   // Budgets: rc_enabled flag for the Revenues & COGS module (Phase 3c).
   try {
     database.exec(`ALTER TABLE budgets ADD COLUMN rc_enabled INTEGER NOT NULL DEFAULT 0`);
+  } catch { /* already exists */ }
+  // Marketplace listings: customer-uploaded investor deck PDF (Phase 3).
+  try {
+    database.exec(`ALTER TABLE marketplace_listings ADD COLUMN deck_pdf_path TEXT`);
   } catch { /* already exists */ }
 
   // Seed the VV-TEST123 customer key (idempotent)
