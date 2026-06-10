@@ -1,61 +1,84 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Agreements — Vision & Virtue</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vision &amp; Virtue | Agreements</title>
   <link rel="icon" href="favicon.ico">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="partner.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
   <style>
-    body { background: #0a1533; color: #f4f8ff; min-height: 100vh; font-family: 'Inter', system-ui, sans-serif; }
-    .ag-shell { max-width: 1200px; margin: 0 auto; padding: 5rem 1.5rem 4rem; }
-    .ag-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2.2rem; gap: 1rem; flex-wrap: wrap; }
-    .ag-logo { display: flex; align-items: center; gap: 0.65rem; text-decoration: none; color: inherit; }
-    .ag-logo-v { width: 38px; height: 38px; border-radius: 8px; background: linear-gradient(135deg, #40c4c4, #122440); display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 22px; }
-    .ag-logo-text { font-size: 0.95rem; letter-spacing: 0.16em; font-weight: 700; }
-    .ag-back { background: transparent; color: #c8d7eb; border: 1px solid rgba(200, 215, 235, 0.3); border-radius: 999px; padding: 0.45rem 1.05rem; font-size: 0.82rem; cursor: pointer; text-decoration: none; }
-    .ag-back:hover { background: rgba(255,255,255,0.05); }
-    .ag-tag { display: inline-block; background: rgba(64, 196, 196, 0.15); color: #40c4c4; padding: 0.32rem 0.85rem; border-radius: 999px; font-size: 0.72rem; letter-spacing: 0.14em; font-weight: 700; margin-bottom: 1.1rem; }
-    .ag-title { font-size: 2.4rem; font-weight: 700; margin: 0 0 0.65rem; }
-    .ag-sub { color: #c8d7eb; font-size: 1.0rem; max-width: 720px; line-height: 1.55; margin: 0 0 2rem; }
-    .ag-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.2rem; flex-wrap: wrap; }
-    .ag-count { color: #c8d7eb; font-size: 0.92rem; }
-    .ag-refresh { background: transparent; color: #40c4c4; border: 1px solid rgba(64, 196, 196, 0.4); border-radius: 8px; padding: 0.45rem 0.95rem; font-size: 0.82rem; cursor: pointer; }
-    .ag-refresh:hover { background: rgba(64, 196, 196, 0.08); }
+    /* ─── Agreements-specific overrides on top of partner.css ──────── */
+    .ag-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.4rem; flex-wrap: wrap; }
+    .ag-count { color: var(--gray-600); font-size: 0.92rem; }
+    .ag-refresh { background: transparent; color: var(--accent); border: 1px solid rgba(58, 107, 196, 0.4); border-radius: 8px; padding: 0.45rem 0.95rem; font-size: 0.82rem; cursor: pointer; font-family: inherit; }
+    .ag-refresh:hover { background: rgba(58, 107, 196, 0.08); }
 
-    .ag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.2rem; }
-    .ag-card { background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)); border: 1px solid rgba(200, 215, 235, 0.18); border-radius: 16px; padding: 1.3rem 1.3rem 1.2rem; display: flex; flex-direction: column; gap: 0.55rem; }
+    .ag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 1.2rem; }
+
+    .ag-card { background: var(--white); border: 1px solid var(--gray-100); border-radius: 12px; padding: 1.4rem 1.4rem 1.2rem; display: flex; flex-direction: column; gap: 0.55rem; transition: box-shadow 0.2s ease, border-color 0.2s ease; }
+    .ag-card:hover { box-shadow: 0 8px 24px -10px rgba(10, 23, 51, 0.18); border-color: rgba(58, 107, 196, 0.35); }
+
     .ag-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
-    .ag-icon { width: 42px; height: 42px; border-radius: 9px; background: rgba(64,196,196,0.13); color: #40c4c4; display: grid; place-items: center; flex-shrink: 0; }
-    .ag-investor { font-size: 1.15rem; font-weight: 700; color: #fff; line-height: 1.2; margin: 0; }
-    .ag-customer { font-size: 0.85rem; color: #c8d7eb; margin: 0.1rem 0 0; }
-    .ag-meta { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 0.9rem; margin-top: 0.5rem; font-size: 0.82rem; }
-    .ag-meta-label { color: #8d9bb5; }
-    .ag-meta-val { color: #f4f8ff; font-weight: 500; }
-    .ag-actions { display: flex; gap: 0.5rem; margin-top: 0.7rem; padding-top: 0.7rem; border-top: 1px solid rgba(200,215,235,0.12); flex-wrap: wrap; }
-    .ag-btn { flex: 1; padding: 0.5rem 0.7rem; border-radius: 8px; border: none; cursor: pointer; font-size: 0.84rem; font-weight: 600; text-align: center; text-decoration: none; }
-    .ag-btn-download { background: linear-gradient(135deg, #40c4c4, #2a9b9b); color: #08182f; }
-    .ag-btn-delete { background: rgba(255,80,80,0.12); color: #ff9aa2; border: 1px solid rgba(255,80,80,0.35); }
-    .ag-btn-delete:hover { background: rgba(255,80,80,0.22); }
+    .ag-icon { width: 44px; height: 44px; border-radius: 10px; background: rgba(58, 107, 196, 0.1); color: var(--accent); display: grid; place-items: center; flex-shrink: 0; }
+    .ag-investor { font-family: var(--font-head); font-size: 1.15rem; font-weight: 700; color: var(--navy-800); line-height: 1.2; margin: 0; }
+    .ag-customer { font-size: 0.85rem; color: var(--gray-600); margin: 0.15rem 0 0; }
+    .ag-customer strong { color: var(--navy-700); font-weight: 600; }
 
-    .ag-empty { text-align: center; padding: 4rem 1rem; border: 1px dashed rgba(200,215,235,0.2); border-radius: 16px; color: #c8d7eb; grid-column: 1 / -1; }
-    .ag-empty h3 { color: #fff; margin: 0 0 0.5rem; }
-    .ag-error { background: rgba(255,80,80,0.1); border: 1px solid rgba(255,80,80,0.4); border-radius: 10px; padding: 0.8rem 1rem; color: #ff9aa2; margin-bottom: 1rem; }
+    .ag-meta { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 0.9rem; margin-top: 0.5rem; font-size: 0.82rem; }
+    .ag-meta-label { color: var(--gray-400); }
+    .ag-meta-val { color: var(--navy-800); font-weight: 500; }
+
+    .ag-actions { display: flex; gap: 0.5rem; margin-top: 0.7rem; padding-top: 0.7rem; border-top: 1px solid var(--gray-100); flex-wrap: wrap; }
+    .ag-btn { flex: 1; padding: 0.55rem 0.7rem; border-radius: 6px; border: 1px solid transparent; cursor: pointer; font-size: 0.84rem; font-weight: 600; text-align: center; text-decoration: none; font-family: inherit; }
+    .ag-btn-download { background: var(--accent); color: var(--white); }
+    .ag-btn-download:hover { background: var(--accent-light); }
+    .ag-btn-delete { background: var(--white); color: #c0392b; border-color: rgba(192, 57, 43, 0.35); }
+    .ag-btn-delete:hover { background: rgba(192, 57, 43, 0.08); }
+
+    .ag-empty { grid-column: 1 / -1; text-align: center; padding: 4rem 1rem; border: 1px dashed var(--gray-100); border-radius: 12px; color: var(--gray-600); background: var(--white); }
+    .ag-empty h3 { color: var(--navy-800); margin: 0 0 0.5rem; font-family: var(--font-head); }
+
+    .ag-error { background: rgba(192, 57, 43, 0.06); border: 1px solid rgba(192, 57, 43, 0.3); border-radius: 8px; padding: 0.8rem 1rem; color: #b03021; margin-bottom: 1rem; font-size: 0.9rem; }
   </style>
 </head>
-<body>
-  <div class="ag-shell">
-    <div class="ag-topbar">
-      <a href="index.html" class="ag-logo">
-        <span class="ag-logo-v">V</span>
-        <span class="ag-logo-text">VISION &amp; VIRTUE</span>
-      </a>
-      <a href="index.html" class="ag-back">← Back to main site</a>
-    </div>
+<body class="partner-page">
 
-    <span class="ag-tag">Authorized Personnel · Agreements</span>
-    <h1 class="ag-title">Signed NDAs</h1>
-    <p class="ag-sub">Every NDA signed by a VC, PE or other investor against an Investors Marketplace tile. Download the populated NDA PDF (master + signature counterpart) or delete the record.</p>
+  <!-- NAV -->
+  <nav class="navbar partner-nav" id="navbar">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">
+        <span class="logo-v">V</span>
+        <span class="logo-text">VISION &amp; VIRTUE</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="index.html">← Main Site</a></li>
+        <li><span class="nav-badge partner-nav-badge">Authorized · Agreements</span></li>
+        <li><button class="nav-reset-btn" id="signOutBtn" title="Sign out">⟳ Sign Out</button></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="partner-hero">
+    <div class="partner-hero-bg"></div>
+    <div class="partner-hero-content">
+      <p class="hero-eyebrow">Authorized Personnel</p>
+      <h1 class="partner-hero-title">Agreements</h1>
+      <p class="partner-hero-sub">Every NDA signed by a VC, PE or other investor against an Investors Marketplace tile. Download the populated NDA PDF or delete the record.</p>
+    </div>
+  </section>
+
+  <!-- AGREEMENTS LIST -->
+  <section class="partner-products-section">
+    <div class="partner-section-head">
+      <div class="section-tag dark">Signed NDAs</div>
+      <h2 class="partner-section-title">Investor NDAs on Record</h2>
+      <p class="partner-section-sub">Each card represents an investor's accepted NDA — counterparty, signatory, timestamp, and audit trail.</p>
+    </div>
 
     <div class="ag-toolbar">
       <span class="ag-count" id="agCount">Loading…</span>
@@ -64,7 +87,7 @@
 
     <div id="agError" class="ag-error" hidden></div>
     <div class="ag-grid" id="agGrid"></div>
-  </div>
+  </section>
 
   <script>
     const AG_BACKEND = 'https://vv-marketing-api.onrender.com';
@@ -72,6 +95,11 @@
     if (sessionStorage.getItem('vv_auth') !== '1' || !sessionStorage.getItem('vv_admin_pin')) {
       window.location.replace('index.html');
     }
+    document.getElementById('signOutBtn').addEventListener('click', () => {
+      sessionStorage.removeItem('vv_auth');
+      sessionStorage.removeItem('vv_admin_pin');
+      window.location.replace('index.html');
+    });
     function adminPin() { return sessionStorage.getItem('vv_admin_pin') || ''; }
     function adminUrl(p) { const sep = p.includes('?') ? '&' : '?'; return AG_BACKEND + p + sep + 'pin=' + encodeURIComponent(adminPin()); }
     function escHtml(s) {
@@ -79,35 +107,17 @@
         .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
         .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
     }
-    function fmtDateTime(iso) {
-      try {
-        const d = new Date(iso);
-        return d.toLocaleString();
-      } catch { return iso || ''; }
-    }
-    function showError(msg) {
-      const el = document.getElementById('agError');
-      el.textContent = msg;
-      el.hidden = !msg;
-    }
+    function fmtDateTime(iso) { try { return new Date(iso).toLocaleString(); } catch { return iso || ''; } }
+    function showError(msg) { const el = document.getElementById('agError'); el.textContent = msg; el.hidden = !msg; }
 
     async function fetchSignatures() {
       try {
-        const res = await fetch(adminUrl('/api/admin/nda-signatures'), {
-          headers: { 'X-Admin-Pin': adminPin() },
-        });
-        if (res.status === 401 || res.status === 403) {
-          sessionStorage.clear();
-          window.location.replace('index.html');
-          return [];
-        }
+        const res = await fetch(adminUrl('/api/admin/nda-signatures'), { headers: { 'X-Admin-Pin': adminPin() } });
+        if (res.status === 401 || res.status === 403) { sessionStorage.clear(); window.location.replace('index.html'); return []; }
         if (!res.ok) { showError('Failed to load (HTTP ' + res.status + ').'); return []; }
         const data = await res.json();
         return Array.isArray(data.signatures) ? data.signatures : [];
-      } catch (err) {
-        showError('Network error.');
-        return [];
-      }
+      } catch { showError('Network error.'); return []; }
     }
 
     function renderCard(s) {
@@ -116,7 +126,7 @@
           '<div class="ag-card-head">' +
             '<div>' +
               '<h3 class="ag-investor">' + escHtml(s.fundName) + '</h3>' +
-              '<p class="ag-customer">on ' + escHtml(s.customerName || '—') + ' (V&amp;V customer)</p>' +
+              '<p class="ag-customer">NDA for <strong>' + escHtml(s.customerName || '—') + '</strong></p>' +
             '</div>' +
             '<div class="ag-icon" aria-hidden="true">' +
               '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
@@ -144,46 +154,31 @@
 
     async function downloadNda(id) {
       try {
-        const res = await fetch(adminUrl('/api/admin/nda-signatures/' + encodeURIComponent(id) + '/pdf'), {
-          headers: { 'X-Admin-Pin': adminPin() },
-        });
-        if (!res.ok) {
-          const text = await res.text().catch(() => '');
-          throw new Error('HTTP ' + res.status + '. ' + text.slice(0,160));
-        }
+        const res = await fetch(adminUrl('/api/admin/nda-signatures/' + encodeURIComponent(id) + '/pdf'), { headers: { 'X-Admin-Pin': adminPin() } });
+        if (!res.ok) { const text = await res.text().catch(() => ''); throw new Error('HTTP ' + res.status + '. ' + text.slice(0,160)); }
         const blob = await res.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
-        a.href = url;
-        a.download = 'VV_NDA_' + id + '.pdf';
-        document.body.appendChild(a); a.click();
-        document.body.removeChild(a);
+        a.href = url; a.download = 'VV_NDA_' + id + '.pdf';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
         setTimeout(() => URL.revokeObjectURL(url), 4000);
-      } catch (err) {
-        alert('Download failed.\n\n' + (err.message || ''));
-      }
+      } catch (err) { alert('Download failed.\n\n' + (err.message || '')); }
     }
 
     async function deleteNda(id) {
       if (!confirm('Delete this NDA record? The investor will need to re-sign to view the deck again.')) return;
       try {
-        const res = await fetch(adminUrl('/api/admin/nda-signatures/' + encodeURIComponent(id)), {
-          method: 'DELETE',
-          headers: { 'X-Admin-Pin': adminPin() },
-        });
+        const res = await fetch(adminUrl('/api/admin/nda-signatures/' + encodeURIComponent(id)), { method: 'DELETE', headers: { 'X-Admin-Pin': adminPin() } });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         await load();
-      } catch (err) {
-        alert('Delete failed.\n\n' + (err.message || ''));
-      }
+      } catch (err) { alert('Delete failed.\n\n' + (err.message || '')); }
     }
 
     async function load() {
       showError('');
       const grid    = document.getElementById('agGrid');
       const countEl = document.getElementById('agCount');
-      grid.innerHTML = '';
-      countEl.textContent = 'Loading…';
+      grid.innerHTML = ''; countEl.textContent = 'Loading…';
       const rows = await fetchSignatures();
       if (!rows.length) {
         countEl.textContent = '0 NDAs';

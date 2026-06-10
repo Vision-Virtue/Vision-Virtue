@@ -176,13 +176,14 @@ async function apiListMyListings() {
   } catch { return []; }
 }
 
-async function apiPublishListing(payload) {
+/** Publish a submission — all tile fields are auto-extracted server-side. */
+async function apiPublishListing(submissionId) {
   const key = customerKey();
   if (!key) throw new Error('Missing customer key');
   const res = await fetch(`${PARTNER_API}/api/customer/me/marketplace-listings`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Customer-Key': key },
-    body: JSON.stringify(payload),
+    body: JSON.stringify({ submissionId }),
   });
   if (!res.ok) {
     const body = await res.text().catch(() => '');
@@ -253,17 +254,30 @@ async function renderMarketplaceTile(sub) {
   const listing = listingForSubmission(sub.id);
 
   if (listing && listing.status === 'active') {
-    statusEl.innerHTML = '<span class="partner-status-pill partner-status-finalized">Live on marketplace</span>';
+    const deckLabel = listing.deckPdfPath ? 'Update Deck PDF' : 'Attach Deck PDF';
+    statusEl.innerHTML =
+      '<span class="partner-status-pill partner-status-finalized">Published</span>' +
+      '<button type="button" class="partner-tile-download" data-mkt-action="unpublish">Unpublish</button>' +
+      '<button type="button" class="partner-tile-download partner-tile-secondary" data-mkt-action="deck-pdf">' + deckLabel + '</button>';
     tile.classList.add('is-finalized');
     tile.classList.remove('is-review');
   } else {
-    statusEl.innerHTML = '<span class="partner-status-pill partner-status-new">Ready to publish</span>';
+    statusEl.innerHTML =
+      '<span class="partner-status-pill partner-status-new">Ready to Publish</span>' +
+      '<button type="button" class="partner-tile-download" data-mkt-action="publish">Publish to Marketplace</button>';
     tile.classList.remove('is-finalized', 'is-review');
   }
   tile.disabled = false;
 }
 
-document.getElementById('tileInvestorsMarketplace')?.addEventListener('click', () => {
+document.getElementById('tileInvestorsMarketplace')?.addEventListener('click', (ev) => {
+  // Action buttons inside the tile handle their own logic.
+  const actionBtn = ev.target.closest && ev.target.closest('[data-mkt-action]');
+  if (actionBtn) {
+    ev.preventDefault(); ev.stopPropagation();
+    handleMarketplaceAction(actionBtn);
+    return;
+  }
   const sub = _latestSubmission;
   if (!sub) {
     alert('Submit your Customer’s Questionnaire first — the marketplace tile is built from your model.');
@@ -273,149 +287,72 @@ document.getElementById('tileInvestorsMarketplace')?.addEventListener('click', (
     alert('Investors Marketplace opens once Vision & Virtue finalizes your model and presentation. We’ll notify you when ready.');
     return;
   }
-  openMarketplaceModal(sub, listingForSubmission(sub.id));
+  // Default tile click on a finalized submission: behave like Publish if not yet
+  // published; if already published, no-op (the buttons are visible inline).
+  const listing = listingForSubmission(sub.id);
+  if (!listing || listing.status !== 'active') {
+    publishMarketplace(sub.id);
+  }
 });
 
-// ─── Marketplace modal ──────────────────────────────────────────────────────
-const mktOverlay      = document.getElementById('mktOverlay');
-const mktForm         = document.getElementById('mktForm');
-const mktClose        = document.getElementById('mktClose');
-const mktStatusLine   = document.getElementById('mktStatusLine');
-const mktSector       = document.getElementById('mktSector');
-const mktDescription  = document.getElementById('mktDescription');
-const mktAsk          = document.getElementById('mktAsk');
-const mktPublishBtn   = document.getElementById('mktPublishBtn');
-const mktWithdrawBtn  = document.getElementById('mktWithdrawBtn');
-const _kpiFields = ['kpiGmY1','kpiGmY5','kpiArrY1','kpiArrY5','kpiTopY1','kpiTopY5','kpiEbitdaY5','kpiNrr'];
-let _activeMktSubmission = null;
-let _activeMktListing    = null;
-
-function openMarketplaceModal(sub, existingListing) {
-  if (!mktOverlay) return;
-  _activeMktSubmission = sub;
-  _activeMktListing    = existingListing || null;
-
-  // Reset PDF file input + hint when (re)opening the modal
-  const fileEl = document.getElementById('mktDeckPdf');
-  const hintEl = document.getElementById('mktDeckPdfHint');
-  if (fileEl) fileEl.value = '';
-  if (hintEl) {
-    if (existingListing && existingListing.deckPdfPath) {
-      hintEl.innerHTML = '<span style="color:#1f8a52;font-weight:600">✓ Deck PDF on file.</span> Upload a new one to replace it. Max 30 MB.';
-    } else {
-      hintEl.textContent = 'Upload your latest investor deck as PDF. Optional now — you can come back later to attach it. Max 30 MB.';
-    }
-  }
-
-  const formSector = sub?.formData?.sector || '';
-  if (existingListing) {
-    mktStatusLine.textContent = existingListing.status === 'active'
-      ? `Listing is LIVE on the marketplace (published ${new Date(existingListing.publishedAt).toLocaleDateString()}). Update and re-publish, or pull it down.`
-      : `Listing was withdrawn ${existingListing.withdrawnAt ? 'on ' + new Date(existingListing.withdrawnAt).toLocaleDateString() : ''}. Publish to make it live again.`;
-    mktSector.value      = existingListing.sector || formSector || '';
-    mktDescription.value = existingListing.description || sub?.formData?.oneLineDescription || '';
-    mktAsk.value         = existingListing.askAmountText || '';
-    const k = existingListing.kpis || {};
-    document.getElementById('kpiGmY1').value     = k.gmPctY1   ?? '';
-    document.getElementById('kpiGmY5').value     = k.gmPctY5   ?? '';
-    document.getElementById('kpiArrY1').value    = k.arrY1     ?? '';
-    document.getElementById('kpiArrY5').value    = k.arrY5     ?? '';
-    document.getElementById('kpiTopY1').value    = k.topLineY1 ?? '';
-    document.getElementById('kpiTopY5').value    = k.topLineY5 ?? '';
-    document.getElementById('kpiEbitdaY5').value = k.ebitdaY5  ?? '';
-    document.getElementById('kpiNrr').value      = k.nrr       ?? '';
-    mktPublishBtn.textContent = existingListing.status === 'active' ? 'Update & Re-publish' : 'Re-publish';
-    mktWithdrawBtn.hidden = existingListing.status !== 'active';
-  } else {
-    mktStatusLine.textContent = 'Build your tile. You can edit or pull it down anytime.';
-    mktSector.value      = formSector || '';
-    mktDescription.value = sub?.formData?.oneLineDescription || '';
-    mktAsk.value         = '';
-    _kpiFields.forEach(id => { document.getElementById(id).value = ''; });
-    mktPublishBtn.textContent = 'Publish';
-    mktWithdrawBtn.hidden = true;
-  }
-  mktOverlay.hidden = false;
-  document.body.classList.add('is-consult-open');
-  setTimeout(() => mktSector.focus(), 50);
+async function handleMarketplaceAction(btn) {
+  const action = btn.getAttribute('data-mkt-action');
+  const sub = _latestSubmission;
+  if (!sub) return;
+  if (action === 'publish')    return publishMarketplace(sub.id);
+  if (action === 'unpublish')  return unpublishMarketplace(sub.id);
+  if (action === 'deck-pdf')   return triggerDeckPdfUpload();
 }
 
-function closeMarketplaceModal() {
-  if (!mktOverlay) return;
-  mktOverlay.hidden = true;
-  document.body.classList.remove('is-consult-open');
-  _activeMktSubmission = null;
-  _activeMktListing = null;
-}
-
-mktClose?.addEventListener('click', closeMarketplaceModal);
-mktOverlay?.addEventListener('click', (ev) => { if (ev.target === mktOverlay) closeMarketplaceModal(); });
-document.addEventListener('keydown', (ev) => {
-  if (ev.key === 'Escape' && mktOverlay && !mktOverlay.hidden) closeMarketplaceModal();
-});
-
-mktForm?.addEventListener('submit', async (ev) => {
-  ev.preventDefault();
-  if (!_activeMktSubmission) return;
-  const orig = mktPublishBtn.textContent;
-  mktPublishBtn.disabled = true; mktPublishBtn.textContent = 'Publishing…';
+async function publishMarketplace(subId) {
+  const tile = document.getElementById('tileInvestorsMarketplace');
+  if (!tile) return;
+  const original = tile.querySelector('#statusInvestorsMarketplace').innerHTML;
+  tile.querySelector('#statusInvestorsMarketplace').innerHTML =
+    '<span class="partner-status-pill partner-status-new">Extracting tile data…</span>';
   try {
-    const payload = {
-      submissionId: _activeMktSubmission.id,
-      sector:        mktSector.value || 'Other',
-      description:   mktDescription.value || '',
-      askAmountText: mktAsk.value || '',
-      kpis: {
-        gmPctY1:   document.getElementById('kpiGmY1').value,
-        gmPctY5:   document.getElementById('kpiGmY5').value,
-        arrY1:     document.getElementById('kpiArrY1').value,
-        arrY5:     document.getElementById('kpiArrY5').value,
-        topLineY1: document.getElementById('kpiTopY1').value,
-        topLineY5: document.getElementById('kpiTopY5').value,
-        ebitdaY5:  document.getElementById('kpiEbitdaY5').value,
-        nrr:       document.getElementById('kpiNrr').value,
-      },
-    };
-    const listing = await apiPublishListing(payload);
-    // Optional deck PDF upload after publish
-    const fileEl = document.getElementById('mktDeckPdf');
-    const file   = fileEl && fileEl.files && fileEl.files[0];
-    let deckMsg = '';
-    if (file) {
-      mktPublishBtn.textContent = 'Uploading PDF…';
-      try {
-        await apiUploadDeckPdf(listing.id, file);
-        deckMsg = ' Investors will see the deck (view-only) after signing the NDA.';
-      } catch (upErr) {
-        deckMsg = ' (Tile published, but PDF upload failed: ' + (upErr.message || 'unknown') + ')';
-      }
-    } else if (!listing.deckPdfPath) {
-      deckMsg = ' Tip: attach your deck PDF later to enable the investor view.';
-    }
+    await apiPublishListing(subId);
     await renderTileState();
-    closeMarketplaceModal();
-    alert('Your tile is live on the Investors Marketplace.' + deckMsg);
   } catch (err) {
+    tile.querySelector('#statusInvestorsMarketplace').innerHTML = original;
     alert('Publish failed.\n\n' + (err && err.message ? err.message : ''));
-  } finally {
-    mktPublishBtn.disabled = false; mktPublishBtn.textContent = orig;
   }
-});
+}
 
-mktWithdrawBtn?.addEventListener('click', async () => {
-  if (!_activeMktListing) return;
+async function unpublishMarketplace(subId) {
   if (!confirm('Pull this submission from the Investors Marketplace? Investors will no longer see it. You can re-publish later.')) return;
-  const orig = mktWithdrawBtn.textContent;
-  mktWithdrawBtn.disabled = true; mktWithdrawBtn.textContent = 'Pulling…';
+  const listing = listingForSubmission(subId);
+  if (!listing) return;
   try {
-    await apiWithdrawListing(_activeMktListing.id);
+    await apiWithdrawListing(listing.id);
     await renderTileState();
-    closeMarketplaceModal();
-    alert('Pulled from the Investors Marketplace.');
   } catch (err) {
-    alert('Pull failed.\n\n' + (err && err.message ? err.message : ''));
-  } finally {
-    mktWithdrawBtn.disabled = false; mktWithdrawBtn.textContent = orig;
+    alert('Unpublish failed.\n\n' + (err && err.message ? err.message : ''));
+  }
+}
+
+function triggerDeckPdfUpload() {
+  const fileEl = document.getElementById('mktDeckPdfInput');
+  if (!fileEl) return;
+  fileEl.value = '';
+  fileEl.click();
+}
+document.getElementById('mktDeckPdfInput')?.addEventListener('change', async (ev) => {
+  const file = ev.target.files && ev.target.files[0];
+  if (!file) return;
+  const sub = _latestSubmission;
+  if (!sub) return;
+  const listing = listingForSubmission(sub.id);
+  if (!listing) {
+    alert('Publish to the marketplace first, then attach your deck PDF.');
+    return;
+  }
+  try {
+    await apiUploadDeckPdf(listing.id, file);
+    await renderTileState();
+    alert('Deck PDF attached. Investors who have signed the NDA can view it now.');
+  } catch (err) {
+    alert('Deck PDF upload failed.\n\n' + (err && err.message ? err.message : ''));
   }
 });
 

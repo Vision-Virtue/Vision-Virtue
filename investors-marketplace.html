@@ -1,119 +1,129 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Investors Marketplace — Vision & Virtue</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vision &amp; Virtue | Investors Marketplace</title>
   <link rel="icon" href="favicon.ico">
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="partner.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
   <style>
-    body { background: #0a1533; color: #f4f8ff; min-height: 100vh; font-family: 'Inter', system-ui, sans-serif; }
-    .iv-shell { max-width: 1280px; margin: 0 auto; padding: 5rem 1.5rem 4rem; }
-    .iv-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2.2rem; gap: 1rem; flex-wrap: wrap; }
-    .iv-logo { display: flex; align-items: center; gap: 0.65rem; text-decoration: none; color: inherit; }
-    .iv-logo-v { width: 38px; height: 38px; border-radius: 8px; background: linear-gradient(135deg, #40c4c4, #122440); display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 22px; }
-    .iv-logo-text { font-size: 0.95rem; letter-spacing: 0.16em; font-weight: 700; }
-    .iv-topbar-right { display: flex; align-items: center; gap: 0.75rem; }
-    .iv-signed-as { color: #c8d7eb; font-size: 0.85rem; }
-    .iv-signed-as strong { color: #f6e7a5; }
-    .iv-signout { background: transparent; color: #c8d7eb; border: 1px solid rgba(200, 215, 235, 0.3); border-radius: 999px; padding: 0.45rem 1.05rem; font-size: 0.82rem; cursor: pointer; }
-    .iv-signout:hover { background: rgba(255,255,255,0.05); }
-    .iv-tag { display: inline-block; background: rgba(64, 196, 196, 0.15); color: #40c4c4; padding: 0.32rem 0.85rem; border-radius: 999px; font-size: 0.72rem; letter-spacing: 0.14em; font-weight: 700; margin-bottom: 1.1rem; }
-    .iv-title { font-size: 2.45rem; font-weight: 700; margin: 0 0 0.7rem; }
-    .iv-sub { color: #c8d7eb; font-size: 1.02rem; max-width: 760px; line-height: 1.55; margin: 0 0 2.5rem; }
-    .iv-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.4rem; gap: 1rem; flex-wrap: wrap; }
-    .iv-count { font-size: 0.92rem; color: #c8d7eb; }
-    .iv-refresh { background: transparent; color: #40c4c4; border: 1px solid rgba(64, 196, 196, 0.4); border-radius: 8px; padding: 0.45rem 0.95rem; font-size: 0.82rem; cursor: pointer; }
-    .iv-refresh:hover { background: rgba(64, 196, 196, 0.08); }
-    .iv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 1.2rem; }
-    .iv-tile { position: relative; background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02)); border: 1px solid rgba(200, 215, 235, 0.18); border-radius: 18px; padding: 1.5rem 1.4rem 1.4rem; cursor: pointer; transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease; min-height: 240px; display: flex; flex-direction: column; }
-    .iv-tile:hover { transform: translateY(-3px); border-color: rgba(64, 196, 196, 0.55); box-shadow: 0 12px 30px -10px rgba(64, 196, 196, 0.3); }
-    .iv-tile-logo { width: 58px; height: 58px; border-radius: 10px; background: rgba(255,255,255,0.08); display: grid; place-items: center; margin-bottom: 1rem; color: #40c4c4; font-weight: 800; font-size: 1.4rem; overflow: hidden; }
-    .iv-tile-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
-    .iv-tile-name { font-size: 1.45rem; font-weight: 700; line-height: 1.15; margin: 0 0 0.5rem; color: #fff; }
-    .iv-tile-desc { color: #c8d7eb; font-size: 0.9rem; line-height: 1.5; margin: 0 0 1.1rem; flex: 1; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
-    .iv-tile-meta { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; padding-top: 0.9rem; border-top: 1px solid rgba(200, 215, 235, 0.12); }
-    .iv-tile-sector { font-size: 0.7rem; letter-spacing: 0.1em; font-weight: 600; color: #40c4c4; padding: 0.28rem 0.7rem; background: rgba(64, 196, 196, 0.12); border-radius: 999px; }
-    .iv-tile-ask { font-size: 0.92rem; font-weight: 700; color: #f6e7a5; }
-    .iv-empty { text-align: center; padding: 4rem 1rem; color: #c8d7eb; border: 1px dashed rgba(200, 215, 235, 0.18); border-radius: 16px; }
-    .iv-empty h3 { color: #fff; margin: 0 0 0.6rem; }
+    /* ─── Marketplace-specific overrides on top of partner.css ─────── */
+    .mkt-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.4rem; flex-wrap: wrap; }
+    .mkt-count { color: var(--gray-600); font-size: 0.92rem; }
+    .mkt-refresh { background: transparent; color: var(--accent); border: 1px solid rgba(58, 107, 196, 0.4); border-radius: 8px; padding: 0.45rem 0.95rem; font-size: 0.82rem; cursor: pointer; font-family: inherit; }
+    .mkt-refresh:hover { background: rgba(58, 107, 196, 0.08); }
 
-    .iv-kpi-pop { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(100% + 12px); background: #122440; border: 1px solid rgba(64, 196, 196, 0.45); border-radius: 14px; padding: 1rem 1.1rem; min-width: 280px; box-shadow: 0 18px 40px -12px rgba(0,0,0,0.6); z-index: 10; opacity: 0; pointer-events: none; transition: opacity 0.15s ease; }
-    .iv-tile:hover .iv-kpi-pop { opacity: 1; }
-    .iv-kpi-pop::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 7px solid transparent; border-top-color: #122440; }
-    .iv-kpi-row { display: grid; grid-template-columns: auto 1fr auto auto 1fr; gap: 0.4rem 0.5rem; align-items: center; font-size: 0.78rem; margin-bottom: 0.4rem; }
-    .iv-kpi-label { color: #c8d7eb; }
-    .iv-kpi-val { color: #fff; font-weight: 700; text-align: right; }
-    .iv-kpi-arrow { color: #c8d7eb; font-weight: 700; padding: 0 0.15rem; }
-    .iv-kpi-single { display: flex; justify-content: space-between; font-size: 0.78rem; margin-bottom: 0.35rem; }
-    .iv-kpi-divider { height: 1px; background: rgba(200,215,235,0.15); margin: 0.55rem 0; }
+    .mkt-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 1.2rem; }
 
-    /* ─── NDA modal ──────────────────────────────────────────── */
-    .nda-overlay { position: fixed; inset: 0; background: rgba(5,11,28,0.86); display: none; align-items: stretch; justify-content: center; z-index: 100; backdrop-filter: blur(6px); }
+    .mkt-tile { position: relative; background: var(--white); border: 1px solid var(--gray-100); border-radius: 12px; padding: 1.6rem 1.5rem 1.4rem; cursor: pointer; transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease; min-height: 240px; display: flex; flex-direction: column; text-align: left; font-family: inherit; }
+    .mkt-tile:hover { transform: translateY(-3px); border-color: rgba(58, 107, 196, 0.55); box-shadow: 0 12px 30px -10px rgba(10, 23, 51, 0.18); }
+    .mkt-tile-logo { width: 56px; height: 56px; border-radius: 10px; background: rgba(58, 107, 196, 0.1); display: grid; place-items: center; margin-bottom: 1rem; color: var(--accent); font-weight: 800; font-size: 1.4rem; overflow: hidden; font-family: var(--font-head); }
+    .mkt-tile-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .mkt-tile-name { font-family: var(--font-head); font-size: 1.35rem; font-weight: 700; line-height: 1.18; margin: 0 0 0.5rem; color: var(--navy-800); }
+    .mkt-tile-desc { color: var(--gray-600); font-size: 0.9rem; line-height: 1.5; margin: 0 0 1.1rem; flex: 1; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .mkt-tile-meta { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; padding-top: 0.9rem; border-top: 1px solid var(--gray-100); }
+    .mkt-tile-sector { font-size: 0.7rem; letter-spacing: 0.1em; font-weight: 600; color: var(--accent); padding: 0.28rem 0.7rem; background: rgba(58, 107, 196, 0.1); border-radius: 999px; text-transform: uppercase; }
+    .mkt-tile-ask { font-size: 0.95rem; font-weight: 700; color: var(--navy-800); font-family: var(--font-head); }
+
+    .mkt-empty { grid-column: 1 / -1; text-align: center; padding: 4rem 1rem; background: var(--white); border: 1px dashed var(--gray-100); border-radius: 16px; color: var(--gray-600); }
+    .mkt-empty h3 { color: var(--navy-800); margin: 0 0 0.5rem; font-family: var(--font-head); }
+
+    /* Hover KPI popover */
+    .mkt-kpi-pop { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(100% + 12px); background: var(--navy-800); color: var(--white); border: 1px solid var(--navy-500); border-radius: 12px; padding: 1rem 1.1rem; min-width: 290px; box-shadow: 0 18px 40px -12px rgba(10, 23, 51, 0.45); z-index: 10; opacity: 0; pointer-events: none; transition: opacity 0.15s ease; }
+    .mkt-tile:hover .mkt-kpi-pop { opacity: 1; }
+    .mkt-kpi-pop::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 7px solid transparent; border-top-color: var(--navy-800); }
+    .mkt-kpi-row { display: grid; grid-template-columns: auto 1fr auto auto 1fr; gap: 0.4rem 0.5rem; align-items: center; font-size: 0.78rem; margin-bottom: 0.4rem; }
+    .mkt-kpi-label { color: rgba(255,255,255,0.65); }
+    .mkt-kpi-val { color: var(--white); font-weight: 700; text-align: right; font-family: var(--font-head); }
+    .mkt-kpi-arrow { color: var(--accent-light); font-weight: 700; padding: 0 0.15rem; }
+    .mkt-kpi-single { display: flex; justify-content: space-between; font-size: 0.78rem; margin-bottom: 0.35rem; }
+    .mkt-kpi-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 0.55rem 0; }
+
+    /* ─── NDA modal — restyled to match partner area ─────────────── */
+    .nda-overlay { position: fixed; inset: 0; background: rgba(8, 15, 32, 0.78); display: none; align-items: stretch; justify-content: center; z-index: 100; backdrop-filter: blur(4px); }
     .nda-overlay.open { display: flex; }
-    .nda-modal { background: #0e1d3e; color: #f4f8ff; border: 1px solid rgba(64,196,196,0.4); border-radius: 18px; box-shadow: 0 30px 80px -20px rgba(0,0,0,0.7); width: min(1180px, 96vw); max-height: 95vh; display: grid; grid-template-rows: auto 1fr auto; margin: auto; overflow: hidden; }
-    .nda-head { display: flex; justify-content: space-between; align-items: center; padding: 1.1rem 1.4rem; border-bottom: 1px solid rgba(200,215,235,0.15); gap: 1rem; flex-wrap: wrap; }
-    .nda-head-title { margin: 0; font-size: 1.2rem; font-weight: 700; }
-    .nda-head-sub { margin: 0.18rem 0 0; color: #c8d7eb; font-size: 0.82rem; }
-    .nda-close { background: transparent; border: 1px solid rgba(200,215,235,0.35); color: #c8d7eb; border-radius: 999px; padding: 0.4rem 0.8rem; cursor: pointer; }
+    .nda-modal { background: var(--white); color: var(--navy-800); border-radius: 14px; box-shadow: 0 30px 80px -20px rgba(8, 15, 32, 0.4); width: min(1180px, 96vw); max-height: 95vh; display: grid; grid-template-rows: auto 1fr auto; margin: auto; overflow: hidden; font-family: var(--font-sans); }
+    .nda-head { display: flex; justify-content: space-between; align-items: center; padding: 1.1rem 1.4rem; border-bottom: 1px solid var(--gray-100); background: var(--off-white); gap: 1rem; flex-wrap: wrap; }
+    .nda-head-title { margin: 0; font-size: 1.2rem; font-weight: 700; font-family: var(--font-head); color: var(--navy-800); }
+    .nda-head-sub { margin: 0.18rem 0 0; color: var(--gray-600); font-size: 0.82rem; }
+    .nda-close { background: transparent; border: 1px solid var(--gray-100); color: var(--gray-600); border-radius: 999px; padding: 0.4rem 0.8rem; cursor: pointer; font-family: inherit; }
     .nda-body { display: grid; grid-template-columns: 1.05fr 0.95fr; min-height: 0; }
     .nda-pdf-wrap { padding: 1rem 0 1rem 1.4rem; min-height: 0; }
-    .nda-pdf { width: 100%; height: 100%; min-height: 460px; border: 1px solid rgba(200,215,235,0.15); border-radius: 12px; background: #fff; }
+    .nda-pdf { width: 100%; height: 100%; min-height: 460px; border: 1px solid var(--gray-100); border-radius: 10px; background: var(--white); }
     .nda-form { padding: 1rem 1.4rem 1rem 1.2rem; overflow-y: auto; }
     .nda-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0.7rem; }
     .nda-field { display: flex; flex-direction: column; gap: 0.3rem; }
     .nda-field.full { grid-column: 1 / -1; }
-    .nda-label { font-size: 0.78rem; color: #c8d7eb; font-weight: 600; }
-    .nda-input { background: rgba(255,255,255,0.06); border: 1px solid rgba(200,215,235,0.22); color: #fff; padding: 0.55rem 0.7rem; border-radius: 8px; font-size: 0.9rem; }
-    .nda-input:focus { outline: none; border-color: #40c4c4; }
+    .nda-label { font-size: 0.78rem; color: var(--navy-700); font-weight: 600; }
+    .nda-input { background: var(--white); border: 1px solid var(--gray-100); color: var(--navy-800); padding: 0.55rem 0.7rem; border-radius: 6px; font-size: 0.9rem; font-family: inherit; }
+    .nda-input:focus { outline: none; border-color: var(--accent); }
     .nda-sig-tabs { display: flex; gap: 0.45rem; margin-bottom: 0.45rem; }
-    .nda-sig-tab { flex: 1; padding: 0.4rem 0.6rem; border-radius: 8px; border: 1px solid rgba(200,215,235,0.22); background: transparent; color: #c8d7eb; cursor: pointer; font-size: 0.82rem; font-weight: 600; }
-    .nda-sig-tab.is-active { background: rgba(64,196,196,0.14); color: #fff; border-color: #40c4c4; }
-    .nda-sig-typed { font-family: 'Brush Script MT', 'Lucida Handwriting', cursive; font-size: 1.6rem; color: #f6e7a5; padding: 0.6rem 0.8rem; background: rgba(255,255,255,0.05); border: 1px solid rgba(200,215,235,0.18); border-radius: 8px; min-height: 50px; display: flex; align-items: center; }
-    .nda-sig-canvas-wrap { position: relative; background: #fff; border: 1px solid rgba(200,215,235,0.22); border-radius: 8px; height: 130px; overflow: hidden; }
+    .nda-sig-tab { flex: 1; padding: 0.4rem 0.6rem; border-radius: 6px; border: 1px solid var(--gray-100); background: var(--white); color: var(--gray-600); cursor: pointer; font-size: 0.82rem; font-weight: 600; font-family: inherit; }
+    .nda-sig-tab.is-active { background: rgba(58, 107, 196, 0.1); color: var(--accent); border-color: var(--accent); }
+    .nda-sig-typed { font-family: 'Brush Script MT', 'Lucida Handwriting', cursive; font-size: 1.6rem; color: var(--navy-700); padding: 0.6rem 0.8rem; background: var(--off-white); border: 1px solid var(--gray-100); border-radius: 6px; min-height: 50px; display: flex; align-items: center; }
+    .nda-sig-canvas-wrap { position: relative; background: var(--white); border: 1px solid var(--gray-100); border-radius: 6px; height: 130px; overflow: hidden; }
     .nda-sig-canvas { display: block; width: 100%; height: 100%; cursor: crosshair; }
-    .nda-sig-clear { position: absolute; top: 6px; right: 6px; background: rgba(0,0,0,0.45); color: #fff; border: none; border-radius: 6px; padding: 0.25rem 0.55rem; font-size: 0.72rem; cursor: pointer; }
-    .nda-confirm-row { display: flex; align-items: flex-start; gap: 0.5rem; margin-top: 0.7rem; font-size: 0.84rem; color: #c8d7eb; line-height: 1.45; }
+    .nda-sig-clear { position: absolute; top: 6px; right: 6px; background: rgba(8, 15, 32, 0.6); color: var(--white); border: none; border-radius: 6px; padding: 0.25rem 0.55rem; font-size: 0.72rem; cursor: pointer; font-family: inherit; }
+    .nda-confirm-row { display: flex; align-items: flex-start; gap: 0.5rem; margin-top: 0.7rem; font-size: 0.84rem; color: var(--gray-600); line-height: 1.45; }
     .nda-confirm-row input { margin-top: 0.2rem; flex-shrink: 0; }
-    .nda-foot { display: flex; justify-content: space-between; align-items: center; padding: 0.9rem 1.4rem; border-top: 1px solid rgba(200,215,235,0.15); gap: 1rem; flex-wrap: wrap; }
-    .nda-foot-left { display: flex; align-items: center; gap: 0.6rem; font-size: 0.82rem; color: #c8d7eb; }
-    .nda-foot-left a { color: #40c4c4; text-decoration: none; font-weight: 600; }
+    .nda-foot { display: flex; justify-content: space-between; align-items: center; padding: 0.9rem 1.4rem; border-top: 1px solid var(--gray-100); background: var(--off-white); gap: 1rem; flex-wrap: wrap; }
+    .nda-foot-left { display: flex; align-items: center; gap: 0.6rem; font-size: 0.82rem; color: var(--gray-600); }
+    .nda-foot-left a { color: var(--accent); text-decoration: none; font-weight: 600; }
     .nda-foot-left a:hover { text-decoration: underline; }
-    .nda-sign-btn { background: linear-gradient(135deg, #40c4c4, #2a9b9b); color: #08182f; border: none; border-radius: 999px; padding: 0.7rem 1.4rem; font-size: 0.92rem; font-weight: 700; cursor: pointer; }
+    .nda-sign-btn { background: var(--accent); color: var(--white); border: none; border-radius: 6px; padding: 0.7rem 1.4rem; font-size: 0.92rem; font-weight: 700; cursor: pointer; font-family: inherit; }
+    .nda-sign-btn:hover:not(:disabled) { background: var(--accent-light); }
     .nda-sign-btn:disabled { opacity: 0.55; cursor: not-allowed; }
-    .nda-err { color: #ff9aa2; font-size: 0.82rem; margin: 0.35rem 0 0; }
+    .nda-err { color: #c0392b; font-size: 0.82rem; margin: 0.35rem 0 0; }
 
-    @media (max-width: 880px) {
-      .nda-body { grid-template-columns: 1fr; }
-      .nda-pdf-wrap { padding: 1rem 1.4rem 0; }
-      .nda-pdf { min-height: 320px; }
-    }
+    @media (max-width: 880px) { .nda-body { grid-template-columns: 1fr; } .nda-pdf-wrap { padding: 1rem 1.4rem 0; } .nda-pdf { min-height: 320px; } }
   </style>
 </head>
-<body>
-  <div class="iv-shell">
-    <div class="iv-topbar">
-      <a href="index.html" class="iv-logo">
-        <span class="iv-logo-v">V</span>
-        <span class="iv-logo-text">VISION &amp; VIRTUE</span>
+<body class="partner-page">
+
+  <!-- NAV -->
+  <nav class="navbar partner-nav" id="navbar">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-logo">
+        <span class="logo-v">V</span>
+        <span class="logo-text">VISION &amp; VIRTUE</span>
       </a>
-      <div class="iv-topbar-right">
-        <span class="iv-signed-as" id="ivSignedAs"></span>
-        <button type="button" class="iv-signout" id="ivSignOut">Sign out</button>
-      </div>
+      <ul class="nav-links">
+        <li><a href="index.html">← Main Site</a></li>
+        <li><span class="nav-badge partner-nav-badge">Investors Marketplace</span></li>
+        <li><button class="nav-reset-btn" id="signOutBtn" title="Sign out">⟳ Sign Out</button></li>
+      </ul>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <section class="partner-hero">
+    <div class="partner-hero-bg"></div>
+    <div class="partner-hero-content">
+      <p class="hero-eyebrow" id="ivWelcome">Investor Portal</p>
+      <h1 class="partner-hero-title">Investors Marketplace</h1>
+      <p class="partner-hero-sub">Browse Vision &amp; Virtue Partner customers raising capital. Click a tile to sign the standard NDA and view the investor deck.</p>
+    </div>
+  </section>
+
+  <!-- MARKETPLACE LISTINGS -->
+  <section class="partner-products-section">
+    <div class="partner-section-head">
+      <div class="section-tag dark">Open Opportunities</div>
+      <h2 class="partner-section-title">Companies Raising Capital</h2>
+      <p class="partner-section-sub">Hover any tile to preview the company's headline KPIs. Click to start the NDA process and view the deck.</p>
     </div>
 
-    <span class="iv-tag">Investors Marketplace</span>
-    <h1 class="iv-title">Vision's Customers Raising Capital</h1>
-    <p class="iv-sub">Browse Vision &amp; Virtue's Partner customers. Click a tile to sign the standard NDA and view the investor deck.</p>
-
-    <div class="iv-toolbar">
-      <span class="iv-count" id="ivCount">Loading…</span>
-      <button type="button" class="iv-refresh" id="ivRefresh">↻ Refresh</button>
+    <div class="mkt-toolbar">
+      <span class="mkt-count" id="ivCount">Loading…</span>
+      <button type="button" class="mkt-refresh" id="ivRefresh">↻ Refresh</button>
     </div>
 
-    <div class="iv-grid" id="ivGrid"></div>
-  </div>
+    <div class="mkt-grid" id="ivGrid"></div>
+  </section>
 
   <!-- ─── NDA Modal ─────────────────────────────────────────── -->
   <div class="nda-overlay" id="ndaOverlay" aria-hidden="true">
@@ -133,26 +143,11 @@
 
         <form class="nda-form" id="ndaForm" autocomplete="off">
           <div class="nda-form-grid">
-            <div class="nda-field full">
-              <label class="nda-label" for="ndaFullName">Full name</label>
-              <input class="nda-input" id="ndaFullName" type="text" maxlength="200" required />
-            </div>
-            <div class="nda-field">
-              <label class="nda-label" for="ndaFundName">Fund / Company name</label>
-              <input class="nda-input" id="ndaFundName" type="text" maxlength="200" required />
-            </div>
-            <div class="nda-field">
-              <label class="nda-label" for="ndaTitle2">Title</label>
-              <input class="nda-input" id="ndaTitle2" type="text" maxlength="120" required />
-            </div>
-            <div class="nda-field">
-              <label class="nda-label" for="ndaEmail">Business email</label>
-              <input class="nda-input" id="ndaEmail" type="email" maxlength="200" required />
-            </div>
-            <div class="nda-field">
-              <label class="nda-label" for="ndaDate">Date</label>
-              <input class="nda-input" id="ndaDate" type="date" required />
-            </div>
+            <div class="nda-field full"><label class="nda-label" for="ndaFullName">Full name</label><input class="nda-input" id="ndaFullName" type="text" maxlength="200" required /></div>
+            <div class="nda-field"><label class="nda-label" for="ndaFundName">Fund / Company name</label><input class="nda-input" id="ndaFundName" type="text" maxlength="200" required /></div>
+            <div class="nda-field"><label class="nda-label" for="ndaTitle2">Title</label><input class="nda-input" id="ndaTitle2" type="text" maxlength="120" required /></div>
+            <div class="nda-field"><label class="nda-label" for="ndaEmail">Business email</label><input class="nda-input" id="ndaEmail" type="email" maxlength="200" required /></div>
+            <div class="nda-field"><label class="nda-label" for="ndaDate">Date</label><input class="nda-input" id="ndaDate" type="date" required /></div>
 
             <div class="nda-field full">
               <label class="nda-label">Electronic signature</label>
@@ -169,7 +164,7 @@
                   <canvas class="nda-sig-canvas" id="ndaSigCanvas" width="700" height="180"></canvas>
                   <button type="button" class="nda-sig-clear" id="ndaSigClear">Clear</button>
                 </div>
-                <p style="margin:0.25rem 0 0;font-size:0.74rem;color:#8d9bb5">Draw with your mouse, trackpad, or touchscreen.</p>
+                <p style="margin:0.25rem 0 0;font-size:0.74rem;color:var(--gray-400)">Draw with your mouse, trackpad, or touchscreen.</p>
               </div>
             </div>
 
@@ -217,9 +212,9 @@
       const authed = sessionStorage.getItem('vv_investor_auth') === '1';
       const key = ivKey();
       if (!authed || !key) { window.location.replace('index.html'); return; }
-      const el = document.getElementById('ivSignedAs');
-      if (el && ivName()) el.innerHTML = 'Signed in as <strong>' + escHtml(ivName()) + '</strong>';
-      document.getElementById('ivSignOut').addEventListener('click', () => {
+      const welcome = document.getElementById('ivWelcome');
+      if (welcome && ivName()) welcome.textContent = 'Welcome, ' + ivName();
+      document.getElementById('signOutBtn').addEventListener('click', () => {
         sessionStorage.removeItem('vv_investor_auth');
         sessionStorage.removeItem('vv_investor_key');
         sessionStorage.removeItem('vv_investor_name');
@@ -229,9 +224,7 @@
 
     async function fetchListings() {
       try {
-        const res = await fetch(IV_BACKEND + '/api/investor/marketplace/listings', {
-          headers: { 'X-Investor-Key': ivKey() },
-        });
+        const res = await fetch(IV_BACKEND + '/api/investor/marketplace/listings', { headers: { 'X-Investor-Key': ivKey() } });
         if (res.status === 401) { sessionStorage.clear(); window.location.replace('index.html'); return []; }
         if (!res.ok) return [];
         const data = await res.json();
@@ -241,9 +234,7 @@
 
     async function fetchListingDetail(id) {
       try {
-        const res = await fetch(IV_BACKEND + '/api/investor/marketplace/listings/' + encodeURIComponent(id), {
-          headers: { 'X-Investor-Key': ivKey() },
-        });
+        const res = await fetch(IV_BACKEND + '/api/investor/marketplace/listings/' + encodeURIComponent(id), { headers: { 'X-Investor-Key': ivKey() } });
         if (!res.ok) return null;
         return await res.json();
       } catch { return null; }
@@ -252,18 +243,18 @@
     function renderKpiPop(k) {
       k = k || {};
       const pair = (lbl, a, b) =>
-        '<span class="iv-kpi-label">' + lbl + '</span>' +
-        '<span class="iv-kpi-val">' + fmt(a) + '</span>' +
-        '<span class="iv-kpi-arrow">→</span>' +
-        '<span class="iv-kpi-val">' + fmt(b) + '</span><span></span>';
+        '<span class="mkt-kpi-label">' + lbl + '</span>' +
+        '<span class="mkt-kpi-val">' + fmt(a) + '</span>' +
+        '<span class="mkt-kpi-arrow">→</span>' +
+        '<span class="mkt-kpi-val">' + fmt(b) + '</span><span></span>';
       return '' +
-        '<div class="iv-kpi-pop">' +
-          '<div class="iv-kpi-row">' + pair('GM %',     k.gmPctY1,   k.gmPctY5)   + '</div>' +
-          '<div class="iv-kpi-row">' + pair('ARR',      k.arrY1,     k.arrY5)     + '</div>' +
-          '<div class="iv-kpi-row">' + pair('Top-Line', k.topLineY1, k.topLineY5) + '</div>' +
-          '<div class="iv-kpi-divider"></div>' +
-          '<div class="iv-kpi-single"><span class="iv-kpi-label">Adjusted EBITDA YR5</span><span class="iv-kpi-val">' + fmt(k.ebitdaY5) + '</span></div>' +
-          '<div class="iv-kpi-single"><span class="iv-kpi-label">NRR</span><span class="iv-kpi-val">' + fmt(k.nrr) + '</span></div>' +
+        '<div class="mkt-kpi-pop">' +
+          '<div class="mkt-kpi-row">' + pair('GM %',     k.gmPctY1,   k.gmPctY5)   + '</div>' +
+          '<div class="mkt-kpi-row">' + pair('ARR',      k.arrY1,     k.arrY5)     + '</div>' +
+          '<div class="mkt-kpi-row">' + pair('Top-Line', k.topLineY1, k.topLineY5) + '</div>' +
+          '<div class="mkt-kpi-divider"></div>' +
+          '<div class="mkt-kpi-single"><span class="mkt-kpi-label">Adjusted EBITDA YR5</span><span class="mkt-kpi-val">' + fmt(k.ebitdaY5) + '</span></div>' +
+          '<div class="mkt-kpi-single"><span class="mkt-kpi-label">NRR</span><span class="mkt-kpi-val">' + fmt(k.nrr) + '</span></div>' +
         '</div>';
     }
 
@@ -272,13 +263,13 @@
         ? '<img src="' + escHtml(listing.logoPath) + '" alt="' + escHtml(listing.customerName) + ' logo">'
         : escHtml(logoInitial(listing.customerName));
       return '' +
-        '<div class="iv-tile" data-listing-id="' + escHtml(listing.id) + '" tabindex="0" role="button">' +
-          '<div class="iv-tile-logo">' + logoHtml + '</div>' +
-          '<h3 class="iv-tile-name">' + escHtml(listing.customerName) + '</h3>' +
-          '<p class="iv-tile-desc">' + escHtml(listing.description || 'Vision Partner customer — investor materials available after NDA.') + '</p>' +
-          '<div class="iv-tile-meta">' +
-            '<span class="iv-tile-sector">' + escHtml(listing.sector || 'Other') + '</span>' +
-            '<span class="iv-tile-ask">' + escHtml(listing.askAmountText || '') + '</span>' +
+        '<div class="mkt-tile" data-listing-id="' + escHtml(listing.id) + '" tabindex="0" role="button">' +
+          '<div class="mkt-tile-logo">' + logoHtml + '</div>' +
+          '<h3 class="mkt-tile-name">' + escHtml(listing.customerName) + '</h3>' +
+          '<p class="mkt-tile-desc">' + escHtml(listing.description || 'Vision Partner customer — investor materials available after NDA.') + '</p>' +
+          '<div class="mkt-tile-meta">' +
+            '<span class="mkt-tile-sector">' + escHtml(listing.sector || 'Other') + '</span>' +
+            '<span class="mkt-tile-ask">' + escHtml(listing.askAmountText || '') + '</span>' +
           '</div>' +
           renderKpiPop(listing.kpis) +
         '</div>';
@@ -286,17 +277,10 @@
 
     async function onTileClick(listingId) {
       const detail = await fetchListingDetail(listingId);
-      if (!detail || !detail.listing) {
-        alert('This listing is no longer available.');
-        return;
-      }
+      if (!detail || !detail.listing) { alert('This listing is no longer available.'); return; }
       if (detail.ndaSigned) {
-        if (!detail.deckAvailable) {
-          alert('NDA already on file — but the company has not yet attached their investor deck. Check back soon.');
-          return;
-        }
-        window.location.href = 'deck-view.html?listing=' + encodeURIComponent(listingId) +
-                               '&name=' + encodeURIComponent(detail.listing.customerName);
+        if (!detail.deckAvailable) { alert('NDA already on file — but the company has not yet attached their investor deck. Check back soon.'); return; }
+        window.location.href = 'deck-view.html?listing=' + encodeURIComponent(listingId) + '&name=' + encodeURIComponent(detail.listing.customerName);
         return;
       }
       openNdaModal(detail.listing);
@@ -310,12 +294,12 @@
       const listings = await fetchListings();
       if (!listings.length) {
         countEl.textContent = '0 listings';
-        grid.innerHTML = '<div class="iv-empty" style="grid-column:1/-1"><h3>No listings yet</h3><p>Partner customers haven\'t published their tiles yet. Check back soon.</p></div>';
+        grid.innerHTML = '<div class="mkt-empty"><h3>No listings yet</h3><p>Partner customers haven\'t published their tiles yet. Check back soon.</p></div>';
         return;
       }
       countEl.textContent = listings.length + ' listing' + (listings.length === 1 ? '' : 's');
       grid.innerHTML = listings.map(renderTile).join('');
-      grid.querySelectorAll('.iv-tile').forEach(el => {
+      grid.querySelectorAll('.mkt-tile').forEach(el => {
         const id = el.getAttribute('data-listing-id');
         el.addEventListener('click', () => onTileClick(id));
         el.addEventListener('keydown', (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); el.click(); } });
@@ -325,7 +309,7 @@
     document.getElementById('ivRefresh').addEventListener('click', loadMarketplace);
     loadMarketplace();
 
-    /* ─── NDA modal logic ──────────────────────────────────── */
+    /* ─── NDA modal logic ────────────────────────────────── */
     const ndaOverlay     = document.getElementById('ndaOverlay');
     const ndaClose       = document.getElementById('ndaClose');
     const ndaSubtitle    = document.getElementById('ndaSubtitle');
@@ -351,38 +335,28 @@
     let _drawnEmpty     = true;
     const ctx           = ndaSigCanvas.getContext('2d');
 
-    function clearCanvas() {
-      ctx.clearRect(0, 0, ndaSigCanvas.width, ndaSigCanvas.height);
-      _drawnEmpty = true;
-    }
+    function clearCanvas() { ctx.clearRect(0, 0, ndaSigCanvas.width, ndaSigCanvas.height); _drawnEmpty = true; }
     clearCanvas();
 
     function openNdaModal(listing) {
       _activeListing = listing;
       ndaSubtitle.textContent = 'Required before viewing ' + (listing.customerName || 'this company') + '\'s investor deck.';
-      ndaFullName.value = '';
-      ndaFundName.value = '';
-      ndaTitle2.value   = '';
-      ndaEmail.value    = '';
-      ndaDate.value     = new Date().toISOString().slice(0, 10);
-      ndaSigTypedInput.value = '';
-      ndaSigTypedPrev.textContent = '';
+      ndaFullName.value = ''; ndaFundName.value = ''; ndaTitle2.value = ''; ndaEmail.value = '';
+      ndaDate.value = new Date().toISOString().slice(0, 10);
+      ndaSigTypedInput.value = ''; ndaSigTypedPrev.textContent = '';
       clearCanvas();
-      ndaConfirm.checked = false;
-      ndaErr.textContent = '';
+      ndaConfirm.checked = false; ndaErr.textContent = '';
       ndaSignBtn.disabled = true;
       switchSigMode('typed');
       ndaOverlay.classList.add('open');
       ndaOverlay.setAttribute('aria-hidden', 'false');
       setTimeout(() => ndaFullName.focus(), 60);
     }
-
     function closeNdaModal() {
       ndaOverlay.classList.remove('open');
       ndaOverlay.setAttribute('aria-hidden', 'true');
       _activeListing = null;
     }
-
     function switchSigMode(mode) {
       _sigMode = mode;
       ndaTabTyped.classList.toggle('is-active', mode === 'typed');
@@ -393,44 +367,25 @@
     }
     ndaTabTyped.addEventListener('click', () => switchSigMode('typed'));
     ndaTabDrawn.addEventListener('click', () => switchSigMode('drawn'));
-    ndaSigTypedInput.addEventListener('input', () => {
-      ndaSigTypedPrev.textContent = ndaSigTypedInput.value.trim();
-      validate();
-    });
+    ndaSigTypedInput.addEventListener('input', () => { ndaSigTypedPrev.textContent = ndaSigTypedInput.value.trim(); validate(); });
     ndaSigClearBtn.addEventListener('click', () => { clearCanvas(); validate(); });
 
-    // Canvas drawing
     let _drawing = false, _lastX = 0, _lastY = 0;
     function canvasCoords(ev) {
       const rect = ndaSigCanvas.getBoundingClientRect();
       const x = (ev.touches ? ev.touches[0].clientX : ev.clientX) - rect.left;
       const y = (ev.touches ? ev.touches[0].clientY : ev.clientY) - rect.top;
-      // canvas is sized via CSS but internal is fixed; scale
       const sx = ndaSigCanvas.width / rect.width;
       const sy = ndaSigCanvas.height / rect.height;
       return { x: x * sx, y: y * sy };
     }
-    function startDraw(ev) {
-      ev.preventDefault();
-      _drawing = true;
-      const p = canvasCoords(ev);
-      _lastX = p.x; _lastY = p.y;
-    }
+    function startDraw(ev) { ev.preventDefault(); _drawing = true; const p = canvasCoords(ev); _lastX = p.x; _lastY = p.y; }
     function moveDraw(ev) {
-      if (!_drawing) return;
-      ev.preventDefault();
+      if (!_drawing) return; ev.preventDefault();
       const p = canvasCoords(ev);
-      ctx.strokeStyle = '#1a2d5e';
-      ctx.lineWidth = 2.4;
-      ctx.lineCap = 'round';
-      ctx.lineJoin = 'round';
-      ctx.beginPath();
-      ctx.moveTo(_lastX, _lastY);
-      ctx.lineTo(p.x, p.y);
-      ctx.stroke();
-      _lastX = p.x; _lastY = p.y;
-      _drawnEmpty = false;
-      validate();
+      ctx.strokeStyle = '#1a2d5e'; ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+      ctx.beginPath(); ctx.moveTo(_lastX, _lastY); ctx.lineTo(p.x, p.y); ctx.stroke();
+      _lastX = p.x; _lastY = p.y; _drawnEmpty = false; validate();
     }
     function endDraw() { _drawing = false; }
     ndaSigCanvas.addEventListener('mousedown', startDraw);
@@ -444,12 +399,10 @@
       if (_sigMode === 'typed') return ndaSigTypedInput.value.trim();
       return _drawnEmpty ? '' : ndaSigCanvas.toDataURL('image/png');
     }
-
     function hasValidSig() {
       if (_sigMode === 'typed') return ndaSigTypedInput.value.trim().length >= 2;
       return !_drawnEmpty;
     }
-
     function validate() {
       const ok = ndaFullName.value.trim().length >= 2
               && ndaFundName.value.trim().length >= 1
@@ -466,15 +419,12 @@
 
     ndaClose.addEventListener('click', closeNdaModal);
     ndaOverlay.addEventListener('click', (ev) => { if (ev.target === ndaOverlay) closeNdaModal(); });
-    document.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Escape' && ndaOverlay.classList.contains('open')) closeNdaModal();
-    });
+    document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && ndaOverlay.classList.contains('open')) closeNdaModal(); });
 
     ndaSignBtn.addEventListener('click', async () => {
       if (!_activeListing) return;
       const orig = ndaSignBtn.textContent;
-      ndaSignBtn.disabled = true;
-      ndaSignBtn.textContent = 'Signing…';
+      ndaSignBtn.disabled = true; ndaSignBtn.textContent = 'Signing…';
       ndaErr.textContent = '';
       try {
         const body = {
@@ -498,21 +448,18 @@
           throw new Error('Sign failed (' + res.status + '). ' + text.slice(0, 160));
         }
         const detail = await fetchListingDetail(_activeListing.id);
-        const listingId = _activeListing.id;
+        const listingId    = _activeListing.id;
         const customerName = _activeListing.customerName;
         closeNdaModal();
         if (detail && detail.deckAvailable) {
-          window.location.href = 'deck-view.html?listing=' + encodeURIComponent(listingId) +
-                                 '&name=' + encodeURIComponent(customerName);
+          window.location.href = 'deck-view.html?listing=' + encodeURIComponent(listingId) + '&name=' + encodeURIComponent(customerName);
         } else {
           alert('NDA accepted. The investor deck has not been attached yet — you\'ll see it appear here when it\'s ready.');
         }
       } catch (err) {
         ndaErr.textContent = err && err.message ? err.message : 'Could not submit signature.';
       } finally {
-        ndaSignBtn.disabled = false;
-        ndaSignBtn.textContent = orig;
-        validate();
+        ndaSignBtn.disabled = false; ndaSignBtn.textContent = orig; validate();
       }
     });
   </script>

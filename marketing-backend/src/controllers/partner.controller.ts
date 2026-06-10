@@ -17,6 +17,7 @@ import {
   storeDeckPdf, readDeckPdf, MAX_DECK_PDF_BYTES,
 } from '../services/marketplace-deck.service';
 import { generatePopulatedNdaPdf } from '../services/nda-pdf-generator.service';
+import { extractMarketplaceTileData } from '../services/marketplace-extractor.service';
 import { generateFinalizedXlsx, resolveStoredXlsx, storeUploadedXlsx } from '../services/partner-xlsx.service';
 import {
   storeAsset, resolveAsset, contentTypeForFilename, MAX_ASSET_BYTES,
@@ -954,35 +955,21 @@ export const partnerController = {
   /**
    * POST /api/customer/me/marketplace-listings
    * Header: X-Customer-Key
-   * Body: { submissionId, logoPath?, description?, sector?, askAmountText?, kpis? }
+   * Body: { submissionId }
    *
    * Publishes (or republishes) the customer's submission to the Investors
-   * Marketplace. The submission must belong to this customer key. One listing
-   * per submission.
+   * Marketplace. ALL tile fields (sector, description, ask, KPIs) are auto-
+   * extracted from the customer's questionnaire + finalized Financial Model
+   * xlsx — the customer doesn't supply them. The submission must belong to
+   * this customer key. One listing per submission.
    */
-  customerPublishListing(req: Request, res: Response): void {
+  async customerPublishListing(req: Request, res: Response): Promise<void> {
     const keyRow = resolveCustomerKey(req);
     if (!keyRow) { send401(res, 'Missing or invalid customer key.'); return; }
-    const Body = z.object({
-      submissionId:   z.string().trim().min(1),
-      logoPath:       z.string().trim().max(500).nullable().optional(),
-      description:    z.string().trim().max(600).optional(),
-      sector:         z.string().trim().max(80).optional(),
-      askAmountText:  z.string().trim().max(40).optional(),
-      kpis: z.object({
-        gmPctY1:    z.union([z.number(), z.string()]).optional(),
-        gmPctY5:    z.union([z.number(), z.string()]).optional(),
-        arrY1:      z.union([z.number(), z.string()]).optional(),
-        arrY5:      z.union([z.number(), z.string()]).optional(),
-        topLineY1:  z.union([z.number(), z.string()]).optional(),
-        topLineY5:  z.union([z.number(), z.string()]).optional(),
-        ebitdaY5:   z.union([z.number(), z.string()]).optional(),
-        nrr:        z.union([z.number(), z.string()]).optional(),
-      }).optional(),
-    });
+    const Body = z.object({ submissionId: z.string().trim().min(1) });
     const parsed = Body.safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid publish payload.' } });
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'submissionId is required.' } });
       return;
     }
     const sub = partnerSubmissionRepo.getById(parsed.data.submissionId);
@@ -990,17 +977,53 @@ export const partnerController = {
       res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
       return;
     }
+    let extracted;
+    try {
+      extracted = await extractMarketplaceTileData(sub);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Auto-extraction failed.';
+      res.status(500).json({ error: { code: 'EXTRACT_FAILED', message: msg } });
+      return;
+    }
     const listing = marketplaceListingRepo.upsert({
       submissionId:   sub.id,
       customerKeyId:  keyRow.id,
       customerName:   sub.customerName,
-      logoPath:       parsed.data.logoPath ?? null,
-      description:    parsed.data.description ?? '',
-      sector:         parsed.data.sector ?? 'Other',
-      askAmountText:  parsed.data.askAmountText ?? '',
-      kpis:           (parsed.data.kpis ?? {}) as MarketplaceListingKpis,
+      logoPath:       null,
+      description:    extracted.description,
+      sector:         extracted.sector,
+      askAmountText:  extracted.askAmountText,
+      kpis:           extracted.kpis,
     });
     res.status(201).json({ listing });
+  },
+
+  /**
+   * GET /api/customer/me/marketplace-preview?submissionId=...
+   * Header: X-Customer-Key
+   * Returns the would-be tile fields without publishing — drives the
+   * preview shown in the Partner area before the customer clicks Publish.
+   */
+  async customerPreviewListing(req: Request, res: Response): Promise<void> {
+    const keyRow = resolveCustomerKey(req);
+    if (!keyRow) { send401(res, 'Missing or invalid customer key.'); return; }
+    const submissionId = String(req.query.submissionId || '').trim();
+    if (!submissionId) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'submissionId is required.' } });
+      return;
+    }
+    const sub = partnerSubmissionRepo.getById(submissionId);
+    if (!sub || sub.customerKeyId !== keyRow.id) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
+      return;
+    }
+    try {
+      const extract = await extractMarketplaceTileData(sub);
+      res.json({ extract });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Auto-extraction failed.';
+      res.status(500).json({ error: { code: 'EXTRACT_FAILED', message: msg } });
+    }
   },
 
   /**

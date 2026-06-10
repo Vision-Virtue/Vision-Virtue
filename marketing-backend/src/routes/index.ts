@@ -157,9 +157,22 @@ router.get('/investor/marketplace/listings',     (req, res) => partnerController
 router.get('/investor/marketplace/listings/:id', (req, res) => partnerController.investorGetListing(req, res));
 
 // Investors Marketplace — customer publish / withdraw (gated by X-Customer-Key)
-router.post(  '/customer/me/marketplace-listings',              (req, res) => partnerController.customerPublishListing(req, res));
-router.get(   '/customer/me/marketplace-listings',              (req, res) => partnerController.customerListMyListings(req, res));
-router.post(  '/customer/me/marketplace-listings/:id/withdraw', (req, res) => partnerController.customerWithdrawListing(req, res));
+router.post(
+  '/customer/me/marketplace-listings',
+  asyncHandler(async (req, res) => { await partnerController.customerPublishListing(req, res); }),
+);
+router.get('/customer/me/marketplace-listings', (req, res) => partnerController.customerListMyListings(req, res));
+router.post(
+  '/customer/me/marketplace-listings/:id/withdraw',
+  (req, res) => partnerController.customerWithdrawListing(req, res),
+);
+
+// Investors Marketplace — preview the auto-extracted tile fields without
+// publishing. Drives the Partner-area preview before the customer clicks Publish.
+router.get(
+  '/customer/me/marketplace-preview',
+  asyncHandler(async (req, res) => { await partnerController.customerPreviewListing(req, res); }),
+);
 
 // Investors Marketplace — Customer uploads the view-only investor deck PDF
 // (raw body, application/pdf only). Gated by X-Customer-Key.
