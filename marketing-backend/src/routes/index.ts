@@ -152,6 +152,15 @@ router.post('/customer/auth', (req, res) => partnerController.auth(req, res));
 // /customer/auth but checked against the investor_keys table.
 router.post('/investor/auth', (req, res) => partnerController.investorAuth(req, res));
 
+// Investors Marketplace — listings (investor-facing, gated by X-Investor-Key)
+router.get('/investor/marketplace/listings',     (req, res) => partnerController.investorListListings(req, res));
+router.get('/investor/marketplace/listings/:id', (req, res) => partnerController.investorGetListing(req, res));
+
+// Investors Marketplace — customer publish / withdraw (gated by X-Customer-Key)
+router.post(  '/customer/me/marketplace-listings',              (req, res) => partnerController.customerPublishListing(req, res));
+router.get(   '/customer/me/marketplace-listings',              (req, res) => partnerController.customerListMyListings(req, res));
+router.post(  '/customer/me/marketplace-listings/:id/withdraw', (req, res) => partnerController.customerWithdrawListing(req, res));
+
 // Investor-deck placeholder schema — used by the customer questionnaire UI
 // to render the deck-specific sections. Single source of truth shared with
 // the xlsx writer.

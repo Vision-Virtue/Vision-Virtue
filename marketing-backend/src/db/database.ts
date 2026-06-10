@@ -97,6 +97,31 @@ function initializeSchema(database: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_investor_keys_key ON investor_keys(key);
 
+    -- Investors Marketplace — one listing per partner submission. Created when
+    -- the customer opts in via the 'To Investors Marketplace!' button on their
+    -- Partner area; can be retracted via 'Pull submission'.
+    CREATE TABLE IF NOT EXISTS marketplace_listings (
+      id                   TEXT PRIMARY KEY,
+      submission_id        TEXT NOT NULL UNIQUE,
+      customer_key_id      TEXT NOT NULL,
+      customer_name        TEXT NOT NULL DEFAULT '',
+      logo_path            TEXT,
+      description          TEXT NOT NULL DEFAULT '',
+      sector               TEXT NOT NULL DEFAULT 'Other',
+      ask_amount_text      TEXT NOT NULL DEFAULT '',
+      -- KPIs as JSON: { gmPctY1, gmPctY5, arrY1, arrY5, topLineY1, topLineY5, ebitdaY5, nrr }
+      kpis                 TEXT NOT NULL DEFAULT '{}',
+      published_at         TEXT NOT NULL,
+      withdrawn_at         TEXT,
+      status               TEXT NOT NULL DEFAULT 'active',
+      FOREIGN KEY (submission_id)   REFERENCES partner_submissions(id) ON DELETE CASCADE,
+      FOREIGN KEY (customer_key_id) REFERENCES customer_keys(id)       ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_marketplace_status   ON marketplace_listings(status);
+    CREATE INDEX IF NOT EXISTS idx_marketplace_customer ON marketplace_listings(customer_key_id);
+    CREATE INDEX IF NOT EXISTS idx_marketplace_submission ON marketplace_listings(submission_id);
+
     CREATE TABLE IF NOT EXISTS partner_submissions (
       id                   TEXT PRIMARY KEY,
       customer_key_id      TEXT,

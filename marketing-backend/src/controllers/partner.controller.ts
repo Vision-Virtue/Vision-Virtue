@@ -7,7 +7,11 @@
 
 import { Request, Response } from 'express';
 import path from 'path';
-import { customerKeyRepo, partnerSubmissionRepo, CustomerKeyRow, investorKeyRepo } from '../db/partner.repository';
+import {
+  customerKeyRepo, partnerSubmissionRepo, CustomerKeyRow,
+  investorKeyRepo, InvestorKeyRow,
+  marketplaceListingRepo, MarketplaceListingKpis,
+} from '../db/partner.repository';
 import { generateFinalizedXlsx, resolveStoredXlsx, storeUploadedXlsx } from '../services/partner-xlsx.service';
 import {
   storeAsset, resolveAsset, contentTypeForFilename, MAX_ASSET_BYTES,
@@ -61,9 +65,22 @@ function resolveCustomerKey(req: Request): CustomerKeyRow | null {
   return customerKeyRepo.findByKey(headerKey.trim());
 }
 
+/** Same shape as resolveCustomerKey, but for the investor key (X-Investor-Key). */
+function resolveInvestorKey(req: Request): InvestorKeyRow | null {
+  const headerKey = req.header('x-investor-key');
+  if (!headerKey) return null;
+  return investorKeyRepo.findByKey(headerKey.trim());
+}
+
 function send401(res: Response, message: string): void {
   res.status(401).json({
     error: { code: 'CUSTOMER_KEY_INVALID', message },
+  });
+}
+
+function send401Investor(res: Response, message: string): void {
+  res.status(401).json({
+    error: { code: 'INVESTOR_KEY_INVALID', message },
   });
 }
 
@@ -921,6 +938,125 @@ export const partnerController = {
     }
     investorKeyRepo.revoke(id);
     res.json({ ok: true });
+  },
+
+  // ────────────────────────────────────────────────────────────────────────────
+  // Investors Marketplace — Listings (Phase 2)
+  // Customer side: publish / withdraw their submission to the marketplace.
+  // Investor side: list active tiles, fetch a tile detail.
+  // ────────────────────────────────────────────────────────────────────────────
+
+  /**
+   * POST /api/customer/me/marketplace-listings
+   * Header: X-Customer-Key
+   * Body: { submissionId, logoPath?, description?, sector?, askAmountText?, kpis? }
+   *
+   * Publishes (or republishes) the customer's submission to the Investors
+   * Marketplace. The submission must belong to this customer key. One listing
+   * per submission.
+   */
+  customerPublishListing(req: Request, res: Response): void {
+    const keyRow = resolveCustomerKey(req);
+    if (!keyRow) { send401(res, 'Missing or invalid customer key.'); return; }
+    const Body = z.object({
+      submissionId:   z.string().trim().min(1),
+      logoPath:       z.string().trim().max(500).nullable().optional(),
+      description:    z.string().trim().max(600).optional(),
+      sector:         z.string().trim().max(80).optional(),
+      askAmountText:  z.string().trim().max(40).optional(),
+      kpis: z.object({
+        gmPctY1:    z.union([z.number(), z.string()]).optional(),
+        gmPctY5:    z.union([z.number(), z.string()]).optional(),
+        arrY1:      z.union([z.number(), z.string()]).optional(),
+        arrY5:      z.union([z.number(), z.string()]).optional(),
+        topLineY1:  z.union([z.number(), z.string()]).optional(),
+        topLineY5:  z.union([z.number(), z.string()]).optional(),
+        ebitdaY5:   z.union([z.number(), z.string()]).optional(),
+        nrr:        z.union([z.number(), z.string()]).optional(),
+      }).optional(),
+    });
+    const parsed = Body.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid publish payload.' } });
+      return;
+    }
+    const sub = partnerSubmissionRepo.getById(parsed.data.submissionId);
+    if (!sub || sub.customerKeyId !== keyRow.id) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
+      return;
+    }
+    const listing = marketplaceListingRepo.upsert({
+      submissionId:   sub.id,
+      customerKeyId:  keyRow.id,
+      customerName:   sub.customerName,
+      logoPath:       parsed.data.logoPath ?? null,
+      description:    parsed.data.description ?? '',
+      sector:         parsed.data.sector ?? 'Other',
+      askAmountText:  parsed.data.askAmountText ?? '',
+      kpis:           (parsed.data.kpis ?? {}) as MarketplaceListingKpis,
+    });
+    res.status(201).json({ listing });
+  },
+
+  /**
+   * GET /api/customer/me/marketplace-listings
+   * Header: X-Customer-Key
+   * Returns the customer's own listings (active + withdrawn) so the Partner
+   * area can show current status + offer Pull submission.
+   */
+  customerListMyListings(req: Request, res: Response): void {
+    const keyRow = resolveCustomerKey(req);
+    if (!keyRow) { send401(res, 'Missing or invalid customer key.'); return; }
+    const listings = marketplaceListingRepo.listByCustomerKey(keyRow.id);
+    res.json({ listings });
+  },
+
+  /**
+   * POST /api/customer/me/marketplace-listings/:id/withdraw
+   * Header: X-Customer-Key
+   * Pull-submission (item 9 of the spec). Marks the listing as withdrawn so
+   * it disappears from the investor view. Re-publishable later.
+   */
+  customerWithdrawListing(req: Request, res: Response): void {
+    const keyRow = resolveCustomerKey(req);
+    if (!keyRow) { send401(res, 'Missing or invalid customer key.'); return; }
+    const id = String(req.params.id || '').trim();
+    const listing = marketplaceListingRepo.findById(id);
+    if (!listing || listing.customerKeyId !== keyRow.id) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Listing not found.' } });
+      return;
+    }
+    const updated = marketplaceListingRepo.withdraw(id);
+    res.json({ listing: updated });
+  },
+
+  /**
+   * GET /api/investor/marketplace/listings
+   * Header: X-Investor-Key
+   * Returns every active tile for the marketplace grid.
+   */
+  investorListListings(req: Request, res: Response): void {
+    const keyRow = resolveInvestorKey(req);
+    if (!keyRow) { send401Investor(res, 'Missing or invalid investor key.'); return; }
+    const listings = marketplaceListingRepo.listActive();
+    res.json({ listings });
+  },
+
+  /**
+   * GET /api/investor/marketplace/listings/:id
+   * Header: X-Investor-Key
+   * Returns a single active tile's full detail (KPIs, etc.) for the popover.
+   */
+  investorGetListing(req: Request, res: Response): void {
+    const keyRow = resolveInvestorKey(req);
+    if (!keyRow) { send401Investor(res, 'Missing or invalid investor key.'); return; }
+    const id = String(req.params.id || '').trim();
+    const listing = marketplaceListingRepo.findById(id);
+    if (!listing || listing.status !== 'active') {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Listing not available.' } });
+      return;
+    }
+    res.json({ listing });
   },
 
   // ────────────────────────────────────────────────────────────────────────────

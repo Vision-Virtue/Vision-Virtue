@@ -8,22 +8,51 @@
   <link rel="stylesheet" href="styles.css">
   <style>
     body { background: #0a1533; color: #f4f8ff; min-height: 100vh; font-family: 'Inter', system-ui, sans-serif; }
-    .iv-shell { max-width: 1180px; margin: 0 auto; padding: 6rem 1.5rem 4rem; }
-    .iv-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2.5rem; }
+    .iv-shell { max-width: 1280px; margin: 0 auto; padding: 5rem 1.5rem 4rem; }
+    .iv-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2.2rem; gap: 1rem; flex-wrap: wrap; }
     .iv-logo { display: flex; align-items: center; gap: 0.65rem; text-decoration: none; color: inherit; }
     .iv-logo-v { width: 38px; height: 38px; border-radius: 8px; background: linear-gradient(135deg, #40c4c4, #122440); display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 22px; }
     .iv-logo-text { font-size: 0.95rem; letter-spacing: 0.16em; font-weight: 700; }
+    .iv-topbar-right { display: flex; align-items: center; gap: 0.75rem; }
+    .iv-signed-as { color: #c8d7eb; font-size: 0.85rem; }
+    .iv-signed-as strong { color: #f6e7a5; }
     .iv-signout { background: transparent; color: #c8d7eb; border: 1px solid rgba(200, 215, 235, 0.3); border-radius: 999px; padding: 0.45rem 1.05rem; font-size: 0.82rem; cursor: pointer; }
     .iv-signout:hover { background: rgba(255,255,255,0.05); }
     .iv-tag { display: inline-block; background: rgba(64, 196, 196, 0.15); color: #40c4c4; padding: 0.32rem 0.85rem; border-radius: 999px; font-size: 0.72rem; letter-spacing: 0.14em; font-weight: 700; margin-bottom: 1.1rem; }
-    .iv-title { font-size: 2.6rem; font-weight: 700; margin: 0 0 0.7rem; }
-    .iv-sub { color: #c8d7eb; font-size: 1.05rem; max-width: 720px; line-height: 1.55; margin: 0 0 3rem; }
-    .iv-welcome { color: #f6e7a5; font-weight: 600; margin-bottom: 0.75rem; font-size: 0.95rem; letter-spacing: 0.05em; }
-    .iv-placeholder { background: rgba(255,255,255,0.04); border: 1px dashed rgba(200, 215, 235, 0.25); border-radius: 16px; padding: 3rem 2rem; text-align: center; }
-    .iv-placeholder-title { font-size: 1.25rem; font-weight: 600; margin: 0 0 0.6rem; }
-    .iv-placeholder-body { color: #c8d7eb; line-height: 1.6; max-width: 640px; margin: 0 auto; }
-    .iv-placeholder-list { text-align: left; max-width: 540px; margin: 1.5rem auto 0; padding-left: 1.2rem; color: #c8d7eb; line-height: 1.8; }
-    .iv-placeholder-list li::marker { color: #40c4c4; }
+    .iv-title { font-size: 2.45rem; font-weight: 700; margin: 0 0 0.7rem; }
+    .iv-sub { color: #c8d7eb; font-size: 1.02rem; max-width: 760px; line-height: 1.55; margin: 0 0 2.5rem; }
+
+    .iv-toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.4rem; gap: 1rem; flex-wrap: wrap; }
+    .iv-count { font-size: 0.92rem; color: #c8d7eb; }
+    .iv-refresh { background: transparent; color: #40c4c4; border: 1px solid rgba(64, 196, 196, 0.4); border-radius: 8px; padding: 0.45rem 0.95rem; font-size: 0.82rem; cursor: pointer; }
+    .iv-refresh:hover { background: rgba(64, 196, 196, 0.08); }
+
+    .iv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 1.2rem; }
+
+    .iv-tile { position: relative; background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02)); border: 1px solid rgba(200, 215, 235, 0.18); border-radius: 18px; padding: 1.5rem 1.4rem 1.4rem; cursor: pointer; transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease; min-height: 240px; display: flex; flex-direction: column; }
+    .iv-tile:hover { transform: translateY(-3px); border-color: rgba(64, 196, 196, 0.55); box-shadow: 0 12px 30px -10px rgba(64, 196, 196, 0.3); }
+    .iv-tile-logo { width: 58px; height: 58px; border-radius: 10px; background: rgba(255,255,255,0.08); display: grid; place-items: center; margin-bottom: 1rem; color: #40c4c4; font-weight: 800; font-size: 1.4rem; overflow: hidden; }
+    .iv-tile-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+    .iv-tile-name { font-size: 1.45rem; font-weight: 700; line-height: 1.15; margin: 0 0 0.5rem; color: #fff; }
+    .iv-tile-desc { color: #c8d7eb; font-size: 0.9rem; line-height: 1.5; margin: 0 0 1.1rem; flex: 1; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    .iv-tile-meta { display: flex; justify-content: space-between; align-items: center; gap: 0.6rem; padding-top: 0.9rem; border-top: 1px solid rgba(200, 215, 235, 0.12); }
+    .iv-tile-sector { font-size: 0.7rem; letter-spacing: 0.1em; font-weight: 600; color: #40c4c4; padding: 0.28rem 0.7rem; background: rgba(64, 196, 196, 0.12); border-radius: 999px; }
+    .iv-tile-ask { font-size: 0.92rem; font-weight: 700; color: #f6e7a5; }
+
+    .iv-empty { text-align: center; padding: 4rem 1rem; color: #c8d7eb; border: 1px dashed rgba(200, 215, 235, 0.18); border-radius: 16px; }
+    .iv-empty h3 { color: #fff; margin: 0 0 0.6rem; }
+
+    /* KPI hover popover */
+    .iv-kpi-pop { position: absolute; left: 50%; transform: translateX(-50%); bottom: calc(100% + 12px); background: #122440; border: 1px solid rgba(64, 196, 196, 0.45); border-radius: 14px; padding: 1rem 1.1rem; min-width: 280px; box-shadow: 0 18px 40px -12px rgba(0,0,0,0.6); z-index: 10; opacity: 0; pointer-events: none; transition: opacity 0.15s ease; }
+    .iv-tile:hover .iv-kpi-pop { opacity: 1; }
+    .iv-kpi-pop::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 7px solid transparent; border-top-color: #122440; }
+    .iv-kpi-row { display: grid; grid-template-columns: auto 1fr auto auto 1fr; gap: 0.4rem 0.5rem; align-items: center; font-size: 0.78rem; margin-bottom: 0.4rem; }
+    .iv-kpi-label { color: #c8d7eb; }
+    .iv-kpi-val { color: #fff; font-weight: 700; text-align: right; }
+    .iv-kpi-arrow { color: #c8d7eb; font-weight: 700; padding: 0 0.15rem; position: relative; }
+    .iv-kpi-cagr { position: absolute; left: 50%; transform: translateX(-50%); bottom: 100%; font-size: 0.66rem; color: #5fe6a4; font-weight: 700; white-space: nowrap; }
+    .iv-kpi-single { display: flex; justify-content: space-between; font-size: 0.78rem; margin-bottom: 0.35rem; }
+    .iv-kpi-divider { height: 1px; background: rgba(200,215,235,0.15); margin: 0.55rem 0; }
   </style>
 </head>
 <body>
@@ -33,37 +62,36 @@
         <span class="iv-logo-v">V</span>
         <span class="iv-logo-text">VISION &amp; VIRTUE</span>
       </a>
-      <button type="button" class="iv-signout" id="ivSignOut">Sign out</button>
+      <div class="iv-topbar-right">
+        <span class="iv-signed-as" id="ivSignedAs"></span>
+        <button type="button" class="iv-signout" id="ivSignOut">Sign out</button>
+      </div>
     </div>
 
-    <div class="iv-welcome" id="ivWelcome"></div>
     <span class="iv-tag">Investors Marketplace</span>
-    <h1 class="iv-title">Browse Vision's Customers Raising Capital</h1>
-    <p class="iv-sub">Vision &amp; Virtue's Partner customers have opted in to share their investor materials with verified VCs, PEs and family offices. Browse tiles below, request access to a deck, and sign the standard NDA inline.</p>
+    <h1 class="iv-title">Vision's Customers Raising Capital</h1>
+    <p class="iv-sub">Browse Vision &amp; Virtue's Partner customers. Each tile carries the company's structured snapshot. Click a tile to sign the standard NDA and view the investor deck.</p>
 
-    <div class="iv-placeholder">
-      <h2 class="iv-placeholder-title">Customer tiles coming online soon</h2>
-      <p class="iv-placeholder-body">You're authenticated. The marketplace shell is live and ready — customer tiles, hover KPIs, deck viewer, and the NDA flow ship in the next phase.</p>
-      <ul class="iv-placeholder-list">
-        <li>Customer name, logo, sector and ask amount on every tile</li>
-        <li>Hover preview: GM% YR1→YR5, ARR YR1→YR5, Top-Line YR1→YR5 with CAGR, Adjusted EBITDA YR5, NRR</li>
-        <li>Click → NDA (V&amp;V standard), then view the investor deck (no download)</li>
-      </ul>
+    <div class="iv-toolbar">
+      <span class="iv-count" id="ivCount">Loading…</span>
+      <button type="button" class="iv-refresh" id="ivRefresh">↻ Refresh</button>
     </div>
+
+    <div class="iv-grid" id="ivGrid"></div>
   </div>
 
   <script>
+    const IV_BACKEND = 'https://vv-marketing-api.onrender.com';
+
+    function ivKey()  { return sessionStorage.getItem('vv_investor_key')  || ''; }
+    function ivName() { return sessionStorage.getItem('vv_investor_name') || ''; }
+
     (function gateInvestorPage() {
       const authed = sessionStorage.getItem('vv_investor_auth') === '1';
-      const key    = sessionStorage.getItem('vv_investor_key') || '';
-      if (!authed || !key) {
-        window.location.replace('index.html');
-        return;
-      }
-      const name = sessionStorage.getItem('vv_investor_name') || '';
-      const welcome = document.getElementById('ivWelcome');
-      if (welcome && name) welcome.textContent = `Welcome, ${name}`;
-
+      const key    = ivKey();
+      if (!authed || !key) { window.location.replace('index.html'); return; }
+      const el = document.getElementById('ivSignedAs');
+      if (el && ivName()) el.innerHTML = 'Signed in as <strong>' + escHtml(ivName()) + '</strong>';
       document.getElementById('ivSignOut').addEventListener('click', () => {
         sessionStorage.removeItem('vv_investor_auth');
         sessionStorage.removeItem('vv_investor_key');
@@ -71,6 +99,108 @@
         window.location.href = 'index.html';
       });
     })();
+
+    function escHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+
+    function fmt(v) {
+      if (v === null || v === undefined || v === '') return '—';
+      return String(v);
+    }
+
+    function logoInitial(name) {
+      const t = String(name || '').trim();
+      return t ? t.charAt(0).toUpperCase() : 'V';
+    }
+
+    async function fetchListings() {
+      try {
+        const res = await fetch(IV_BACKEND + '/api/investor/marketplace/listings', {
+          headers: { 'X-Investor-Key': ivKey() },
+        });
+        if (res.status === 401) {
+          sessionStorage.clear();
+          window.location.replace('index.html');
+          return [];
+        }
+        if (!res.ok) return [];
+        const data = await res.json();
+        return Array.isArray(data.listings) ? data.listings : [];
+      } catch { return []; }
+    }
+
+    function renderKpiPop(k) {
+      k = k || {};
+      const pair = (lbl, a, b) =>
+        `<span class="iv-kpi-label">${lbl}</span>
+         <span class="iv-kpi-val">${fmt(a)}</span>
+         <span class="iv-kpi-arrow">→</span>
+         <span class="iv-kpi-val">${fmt(b)}</span>
+         <span></span>`;
+      return `
+        <div class="iv-kpi-pop">
+          <div class="iv-kpi-row">${pair('GM %', k.gmPctY1, k.gmPctY5)}</div>
+          <div class="iv-kpi-row">${pair('ARR', k.arrY1, k.arrY5)}</div>
+          <div class="iv-kpi-row">${pair('Top-Line', k.topLineY1, k.topLineY5)}</div>
+          <div class="iv-kpi-divider"></div>
+          <div class="iv-kpi-single"><span class="iv-kpi-label">Adjusted EBITDA YR5</span><span class="iv-kpi-val">${fmt(k.ebitdaY5)}</span></div>
+          <div class="iv-kpi-single"><span class="iv-kpi-label">NRR</span><span class="iv-kpi-val">${fmt(k.nrr)}</span></div>
+        </div>
+      `;
+    }
+
+    function renderTile(listing) {
+      const logoHtml = listing.logoPath
+        ? `<img src="${escHtml(listing.logoPath)}" alt="${escHtml(listing.customerName)} logo">`
+        : escHtml(logoInitial(listing.customerName));
+      return `
+        <div class="iv-tile" data-listing-id="${escHtml(listing.id)}" tabindex="0" role="button">
+          <div class="iv-tile-logo">${logoHtml}</div>
+          <h3 class="iv-tile-name">${escHtml(listing.customerName)}</h3>
+          <p class="iv-tile-desc">${escHtml(listing.description || 'Vision Partner customer — investor materials available after NDA.')}</p>
+          <div class="iv-tile-meta">
+            <span class="iv-tile-sector">${escHtml(listing.sector || 'Other')}</span>
+            <span class="iv-tile-ask">${escHtml(listing.askAmountText || '')}</span>
+          </div>
+          ${renderKpiPop(listing.kpis)}
+        </div>
+      `;
+    }
+
+    async function loadMarketplace() {
+      const grid    = document.getElementById('ivGrid');
+      const countEl = document.getElementById('ivCount');
+      grid.innerHTML = '';
+      countEl.textContent = 'Loading…';
+      const listings = await fetchListings();
+      if (!listings.length) {
+        countEl.textContent = '0 listings';
+        grid.innerHTML = `
+          <div class="iv-empty" style="grid-column:1/-1">
+            <h3>No listings yet</h3>
+            <p>Partner customers haven't published their tiles yet. Check back soon.</p>
+          </div>`;
+        return;
+      }
+      countEl.textContent = listings.length + ' listing' + (listings.length === 1 ? '' : 's');
+      grid.innerHTML = listings.map(renderTile).join('');
+
+      // Tile click → Phase 3 will open NDA modal. For now show a friendly note.
+      grid.querySelectorAll('.iv-tile').forEach(el => {
+        el.addEventListener('click', () => {
+          alert('NDA + deck viewer is being assembled. After signing the standard NDA, the company\'s investor deck will open here for review.');
+        });
+        el.addEventListener('keydown', (ev) => {
+          if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); el.click(); }
+        });
+      });
+    }
+
+    document.getElementById('ivRefresh').addEventListener('click', loadMarketplace);
+    loadMarketplace();
   </script>
 </body>
 </html>

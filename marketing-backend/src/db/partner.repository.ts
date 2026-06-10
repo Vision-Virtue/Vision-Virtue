@@ -159,6 +159,180 @@ export const investorKeyRepo = {
   },
 };
 
+// ─── Investors Marketplace — Listings ─────────────────────────────────────────
+
+export interface MarketplaceListingKpis {
+  gmPctY1?: number | string;
+  gmPctY5?: number | string;
+  arrY1?: number | string;
+  arrY5?: number | string;
+  topLineY1?: number | string;
+  topLineY5?: number | string;
+  ebitdaY5?: number | string;
+  nrr?: number | string;
+}
+
+export interface MarketplaceListingRow {
+  id: string;
+  submission_id: string;
+  customer_key_id: string;
+  customer_name: string;
+  logo_path: string | null;
+  description: string;
+  sector: string;
+  ask_amount_text: string;
+  kpis: string; // JSON
+  published_at: string;
+  withdrawn_at: string | null;
+  status: 'active' | 'withdrawn';
+}
+
+export interface MarketplaceListing {
+  id: string;
+  submissionId: string;
+  customerKeyId: string;
+  customerName: string;
+  logoPath: string | null;
+  description: string;
+  sector: string;
+  askAmountText: string;
+  kpis: MarketplaceListingKpis;
+  publishedAt: string;
+  withdrawnAt: string | null;
+  status: 'active' | 'withdrawn';
+}
+
+function rowToListing(row: MarketplaceListingRow): MarketplaceListing {
+  let kpis: MarketplaceListingKpis = {};
+  try { kpis = JSON.parse(row.kpis); } catch { kpis = {}; }
+  return {
+    id: row.id,
+    submissionId: row.submission_id,
+    customerKeyId: row.customer_key_id,
+    customerName: row.customer_name,
+    logoPath: row.logo_path,
+    description: row.description,
+    sector: row.sector,
+    askAmountText: row.ask_amount_text,
+    kpis,
+    publishedAt: row.published_at,
+    withdrawnAt: row.withdrawn_at,
+    status: row.status,
+  };
+}
+
+export interface UpsertListingInput {
+  submissionId: string;
+  customerKeyId: string;
+  customerName: string;
+  logoPath?: string | null;
+  description?: string;
+  sector?: string;
+  askAmountText?: string;
+  kpis?: MarketplaceListingKpis;
+}
+
+export const marketplaceListingRepo = {
+  findById(id: string): MarketplaceListing | null {
+    const row = getDb()
+      .prepare('SELECT * FROM marketplace_listings WHERE id = ?')
+      .get(id) as MarketplaceListingRow | undefined;
+    return row ? rowToListing(row) : null;
+  },
+
+  findBySubmissionId(submissionId: string): MarketplaceListing | null {
+    const row = getDb()
+      .prepare('SELECT * FROM marketplace_listings WHERE submission_id = ?')
+      .get(submissionId) as MarketplaceListingRow | undefined;
+    return row ? rowToListing(row) : null;
+  },
+
+  /**
+   * Publish (insert) or republish (update + reactivate) a listing for the
+   * given submission. One submission can only ever have one listing row.
+   */
+  upsert(input: UpsertListingInput): MarketplaceListing {
+    const now = new Date().toISOString();
+    const kpisJson = JSON.stringify(input.kpis ?? {});
+    const existing = this.findBySubmissionId(input.submissionId);
+    if (existing) {
+      getDb()
+        .prepare(
+          `UPDATE marketplace_listings
+             SET customer_name = ?, logo_path = ?, description = ?, sector = ?,
+                 ask_amount_text = ?, kpis = ?,
+                 published_at = ?, withdrawn_at = NULL, status = 'active'
+             WHERE id = ?`,
+        )
+        .run(
+          input.customerName,
+          input.logoPath ?? null,
+          input.description ?? '',
+          input.sector ?? 'Other',
+          input.askAmountText ?? '',
+          kpisJson,
+          now,
+          existing.id,
+        );
+      return this.findById(existing.id) as MarketplaceListing;
+    }
+    const id = uuidv4();
+    getDb()
+      .prepare(
+        `INSERT INTO marketplace_listings
+           (id, submission_id, customer_key_id, customer_name, logo_path, description,
+            sector, ask_amount_text, kpis, published_at, status)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')`,
+      )
+      .run(
+        id,
+        input.submissionId,
+        input.customerKeyId,
+        input.customerName,
+        input.logoPath ?? null,
+        input.description ?? '',
+        input.sector ?? 'Other',
+        input.askAmountText ?? '',
+        kpisJson,
+        now,
+      );
+    return this.findById(id) as MarketplaceListing;
+  },
+
+  /** Mark a listing as withdrawn (Pull submission). Reversible by re-publishing. */
+  withdraw(id: string): MarketplaceListing | null {
+    const now = new Date().toISOString();
+    getDb()
+      .prepare(
+        `UPDATE marketplace_listings
+           SET status = 'withdrawn', withdrawn_at = ?
+           WHERE id = ?`,
+      )
+      .run(now, id);
+    return this.findById(id);
+  },
+
+  /** All active listings, newest first (investor-facing view). */
+  listActive(): MarketplaceListing[] {
+    const rows = getDb()
+      .prepare(
+        "SELECT * FROM marketplace_listings WHERE status = 'active' ORDER BY published_at DESC",
+      )
+      .all() as MarketplaceListingRow[];
+    return rows.map(rowToListing);
+  },
+
+  /** All listings (active + withdrawn) for a given customer key. */
+  listByCustomerKey(customerKeyId: string): MarketplaceListing[] {
+    const rows = getDb()
+      .prepare(
+        'SELECT * FROM marketplace_listings WHERE customer_key_id = ? ORDER BY published_at DESC',
+      )
+      .all(customerKeyId) as MarketplaceListingRow[];
+    return rows.map(rowToListing);
+  },
+};
+
 // ─── Partner Submissions ──────────────────────────────────────────────────────
 
 function rowToSubmission(row: PartnerSubmissionRow): PartnerSubmission {
