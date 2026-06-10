@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agreements — Vision & Virtue</title>
+  <link rel="icon" href="favicon.ico">
+  <link rel="stylesheet" href="styles.css">
+  <style>
+    body { background: #0a1533; color: #f4f8ff; min-height: 100vh; font-family: 'Inter', system-ui, sans-serif; }
+    .ag-shell { max-width: 1200px; margin: 0 auto; padding: 5rem 1.5rem 4rem; }
+    .ag-topbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 2.2rem; gap: 1rem; flex-wrap: wrap; }
+    .ag-logo { display: flex; align-items: center; gap: 0.65rem; text-decoration: none; color: inherit; }
+    .ag-logo-v { width: 38px; height: 38px; border-radius: 8px; background: linear-gradient(135deg, #40c4c4, #122440); display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 22px; }
+    .ag-logo-text { font-size: 0.95rem; letter-spacing: 0.16em; font-weight: 700; }
+    .ag-back { background: transparent; color: #c8d7eb; border: 1px solid rgba(200, 215, 235, 0.3); border-radius: 999px; padding: 0.45rem 1.05rem; font-size: 0.82rem; cursor: pointer; text-decoration: none; }
+    .ag-back:hover { background: rgba(255,255,255,0.05); }
+    .ag-tag { display: inline-block; background: rgba(64, 196, 196, 0.15); color: #40c4c4; padding: 0.32rem 0.85rem; border-radius: 999px; font-size: 0.72rem; letter-spacing: 0.14em; font-weight: 700; margin-bottom: 1.1rem; }
+    .ag-title { font-size: 2.4rem; font-weight: 700; margin: 0 0 0.65rem; }
+    .ag-sub { color: #c8d7eb; font-size: 1.0rem; max-width: 720px; line-height: 1.55; margin: 0 0 2rem; }
+    .ag-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.2rem; flex-wrap: wrap; }
+    .ag-count { color: #c8d7eb; font-size: 0.92rem; }
+    .ag-refresh { background: transparent; color: #40c4c4; border: 1px solid rgba(64, 196, 196, 0.4); border-radius: 8px; padding: 0.45rem 0.95rem; font-size: 0.82rem; cursor: pointer; }
+    .ag-refresh:hover { background: rgba(64, 196, 196, 0.08); }
+
+    .ag-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 1.2rem; }
+    .ag-card { background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02)); border: 1px solid rgba(200, 215, 235, 0.18); border-radius: 16px; padding: 1.3rem 1.3rem 1.2rem; display: flex; flex-direction: column; gap: 0.55rem; }
+    .ag-card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 0.5rem; }
+    .ag-icon { width: 42px; height: 42px; border-radius: 9px; background: rgba(64,196,196,0.13); color: #40c4c4; display: grid; place-items: center; flex-shrink: 0; }
+    .ag-investor { font-size: 1.15rem; font-weight: 700; color: #fff; line-height: 1.2; margin: 0; }
+    .ag-customer { font-size: 0.85rem; color: #c8d7eb; margin: 0.1rem 0 0; }
+    .ag-meta { display: grid; grid-template-columns: auto 1fr; gap: 0.35rem 0.9rem; margin-top: 0.5rem; font-size: 0.82rem; }
+    .ag-meta-label { color: #8d9bb5; }
+    .ag-meta-val { color: #f4f8ff; font-weight: 500; }
+    .ag-actions { display: flex; gap: 0.5rem; margin-top: 0.7rem; padding-top: 0.7rem; border-top: 1px solid rgba(200,215,235,0.12); flex-wrap: wrap; }
+    .ag-btn { flex: 1; padding: 0.5rem 0.7rem; border-radius: 8px; border: none; cursor: pointer; font-size: 0.84rem; font-weight: 600; text-align: center; text-decoration: none; }
+    .ag-btn-download { background: linear-gradient(135deg, #40c4c4, #2a9b9b); color: #08182f; }
+    .ag-btn-delete { background: rgba(255,80,80,0.12); color: #ff9aa2; border: 1px solid rgba(255,80,80,0.35); }
+    .ag-btn-delete:hover { background: rgba(255,80,80,0.22); }
+
+    .ag-empty { text-align: center; padding: 4rem 1rem; border: 1px dashed rgba(200,215,235,0.2); border-radius: 16px; color: #c8d7eb; grid-column: 1 / -1; }
+    .ag-empty h3 { color: #fff; margin: 0 0 0.5rem; }
+    .ag-error { background: rgba(255,80,80,0.1); border: 1px solid rgba(255,80,80,0.4); border-radius: 10px; padding: 0.8rem 1rem; color: #ff9aa2; margin-bottom: 1rem; }
+  </style>
+</head>
+<body>
+  <div class="ag-shell">
+    <div class="ag-topbar">
+      <a href="index.html" class="ag-logo">
+        <span class="ag-logo-v">V</span>
+        <span class="ag-logo-text">VISION &amp; VIRTUE</span>
+      </a>
+      <a href="index.html" class="ag-back">← Back to main site</a>
+    </div>
+
+    <span class="ag-tag">Authorized Personnel · Agreements</span>
+    <h1 class="ag-title">Signed NDAs</h1>
+    <p class="ag-sub">Every NDA signed by a VC, PE or other investor against an Investors Marketplace tile. Download the populated NDA PDF (master + signature counterpart) or delete the record.</p>
+
+    <div class="ag-toolbar">
+      <span class="ag-count" id="agCount">Loading…</span>
+      <button type="button" class="ag-refresh" id="agRefresh">↻ Refresh</button>
+    </div>
+
+    <div id="agError" class="ag-error" hidden></div>
+    <div class="ag-grid" id="agGrid"></div>
+  </div>
+
+  <script>
+    const AG_BACKEND = 'https://vv-marketing-api.onrender.com';
+
+    if (sessionStorage.getItem('vv_auth') !== '1' || !sessionStorage.getItem('vv_admin_pin')) {
+      window.location.replace('index.html');
+    }
+    function adminPin() { return sessionStorage.getItem('vv_admin_pin') || ''; }
+    function adminUrl(p) { const sep = p.includes('?') ? '&' : '?'; return AG_BACKEND + p + sep + 'pin=' + encodeURIComponent(adminPin()); }
+    function escHtml(s) {
+      return String(s == null ? '' : s)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+        .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+    }
+    function fmtDateTime(iso) {
+      try {
+        const d = new Date(iso);
+        return d.toLocaleString();
+      } catch { return iso || ''; }
+    }
+    function showError(msg) {
+      const el = document.getElementById('agError');
+      el.textContent = msg;
+      el.hidden = !msg;
+    }
+
+    async function fetchSignatures() {
+      try {
+        const res = await fetch(adminUrl('/api/admin/nda-signatures'), {
+          headers: { 'X-Admin-Pin': adminPin() },
+        });
+        if (res.status === 401 || res.status === 403) {
+          sessionStorage.clear();
+          window.location.replace('index.html');
+          return [];
+        }
+        if (!res.ok) { showError('Failed to load (HTTP ' + res.status + ').'); return []; }
+        const data = await res.json();
+        return Array.isArray(data.signatures) ? data.signatures : [];
+      } catch (err) {
+        showError('Network error.');
+        return [];
+      }
+    }
+
+    function renderCard(s) {
+      return '' +
+        '<div class="ag-card" data-id="' + escHtml(s.id) + '">' +
+          '<div class="ag-card-head">' +
+            '<div>' +
+              '<h3 class="ag-investor">' + escHtml(s.fundName) + '</h3>' +
+              '<p class="ag-customer">on ' + escHtml(s.customerName || '—') + ' (V&amp;V customer)</p>' +
+            '</div>' +
+            '<div class="ag-icon" aria-hidden="true">' +
+              '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' +
+                '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>' +
+                '<polyline points="14,2 14,8 20,8"/>' +
+                '<line x1="9" y1="13" x2="15" y2="13"/>' +
+                '<line x1="9" y1="17" x2="15" y2="17"/>' +
+              '</svg>' +
+            '</div>' +
+          '</div>' +
+          '<div class="ag-meta">' +
+            '<span class="ag-meta-label">Signatory</span>     <span class="ag-meta-val">' + escHtml(s.fullName) + ', ' + escHtml(s.title) + '</span>' +
+            '<span class="ag-meta-label">Email</span>         <span class="ag-meta-val">' + escHtml(s.businessEmail) + '</span>' +
+            '<span class="ag-meta-label">Date signed</span>   <span class="ag-meta-val">' + escHtml(s.signDate) + '</span>' +
+            '<span class="ag-meta-label">Signed at</span>     <span class="ag-meta-val">' + escHtml(fmtDateTime(s.signedAt)) + '</span>' +
+            '<span class="ag-meta-label">Signature</span>     <span class="ag-meta-val">' + escHtml(s.signatureType) + '</span>' +
+            '<span class="ag-meta-label">Investor key</span>  <span class="ag-meta-val">' + escHtml(s.investorName || s.investorKeyId) + '</span>' +
+          '</div>' +
+          '<div class="ag-actions">' +
+            '<button type="button" class="ag-btn ag-btn-download" data-action="download">⇩ Download NDA</button>' +
+            '<button type="button" class="ag-btn ag-btn-delete"   data-action="delete">Delete</button>' +
+          '</div>' +
+        '</div>';
+    }
+
+    async function downloadNda(id) {
+      try {
+        const res = await fetch(adminUrl('/api/admin/nda-signatures/' + encodeURIComponent(id) + '/pdf'), {
+          headers: { 'X-Admin-Pin': adminPin() },
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error('HTTP ' + res.status + '. ' + text.slice(0,160));
+        }
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'VV_NDA_' + id + '.pdf';
+        document.body.appendChild(a); a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 4000);
+      } catch (err) {
+        alert('Download failed.\n\n' + (err.message || ''));
+      }
+    }
+
+    async function deleteNda(id) {
+      if (!confirm('Delete this NDA record? The investor will need to re-sign to view the deck again.')) return;
+      try {
+        const res = await fetch(adminUrl('/api/admin/nda-signatures/' + encodeURIComponent(id)), {
+          method: 'DELETE',
+          headers: { 'X-Admin-Pin': adminPin() },
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        await load();
+      } catch (err) {
+        alert('Delete failed.\n\n' + (err.message || ''));
+      }
+    }
+
+    async function load() {
+      showError('');
+      const grid    = document.getElementById('agGrid');
+      const countEl = document.getElementById('agCount');
+      grid.innerHTML = '';
+      countEl.textContent = 'Loading…';
+      const rows = await fetchSignatures();
+      if (!rows.length) {
+        countEl.textContent = '0 NDAs';
+        grid.innerHTML = '<div class="ag-empty"><h3>No NDAs yet</h3><p>NDAs will land here as soon as an investor signs against a marketplace tile.</p></div>';
+        return;
+      }
+      countEl.textContent = rows.length + ' signed NDA' + (rows.length === 1 ? '' : 's');
+      grid.innerHTML = rows.map(renderCard).join('');
+      grid.querySelectorAll('.ag-card').forEach(card => {
+        const id = card.getAttribute('data-id');
+        card.querySelector('[data-action="download"]').addEventListener('click', () => downloadNda(id));
+        card.querySelector('[data-action="delete"]')  .addEventListener('click', () => deleteNda(id));
+      });
+    }
+
+    document.getElementById('agRefresh').addEventListener('click', load);
+    load();
+  </script>
+</body>
+</html>
