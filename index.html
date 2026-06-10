@@ -993,6 +993,17 @@
           <span class="offering-cta-text">Already a customer? Press here</span>
         </button>
       </div>
+      <div class="offering-card">
+        <div class="offering-img" style="background-image:url('apart_partner.png')"></div>
+        <div class="offering-body">
+          <h3 class="offering-title">Investors Marketplace</h3>
+          <p class="offering-desc">VCs / PEs / Investors: view Vision's Partner customers raising capital. Browse opportunities, review investor decks, sign NDAs.</p>
+        </div>
+        <button type="button" class="offering-cta" id="investorMarketplaceCta" data-target="investor-marketplace">
+          <span class="offering-cta-dot"></span>
+          <span class="offering-cta-text">Investor? Press here</span>
+        </button>
+      </div>
     </div>
   </section>
 
@@ -1245,6 +1256,24 @@
       </div>
       <button id="ckEnterBtn" class="gate-btn-full ap-enter">Enter</button>
       <p class="gate-error" id="ckError"></p>
+    </div>
+  </div>
+
+  <!-- INVESTOR KEY GATE (Investors Marketplace) -->
+  <div class="ap-overlay" id="ivOverlay" aria-hidden="true">
+    <div class="ap-modal">
+      <button class="ap-close" id="ivClose" aria-label="Close">&#x2715;</button>
+      <div class="gate-logo" style="justify-content:center;margin-bottom:1.5rem">
+        <span class="logo-v">V</span>
+        <span class="logo-text">VISION &amp; VIRTUE</span>
+      </div>
+      <h2 class="gate-title">Investors Marketplace</h2>
+      <p class="gate-sub">Enter your Investor Key to view Vision's customers raising capital.</p>
+      <div style="display:flex;flex-direction:column;gap:0.75rem;margin-bottom:0.5rem">
+        <input type="password" id="ivKey" class="ap-input" placeholder="Investor Key (IV-XXXXXX)" autocomplete="off" />
+      </div>
+      <button id="ivEnterBtn" class="gate-btn-full ap-enter">Enter</button>
+      <p class="gate-error" id="ivError"></p>
     </div>
   </div>
 

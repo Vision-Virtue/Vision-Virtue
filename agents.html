@@ -214,6 +214,19 @@
 
         </div>
 
+        <!-- INVESTORS KEYS (mint new IV-XXXXXX keys for VCs/PEs/Investors) -->
+        <div class="fin-upload-section partner-keys-section">
+          <div class="fin-upload-header">
+            <h3 class="fin-upload-title">Investors Keys</h3>
+            <p class="fin-upload-sub">Generate a one-per-investor access key for the Investors Marketplace. Each key opens the marketplace view where the VC/PE/Investor can browse Vision's customers raising capital under the Partner offering.</p>
+          </div>
+          <form class="partner-keys-form" id="investorKeysForm" autocomplete="off">
+            <input type="text" id="investorKeysInvestorName" class="partner-keys-input" placeholder="Investor / Fund name (e.g. Sequoia Capital)" required maxlength="200">
+            <button type="submit" class="partner-keys-submit" id="investorKeysSubmit">Generate Key</button>
+          </form>
+          <div class="partner-keys-result" id="investorKeysResult" hidden></div>
+        </div>
+
         <!-- CUSTOMER KEYS (mint new VV-XXXXXX keys) -->
         <div class="fin-upload-section partner-keys-section">
           <div class="fin-upload-header">
