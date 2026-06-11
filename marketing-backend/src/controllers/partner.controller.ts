@@ -1124,10 +1124,19 @@ export const partnerController = {
       return;
     }
     const nda = ndaSignatureRepo.findByInvestorAndListing(keyRow.id, listing.id);
+    // A deck is "available" when either:
+    //   • the customer's populated investor-deck PPTX exists on disk (the
+    //     normal post-Phase-6 path — we auto-convert it on demand), OR
+    //   • the listing has a legacy customer-uploaded PDF attached.
+    let pptxOnDisk = false;
+    const sub = partnerSubmissionRepo.getById(listing.submissionId);
+    if (sub) {
+      pptxOnDisk = !!resolveStoredPptx(buildPptxFileName(sub.customerName, sub.id));
+    }
     res.json({
       listing,
       ndaSigned: !!nda,
-      deckAvailable: !!listing.deckPdfPath,
+      deckAvailable: pptxOnDisk || !!listing.deckPdfPath,
     });
   },
 
