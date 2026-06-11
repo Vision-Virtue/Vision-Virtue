@@ -185,9 +185,18 @@ router.post(
 // Investors Marketplace — NDA flow (gated by X-Investor-Key)
 router.post('/investor/nda/sign',    (req, res) => partnerController.investorSignNda(req, res));
 router.get( '/investor/nda/status',  (req, res) => partnerController.investorNdaStatus(req, res));
+// Returns the Office Online Viewer iframe URL for the customer's PPTX.
 router.get(
-  '/investor/marketplace/listings/:id/deck',
-  (req, res) => partnerController.investorViewDeck(req, res),
+  '/investor/marketplace/listings/:id/deck-info',
+  (req, res) => partnerController.investorGetDeckInfo(req, res),
+);
+
+// Public PPTX serving endpoint — gated by an HMAC-signed token, NOT a
+// header. Microsoft Office Online fetches this URL once when loading the
+// iframe; outside the token's TTL (10 min) the URL is dead.
+router.get(
+  '/marketplace/deck-pptx/:token',
+  (req, res) => partnerController.marketplaceServeDeckPptx(req, res),
 );
 
 // Investor-deck placeholder schema — used by the customer questionnaire UI

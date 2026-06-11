@@ -146,7 +146,7 @@
       const statusEl = document.getElementById('dvStatus');
       const iframeEl = document.getElementById('dvPdf');
       try {
-        const res = await fetch(DV_BACKEND + '/api/investor/marketplace/listings/' + encodeURIComponent(listingId) + '/deck', {
+        const res = await fetch(DV_BACKEND + '/api/investor/marketplace/listings/' + encodeURIComponent(listingId) + '/deck-info', {
           headers: { 'X-Investor-Key': ivKey() },
         });
         if (res.status === 401) { sessionStorage.clear(); window.location.replace('index.html'); return; }
@@ -168,11 +168,15 @@
           statusEl.textContent = 'Could not load deck (HTTP ' + res.status + ').';
           return;
         }
-        const blob = await res.blob();
-        const url = URL.createObjectURL(blob);
-        // The #toolbar=0&navpanes=0 fragments tell most browsers to hide the
-        // built-in PDF download/print toolbar.
-        iframeEl.src = url + '#toolbar=0&navpanes=0&statusbar=0&view=FitH';
+        const data = await res.json();
+        if (!data || !data.viewerUrl) {
+          statusEl.textContent = 'Deck viewer not available.';
+          return;
+        }
+        // The Office Online Viewer renders the PPTX in slideshow / presentation
+        // mode inside the iframe. There's no built-in download or edit UI,
+        // which gives us view-only access by default.
+        iframeEl.src = data.viewerUrl;
         iframeEl.hidden = false;
         statusEl.style.display = 'none';
       } catch (err) {

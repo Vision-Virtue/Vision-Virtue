@@ -18,7 +18,7 @@ import {
 } from '../services/marketplace-deck.service';
 import { generatePopulatedNdaPdf } from '../services/nda-pdf-generator.service';
 import { extractMarketplaceTileData } from '../services/marketplace-extractor.service';
-import { getOrBuildAutoDeckPdf, invalidateAutoDeckCache } from '../services/pptx-to-pdf.service';
+import { signDeckToken, verifyDeckToken } from '../services/deck-token.service';
 import { runSystemCheck } from '../services/system-check.service';
 import { generateFinalizedXlsx, resolveStoredXlsx, storeUploadedXlsx } from '../services/partner-xlsx.service';
 import {
@@ -1029,10 +1029,6 @@ export const partnerController = {
       askAmountText:  extracted.askAmountText,
       kpis:           extracted.kpis,
     });
-    // Drop any cached auto-deck PDF — re-publish may mean the source PPTX has
-    // changed (admin regenerated after edits), so the next investor view re-
-    // converts from the freshest PPTX on disk.
-    try { invalidateAutoDeckCache(listing.id); } catch { /* best-effort */ }
     res.status(201).json({ listing });
   },
 
@@ -1263,7 +1259,19 @@ export const partnerController = {
    *   3. Deck PDF actually uploaded
    * Sends X-Content-Type-Options: nosniff and Content-Disposition: inline.
    */
-  async investorViewDeck(req: Request, res: Response): Promise<void> {
+  /**
+   * GET /api/investor/marketplace/listings/:id/deck-info
+   * Header: X-Investor-Key
+   *
+   * Returns the URL the deck-view.html iframe should load. We sign a short-
+   * lived token bound to (listing, investor key) and hand back a Microsoft
+   * Office Online Viewer URL that embeds the PPTX. Office Online fetches
+   * the file from our public deck-pptx endpoint using the signed token;
+   * after the token's TTL, that URL is dead.
+   *
+   * No server-side PPTX → PDF conversion required.
+   */
+  investorGetDeckInfo(req: Request, res: Response): void {
     const keyRow = resolveInvestorKey(req);
     if (!keyRow) { send401Investor(res, 'Missing or invalid investor key.'); return; }
     const id = String(req.params.id || '').trim();
@@ -1277,70 +1285,67 @@ export const partnerController = {
       res.status(403).json({ error: { code: 'NDA_REQUIRED', message: 'Sign the NDA before viewing the deck.' } });
       return;
     }
-
-    const filename = listing.customerName.replace(/[^A-Za-z0-9_-]+/g, '_') + '_deck.pdf';
-
-    // Diagnostic state we accumulate so the 404 response can tell us WHY the
-    // deck is missing (no PPTX vs conversion failed vs no fallback PDF).
-    let pptxAbsPath: string | null = null;
-    let pptxConversionError: string | null = null;
-
     const sub = partnerSubmissionRepo.getById(listing.submissionId);
-    if (sub) {
-      pptxAbsPath = resolveStoredPptx(buildPptxFileName(sub.customerName, sub.id));
-      if (pptxAbsPath) {
-        try {
-          const buf = await getOrBuildAutoDeckPdf({ listingId: listing.id, pptxAbsPath });
-          res.setHeader('Content-Type', 'application/pdf');
-          res.setHeader('Content-Disposition', 'inline; filename="' + filename + '"');
-          res.setHeader('X-Content-Type-Options', 'nosniff');
-          res.setHeader('Cache-Control', 'private, max-age=300');
-          res.end(buf);
-          return;
-        } catch (err) {
-          pptxConversionError = err instanceof Error ? err.message : String(err);
-          console.warn('[deck-view] auto-PPTX→PDF failed for listing ' + listing.id + ':', pptxConversionError);
-        }
-      }
-    }
-
-    // Fallback: customer-uploaded PDF (legacy path / safety net).
-    if (listing.deckPdfPath) {
-      const buf = readDeckPdf(listing.id);
-      if (buf) {
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'inline; filename="' + filename + '"');
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.setHeader('Cache-Control', 'private, max-age=300');
-        res.end(buf);
-        return;
-      }
-    }
-
-    // Build the most diagnostic error message we can manage based on what
-    // we observed above. The frontend surfaces this verbatim to the admin
-    // (and to the investor in a friendly form).
-    let detail: string;
     if (!sub) {
-      detail = 'Submission record not found.';
-    } else if (!pptxAbsPath) {
-      detail = 'The customer\'s investor-deck PPTX has not been generated yet — admin needs to run Generate PPTX in Finance AI.';
-    } else if (pptxConversionError) {
-      detail = 'libreoffice conversion failed: ' + pptxConversionError.slice(0, 240);
-    } else {
-      detail = 'Deck PDF file not found.';
+      res.status(404).json({ error: { code: 'DECK_MISSING', message: 'Submission record not found.' } });
+      return;
     }
-    res.status(404).json({
-      error: {
-        code:   'DECK_MISSING',
-        message: detail,
-        diagnostics: {
-          pptxOnDisk: !!pptxAbsPath,
-          pptxConversionError,
-          hasUploadedPdf: !!listing.deckPdfPath,
+    const pptxAbsPath = resolveStoredPptx(buildPptxFileName(sub.customerName, sub.id));
+    if (!pptxAbsPath) {
+      res.status(404).json({
+        error: {
+          code: 'DECK_MISSING',
+          message: 'The customer\'s investor-deck PPTX has not been generated yet — admin needs to run Generate PPTX in Finance AI.',
         },
-      },
+      });
+      return;
+    }
+
+    const token = signDeckToken({ listingId: listing.id, investorKeyId: keyRow.id });
+    const baseUrl = (process.env.PUBLIC_BACKEND_URL || ('https://' + (req.get('host') || 'vv-marketing-api.onrender.com'))).replace(/\/$/, '');
+    const pptxUrl = baseUrl + '/api/marketplace/deck-pptx/' + token;
+    const viewerUrl = 'https://view.officeapps.live.com/op/embed.aspx?src=' + encodeURIComponent(pptxUrl);
+    res.json({
+      viewerUrl,
+      ttlMs: 10 * 60 * 1000,
+      customerName: listing.customerName,
     });
+  },
+
+  /**
+   * GET /api/marketplace/deck-pptx/:token
+   * No header auth — gated solely by the HMAC-signed token. Microsoft Office
+   * Online Viewer fetches this URL once at iframe load. Outside the token
+   * TTL the URL is dead.
+   */
+  marketplaceServeDeckPptx(req: Request, res: Response): void {
+    const token = String(req.params.token || '').trim();
+    const claims = verifyDeckToken(token);
+    if (!claims) {
+      res.status(401).json({ error: { code: 'INVALID_TOKEN', message: 'Link expired — return to the marketplace and click the tile again.' } });
+      return;
+    }
+    const listing = marketplaceListingRepo.findById(claims.listingId);
+    if (!listing || listing.status !== 'active') {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Listing not available.' } });
+      return;
+    }
+    const sub = partnerSubmissionRepo.getById(listing.submissionId);
+    if (!sub) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Submission not found.' } });
+      return;
+    }
+    const pptxAbsPath = resolveStoredPptx(buildPptxFileName(sub.customerName, sub.id));
+    if (!pptxAbsPath) {
+      res.status(404).json({ error: { code: 'DECK_MISSING', message: 'PPTX has not been generated yet.' } });
+      return;
+    }
+    const safeName = listing.customerName.replace(/[^A-Za-z0-9_-]+/g, '_') + '_deck.pptx';
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.presentationml.presentation');
+    res.setHeader('Content-Disposition', 'inline; filename="' + safeName + '"');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.sendFile(pptxAbsPath);
   },
 
   /** GET /api/admin/system-check — reports presence of optional system deps
