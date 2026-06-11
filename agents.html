@@ -225,6 +225,13 @@
             <button type="submit" class="partner-keys-submit" id="investorKeysSubmit">Generate Key</button>
           </form>
           <div class="partner-keys-result" id="investorKeysResult" hidden></div>
+
+          <!-- Persistent list of every investor key (with delete) -->
+          <div class="partner-subs-toolbar" style="margin-top:1.2rem">
+            <button type="button" class="partner-subs-refresh" id="investorKeysListRefresh">↻ Refresh</button>
+            <span class="partner-subs-summary" id="investorKeysListSummary">Loading…</span>
+          </div>
+          <div class="partner-subs-list" id="investorKeysList"></div>
         </div>
 
         <!-- CUSTOMER KEYS (mint new VV-XXXXXX keys) -->

@@ -38,7 +38,8 @@
     .mkt-kpi-pop::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 7px solid transparent; border-top-color: var(--navy-800); }
     .mkt-kpi-row { display: grid; grid-template-columns: auto 1fr auto auto 1fr; gap: 0.4rem 0.5rem; align-items: center; font-size: 0.78rem; margin-bottom: 0.4rem; }
     .mkt-kpi-label { color: rgba(255,255,255,0.65); }
-    .mkt-kpi-val { color: var(--white); font-weight: 700; text-align: right; font-family: var(--font-head); }
+    .mkt-kpi-val { color: var(--white); font-weight: 700; text-align: right; font-family: var(--font-head); white-space: nowrap; }
+    .mkt-kpi-yr { display: inline-block; margin-left: 0.32rem; font-size: 0.62rem; letter-spacing: 0.08em; color: var(--accent-light); font-weight: 600; vertical-align: middle; font-family: var(--font-sans); }
     .mkt-kpi-arrow { color: var(--accent-light); font-weight: 700; padding: 0 0.15rem; }
     .mkt-kpi-single { display: flex; justify-content: space-between; font-size: 0.78rem; margin-bottom: 0.35rem; }
     .mkt-kpi-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 0.55rem 0; }
@@ -242,11 +243,13 @@
 
     function renderKpiPop(k) {
       k = k || {};
+      // Each KPI row: label | YR1 value | arrow | YR5 value, with tiny YR
+      // markers under each value so the period is unambiguous at a glance.
       const pair = (lbl, a, b) =>
         '<span class="mkt-kpi-label">' + lbl + '</span>' +
-        '<span class="mkt-kpi-val">' + fmt(a) + '</span>' +
+        '<span class="mkt-kpi-val">' + fmt(a) + '<small class="mkt-kpi-yr">YR1</small></span>' +
         '<span class="mkt-kpi-arrow">→</span>' +
-        '<span class="mkt-kpi-val">' + fmt(b) + '</span><span></span>';
+        '<span class="mkt-kpi-val">' + fmt(b) + '<small class="mkt-kpi-yr">YR5</small></span><span></span>';
       return '' +
         '<div class="mkt-kpi-pop">' +
           '<div class="mkt-kpi-row">' + pair('GM %',     k.gmPctY1,   k.gmPctY5)   + '</div>' +
@@ -262,13 +265,21 @@
       const logoHtml = listing.logoPath
         ? '<img src="' + escHtml(listing.logoPath) + '" alt="' + escHtml(listing.customerName) + ' logo">'
         : escHtml(logoInitial(listing.customerName));
+      // Skip the sector pill entirely when the value is unhelpful (empty or
+      // the catch-all 'Other' default the extractor falls back to). Use an
+      // empty <span></span> so flex layout still pushes the ask to the right.
+      const sectorRaw = String(listing.sector || '').trim();
+      const showSector = sectorRaw && sectorRaw.toLowerCase() !== 'other';
+      const sectorHtml = showSector
+        ? '<span class="mkt-tile-sector">' + escHtml(sectorRaw) + '</span>'
+        : '<span></span>';
       return '' +
         '<div class="mkt-tile" data-listing-id="' + escHtml(listing.id) + '" tabindex="0" role="button">' +
           '<div class="mkt-tile-logo">' + logoHtml + '</div>' +
           '<h3 class="mkt-tile-name">' + escHtml(listing.customerName) + '</h3>' +
           '<p class="mkt-tile-desc">' + escHtml(listing.description || 'Vision Partner customer — investor materials available after NDA.') + '</p>' +
           '<div class="mkt-tile-meta">' +
-            '<span class="mkt-tile-sector">' + escHtml(listing.sector || 'Other') + '</span>' +
+            sectorHtml +
             '<span class="mkt-tile-ask">' + escHtml(listing.askAmountText || '') + '</span>' +
           '</div>' +
           renderKpiPop(listing.kpis) +
