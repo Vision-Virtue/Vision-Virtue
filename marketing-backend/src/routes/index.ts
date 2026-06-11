@@ -199,6 +199,15 @@ router.get(
   (req, res) => partnerController.marketplaceServeDeckPptx(req, res),
 );
 
+// Public logo for a marketplace tile. Listing must be active. The image
+// itself was uploaded by the customer via the deck-upload (drag&drop) flow
+// and selected by the publish handler. No auth header required — logos are
+// the public-facing identifier of the listing.
+router.get(
+  '/marketplace/listings/:id/logo',
+  (req, res) => partnerController.marketplaceServeLogo(req, res),
+);
+
 // Investor-deck placeholder schema — used by the customer questionnaire UI
 // to render the deck-specific sections. Single source of truth shared with
 // the xlsx writer.
@@ -234,6 +243,14 @@ const DECK_UPLOAD_MIMES = [
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/octet-stream', // browsers sometimes send this for less-common MIMEs
+  // Images — used as logos on the marketplace tile (and, where the customer
+  // has not otherwise set companyLogo, on the investor-deck cover).
+  'image/png',
+  'image/jpeg',
+  'image/jpg',
+  'image/webp',
+  'image/svg+xml',
+  'image/gif',
 ];
 router.post(
   '/customer/deck-upload',

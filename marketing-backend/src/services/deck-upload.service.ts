@@ -65,6 +65,14 @@ const MIME_EXT: Record<string, string> = {
   'application/vnd.openxmlformats-officedocument.presentationml.presentation':'pptx',
   'application/vnd.ms-excel':                                                 'xls',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':        'xlsx',
+  // Images — used as company logos for the Investors Marketplace tile and
+  // the investor-deck cover. Accepted in the customer drag&drop area.
+  'image/png':     'png',
+  'image/jpeg':    'jpg',
+  'image/jpg':     'jpg',
+  'image/webp':    'webp',
+  'image/svg+xml': 'svg',
+  'image/gif':     'gif',
 };
 
 // Fallback: try to infer extension from the original filename when the

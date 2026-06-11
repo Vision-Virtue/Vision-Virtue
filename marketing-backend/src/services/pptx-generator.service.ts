@@ -40,7 +40,7 @@ import {
   rewriteAffectedParagraphs, SlideRewriteInput,
 } from './slide-rewriter.service';
 import { INVESTOR_DECK_FIELDS } from '../data/investor-deck-schema';
-import { listUploads, getOrExtractText } from './deck-upload.service';
+import { listUploads, getOrExtractText, resolveUpload } from './deck-upload.service';
 import { renderChartPng, asChartData, ChartData } from './chart-renderer.service';
 
 const EXTRACTOR_MODEL = 'claude-sonnet-4-20250514';
@@ -1307,6 +1307,81 @@ async function injectCharts(
   return inserted;
 }
 
+// ─── Company logo discovery + injection ─────────────────────────────────────
+
+interface CompanyLogoFile {
+  absPath: string;
+  extension: 'png' | 'jpg' | 'jpeg' | 'webp' | 'svg' | 'gif';
+  mime: string;
+}
+
+/** Find a logo image among the customer's drag&drop uploads. Picks the most
+ *  recent image upload (any image MIME). Returns null if none found. */
+function findCustomerLogo(customerKeyId: string | undefined): CompanyLogoFile | null {
+  if (!customerKeyId) return null;
+  try {
+    const uploads = listUploads(customerKeyId);
+    const img = uploads.find(u => u.mimeType && u.mimeType.startsWith('image/'));
+    if (!img) return null;
+    const abs = resolveUpload(customerKeyId, img.id);
+    if (!abs) return null;
+    const ext = img.ext.toLowerCase();
+    const allowed: CompanyLogoFile['extension'][] = ['png', 'jpg', 'jpeg', 'webp', 'svg', 'gif'];
+    if (!(allowed as string[]).includes(ext)) return null;
+    return { absPath: abs, extension: ext as CompanyLogoFile['extension'], mime: img.mimeType };
+  } catch { return null; }
+}
+
+const IMG_CT: Record<string, string> = {
+  png:  'image/png',
+  jpg:  'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  svg:  'image/svg+xml',
+  gif:  'image/gif',
+};
+
+/** Ensure [Content_Types].xml has a <Default Extension="<ext>" .../> entry
+ *  for the given image extension. Idempotent. */
+async function ensureImageDefault(zip: JSZip, ext: string): Promise<void> {
+  const ctFile = zip.file('[Content_Types].xml');
+  if (!ctFile) return;
+  let ct = await ctFile.async('string');
+  const escExt = ext.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (new RegExp('<Default\\b[^>]*Extension="' + escExt + '"', 'i').test(ct)) return;
+  const mime = IMG_CT[ext] || 'application/octet-stream';
+  ct = ct.replace(/(<Types\b[^>]*>)/,
+    '$1<Default Extension="' + ext + '" ContentType="' + mime + '"/>');
+  zip.file('[Content_Types].xml', ct);
+}
+
+/** Inject the customer's logo at the captured {{COMPANY_LOGO}} coords on its
+ *  host slide. Mirrors injectCharts but for a single static image file. */
+async function injectLogo(
+  zip: JSZip,
+  logo: CompanyLogoFile,
+  location: { slideKey: string; coords: ShapeCoords },
+  deletedSlides: string[],
+  picId: number,
+): Promise<boolean> {
+  if (deletedSlides.includes(location.slideKey)) return false;
+  const slideFile = zip.file(location.slideKey);
+  if (!slideFile) return false;
+  const ext = logo.extension === 'jpeg' ? 'jpg' : logo.extension;
+  await ensureImageDefault(zip, ext);
+  let imgBuf: Buffer;
+  try { imgBuf = fs.readFileSync(logo.absPath); }
+  catch { return false; }
+  const fileName = 'company-logo.' + ext;
+  zip.file('ppt/media/' + fileName, imgBuf);
+  const rId = await addImageRelToSlide(zip, location.slideKey, fileName);
+  const picXml = buildPictureShapeXml(picId, 'Company Logo', rId, location.coords);
+  let slideXml = await slideFile.async('string');
+  slideXml = slideXml.replace('</p:spTree>', picXml + '</p:spTree>');
+  zip.file(location.slideKey, slideXml);
+  return true;
+}
+
 // ─── Slide deletion: remove a slide from the package atomically ──────────────
 
 /** Escape a string so it can be embedded literally inside a RegExp. */
@@ -1521,6 +1596,13 @@ export async function generatePopulatedPptx(opts: {
   interface ChartLocation { slideKey: string; coords: { x: number; y: number; cx: number; cy: number } }
   const chartLocations = new Map<string, ChartLocation>();
 
+  // Discover the customer's logo (drag&drop upload) up-front so we know to
+  // capture the {{COMPANY_LOGO}} shape coords. If no logo file exists we
+  // skip the capture and the placeholder is treated like any other text.
+  const companyLogo = findCustomerLogo(opts.customerKeyId);
+  const COMPANY_LOGO_PLACEHOLDER = '{{COMPANY_LOGO}}';
+  let logoLocation: { slideKey: string; coords: ShapeCoords } | null = null;
+
   for (const key of slideEntries) {
     const xml           = await zip.file(key)!.async('string');
     const originalCount = countOriginalPlaceholders(xml);
@@ -1534,6 +1616,15 @@ export async function generatePopulatedPptx(opts: {
       if (!xml.includes(chartPlaceholder)) continue;
       const coords = findChartHostFrame(xml, chartPlaceholder);
       if (coords) chartLocations.set(chartPlaceholder, { slideKey: key, coords });
+    }
+
+    // Capture the {{COMPANY_LOGO}} placeholder location while it's still in
+    // the slide XML. We use the placeholder's own shape coords (not an
+    // enclosing frame) because the cover-slide template usually puts the
+    // logo placeholder directly in a logo-sized box.
+    if (companyLogo && !logoLocation && xml.includes(COMPANY_LOGO_PLACEHOLDER)) {
+      const coords = findShapeCoordsContaining(xml, COMPANY_LOGO_PLACEHOLDER);
+      if (coords) logoLocation = { slideKey: key, coords };
     }
 
     const afterReplace  = applyReplacementsToSlideXml(xml, valueMap, mut);
@@ -1711,6 +1802,21 @@ export async function generatePopulatedPptx(opts: {
       console.log(`[pptx-gen] charts injected: ${chartsInjected} / ${chartMap.size}`);
     } catch (err) {
       console.warn('[pptx-gen] chart injection failed (continuing):',
+                   err instanceof Error ? err.message : err);
+    }
+  }
+
+  // ── PHASE 3.6: inject the customer logo at {{COMPANY_LOGO}} ──────────────
+  // Uses the most recent image the customer uploaded via the partner-portal
+  // drag&drop area. Same picture-injection pattern as charts: drop the file
+  // into ppt/media, add a slide relationship, drop a <p:pic> at the captured
+  // placeholder coords.
+  if (companyLogo && logoLocation) {
+    try {
+      const ok = await injectLogo(zip, companyLogo, logoLocation, slidesToDelete, 1500);
+      if (ok) console.log('[pptx-gen] company logo injected on ' + logoLocation.slideKey);
+    } catch (err) {
+      console.warn('[pptx-gen] logo injection failed (continuing):',
                    err instanceof Error ? err.message : err);
     }
   }

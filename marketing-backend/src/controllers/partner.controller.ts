@@ -92,6 +92,28 @@ function send401Investor(res: Response, message: string): void {
   });
 }
 
+/** Absolute base URL for THIS backend, used to build public asset URLs
+ *  (marketplace logos, deck PPTX). PUBLIC_BACKEND_URL env wins; otherwise
+ *  derived from the request Host. */
+function backendBaseUrl(req: Request): string {
+  const envUrl = process.env.PUBLIC_BACKEND_URL;
+  if (envUrl) return envUrl.replace(/\/$/, '');
+  const proto = String(req.get('x-forwarded-proto') || 'https');
+  const host  = String(req.get('host') || 'vv-marketing-api.onrender.com');
+  return proto + '://' + host;
+}
+
+/** Convert a listing's stored "marketplace-logo:<fileId>" reference into the
+ *  absolute, publicly fetchable URL for the marketplace tile <img>. */
+function publicListing<T extends { id: string; logoPath: string | null }>(
+  listing: T, baseUrl: string,
+): T {
+  if (listing.logoPath && listing.logoPath.startsWith('marketplace-logo:')) {
+    return { ...listing, logoPath: baseUrl + '/api/marketplace/listings/' + listing.id + '/logo' };
+  }
+  return listing;
+}
+
 // ─── Controller ───────────────────────────────────────────────────────────────
 
 export const partnerController = {
@@ -1019,11 +1041,22 @@ export const partnerController = {
       res.status(500).json({ error: { code: 'EXTRACT_FAILED', message: msg } });
       return;
     }
+
+    // Pick a logo from the customer's drag&drop uploads. Most recent image
+    // wins. We store a "marketplace-logo:<fileId>" reference on the listing;
+    // the public /api/marketplace/listings/:id/logo endpoint resolves it.
+    let logoPath: string | null = null;
+    try {
+      const uploads = listUploads(keyRow.id);
+      const imgUpload = uploads.find(u => u.mimeType && u.mimeType.startsWith('image/'));
+      if (imgUpload) logoPath = 'marketplace-logo:' + imgUpload.id;
+    } catch { /* best-effort */ }
+
     const listing = marketplaceListingRepo.upsert({
       submissionId:   sub.id,
       customerKeyId:  keyRow.id,
       customerName:   sub.customerName,
-      logoPath:       null,
+      logoPath,
       description:    extracted.description,
       sector:         extracted.sector,
       askAmountText:  extracted.askAmountText,
@@ -1100,7 +1133,8 @@ export const partnerController = {
   investorListListings(req: Request, res: Response): void {
     const keyRow = resolveInvestorKey(req);
     if (!keyRow) { send401Investor(res, 'Missing or invalid investor key.'); return; }
-    const listings = marketplaceListingRepo.listActive();
+    const baseUrl = backendBaseUrl(req);
+    const listings = marketplaceListingRepo.listActive().map(l => publicListing(l, baseUrl));
     res.json({ listings });
   },
 
@@ -1131,9 +1165,9 @@ export const partnerController = {
       pptxOnDisk = !!resolveStoredPptx(buildPptxFileName(sub.customerName, sub.id));
     }
     res.json({
-      listing,
-      ndaSigned: !!nda,
-      deckAvailable: pptxOnDisk || !!listing.deckPdfPath,
+      listing:        publicListing(listing, backendBaseUrl(req)),
+      ndaSigned:      !!nda,
+      deckAvailable:  pptxOnDisk || !!listing.deckPdfPath,
     });
   },
 
@@ -1346,6 +1380,30 @@ export const partnerController = {
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', 'private, no-store');
     res.sendFile(pptxAbsPath);
+  },
+
+  /** GET /api/marketplace/listings/:id/logo — public, no auth.
+   *  Streams the logo image the customer uploaded via the drag&drop. */
+  marketplaceServeLogo(req: Request, res: Response): void {
+    const id = String(req.params.id || '').trim();
+    const listing = marketplaceListingRepo.findById(id);
+    if (!listing || listing.status !== 'active') {
+      res.status(404).end(); return;
+    }
+    const ref = String(listing.logoPath || '');
+    if (!ref.startsWith('marketplace-logo:')) {
+      res.status(404).end(); return;
+    }
+    const fileId = ref.split(':')[1];
+    if (!fileId) { res.status(404).end(); return; }
+    const abs = resolveUpload(listing.customerKeyId, fileId);
+    if (!abs) { res.status(404).end(); return; }
+    const meta = readMeta(listing.customerKeyId, fileId) as { mimeType?: string } | null;
+    const mime = (meta && typeof meta.mimeType === 'string' && meta.mimeType) || 'image/png';
+    res.setHeader('Content-Type', mime);
+    res.setHeader('Content-Disposition', 'inline');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    res.sendFile(abs);
   },
 
   /** GET /api/admin/system-check — reports presence of optional system deps

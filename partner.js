@@ -1167,7 +1167,7 @@ renderTileState();
    when AI Finance generates the deck.
    ========================================================================== */
 
-const DECK_UPLOAD_ACCEPT = /\.(pdf|doc|docx|ppt|pptx|xls|xlsx)$/i;
+const DECK_UPLOAD_ACCEPT = /\.(pdf|doc|docx|ppt|pptx|xls|xlsx|png|jpg|jpeg|webp|svg|gif)$/i;
 const DECK_UPLOAD_MAX    = 30 * 1024 * 1024;
 
 function deckUpFmtSize(n) {
