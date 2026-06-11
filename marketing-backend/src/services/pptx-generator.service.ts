@@ -1341,6 +1341,46 @@ function findShapeCoordsFuzzy(slideXml: string, placeholder: string): ShapeCoord
   return null;
 }
 
+/**
+ * Worst-case finder for {{COMPANY_LOGO}}: PowerPoint sometimes splits the
+ * placeholder across two completely SEPARATE <p:sp> shapes (one carrying
+ * `{{COMPANY` and another carrying `LOGO}}`), each with its own xfrm. We
+ * walk every shape, collect the bounding boxes of any shape whose visible
+ * text contains either fragment, then return a 1.0" × 1.0" box anchored
+ * at the union top-left — a sensible default logo footprint.
+ */
+function findSplitCompanyLogoCoords(slideXml: string): ShapeCoords | null {
+  const shapeRe = /<p:sp\b[^>]*>([\s\S]*?)<\/p:sp>/g;
+  const fragments: ShapeCoords[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = shapeRe.exec(slideXml))) {
+    const inner = m[1];
+    const text = concatVisibleText(inner);
+    // The negative lookahead avoids matching {{COMPANY_NAME, {{COMPANY_TAGLINE, etc.
+    const hasStart = /\{\{COMPANY(?:_LOGO)?(?!_[A-Z])/.test(text);
+    const hasEnd   = /LOGO\}\}/.test(text);
+    if (!hasStart && !hasEnd) continue;
+    const xfrmMatch = /<a:xfrm\b[^>]*>([\s\S]*?)<\/a:xfrm>/.exec(inner);
+    if (!xfrmMatch) continue;
+    const off = /<a:off\b[^/>]*x="(-?\d+)"[^/>]*y="(-?\d+)"/.exec(xfrmMatch[1]);
+    const ext = /<a:ext\b[^/>]*cx="(\d+)"[^/>]*cy="(\d+)"/.exec(xfrmMatch[1]);
+    if (!off || !ext) continue;
+    fragments.push({
+      x:  parseInt(off[1], 10),
+      y:  parseInt(off[2], 10),
+      cx: parseInt(ext[1], 10),
+      cy: parseInt(ext[2], 10),
+    });
+  }
+  if (fragments.length === 0) return null;
+  const minX = Math.min(...fragments.map(f => f.x));
+  const minY = Math.min(...fragments.map(f => f.y));
+  // 1.0" square — 914400 EMU per inch. Big enough to be visible without
+  // overlapping the adjacent {{COMPANY_NAME}} text shape to the right.
+  const EMU_PER_INCH = 914400;
+  return { x: minX, y: minY, cx: EMU_PER_INCH, cy: EMU_PER_INCH };
+}
+
 // ─── Company logo discovery + injection ─────────────────────────────────────
 
 interface CompanyLogoFile {
@@ -1412,14 +1452,19 @@ async function injectLogo(
   const picXml = buildPictureShapeXml(picId, 'Company Logo', rId, location.coords);
   let slideXml = await slideFile.async('string');
 
-  // Strip the split placeholder fragments ({{COMPANY, LOGO}}, etc.) from any
-  // <a:t> nodes inside the host shape so we don't leave leftover text visible
-  // around or behind the injected image. Same treatment for the unsplit form.
+  // Strip the placeholder text from any <p:sp> that carries it (whether the
+  // full {{COMPANY_LOGO}} sits in one shape, or the template split it into
+  // two — see findSplitCompanyLogoCoords). The shapes stay in the slide so
+  // their formatting/layout boxes are intact, but their visible text goes
+  // to empty so we don't see "{{COMPANY" / "LOGO}}" next to the new image.
   slideXml = slideXml.replace(
-    new RegExp('<p:sp\\b[^>]*>([\\s\\S]*?)</p:sp>', 'g'),
-    (whole, inner) => {
+    /<p:sp\b[^>]*>([\s\S]*?)<\/p:sp>/g,
+    (whole, inner: string) => {
       const visible = concatVisibleText(inner);
-      if (!visible.includes('{{COMPANY_LOGO}}')) return whole;
+      const isHost  = visible.includes('{{COMPANY_LOGO}}') ||
+                      /\{\{COMPANY(?:_LOGO)?(?!_[A-Z])/.test(visible) ||
+                      /LOGO\}\}/.test(visible);
+      if (!isHost) return whole;
       const stripped = inner.replace(
         /<a:t[^>]*>[\s\S]*?<\/a:t>/g,
         (run: string) => {
@@ -1436,6 +1481,9 @@ async function injectLogo(
 
   slideXml = slideXml.replace('</p:spTree>', picXml + '</p:spTree>');
   zip.file(location.slideKey, slideXml);
+  console.log('[pptx-gen] logo picture inserted on ' + location.slideKey +
+              ' at (' + location.coords.x + ',' + location.coords.y +
+              ') size ' + location.coords.cx + 'x' + location.coords.cy);
   return true;
 }
 
@@ -1659,6 +1707,12 @@ export async function generatePopulatedPptx(opts: {
   const companyLogo = findCustomerLogo(opts.customerKeyId);
   const COMPANY_LOGO_PLACEHOLDER = '{{COMPANY_LOGO}}';
   let logoLocation: { slideKey: string; coords: ShapeCoords } | null = null;
+  if (companyLogo) {
+    console.log('[pptx-gen] customer logo discovered for embedding: ' +
+                companyLogo.absPath + ' (ext=' + companyLogo.extension + ')');
+  } else if (opts.customerKeyId) {
+    console.log('[pptx-gen] no image upload found among customer uploads — skipping logo embed');
+  }
 
   for (const key of slideEntries) {
     const xml           = await zip.file(key)!.async('string');
@@ -1675,15 +1729,28 @@ export async function generatePopulatedPptx(opts: {
       if (coords) chartLocations.set(chartPlaceholder, { slideKey: key, coords });
     }
 
-    // Capture the {{COMPANY_LOGO}} placeholder location. PowerPoint may split
-    // the placeholder across two adjacent text runs (e.g. <a:t>{{COMPANY</a:t>
-    // <a:t>LOGO}}</a:t>), so we use the fuzzy finder that concatenates every
-    // <a:t> within a shape before matching.
+    // Capture the {{COMPANY_LOGO}} placeholder location. PowerPoint splits
+    // the placeholder in three observed ways:
+    //   (a) one shape, unsplit: <a:t>{{COMPANY_LOGO}}</a:t>
+    //   (b) one shape, split text runs: <a:t>{{COMPANY</a:t><a:t>LOGO}}</a:t>
+    //   (c) two SEPARATE shapes, each carrying part of the placeholder.
+    // The V&V InvestorDeck template uses (c). We try (a/b) first, then fall
+    // back to the cross-shape finder.
     if (companyLogo && !logoLocation) {
       const visibleText = concatVisibleText(xml);
       if (visibleText.includes(COMPANY_LOGO_PLACEHOLDER)) {
         const coords = findShapeCoordsFuzzy(xml, COMPANY_LOGO_PLACEHOLDER);
-        if (coords) logoLocation = { slideKey: key, coords };
+        if (coords) {
+          logoLocation = { slideKey: key, coords };
+          console.log('[pptx-gen] {{COMPANY_LOGO}} located in one shape on ' + key + ' at', coords);
+        }
+      }
+      if (!logoLocation) {
+        const split = findSplitCompanyLogoCoords(xml);
+        if (split) {
+          logoLocation = { slideKey: key, coords: split };
+          console.log('[pptx-gen] {{COMPANY_LOGO}} located across split shapes on ' + key + ' at', split);
+        }
       }
     }
 
