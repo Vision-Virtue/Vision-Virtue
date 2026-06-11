@@ -1307,6 +1307,40 @@ async function injectCharts(
   return inserted;
 }
 
+// ─── Split-placeholder helpers ──────────────────────────────────────────────
+
+/** Concatenate every <a:t> chunk inside an XML fragment. PowerPoint sometimes
+ *  splits a placeholder like {{COMPANY_LOGO}} across two adjacent text runs:
+ *      <a:t>{{COMPANY</a:t>...<a:t>LOGO}}</a:t>
+ *  A literal `xml.includes('{{COMPANY_LOGO}}')` will miss it; running the
+ *  whole shape through this helper recovers the visible text. */
+function concatVisibleText(xml: string): string {
+  const matches = xml.match(/<a:t[^>]*>([\s\S]*?)<\/a:t>/g) || [];
+  return matches.map(m => m.replace(/<\/?a:t[^>]*>/g, '')).join('');
+}
+
+/** Like findShapeCoordsContaining but tolerant of split text runs. */
+function findShapeCoordsFuzzy(slideXml: string, placeholder: string): ShapeCoords | null {
+  const shapeRe = /<p:sp\b[^>]*>([\s\S]*?)<\/p:sp>/g;
+  let m: RegExpExecArray | null;
+  while ((m = shapeRe.exec(slideXml))) {
+    const inner = m[1];
+    if (!concatVisibleText(inner).includes(placeholder)) continue;
+    const xfrmMatch = /<a:xfrm\b[^>]*>([\s\S]*?)<\/a:xfrm>/.exec(inner);
+    if (!xfrmMatch) continue;
+    const off = /<a:off\b[^/>]*x="(-?\d+)"[^/>]*y="(-?\d+)"/.exec(xfrmMatch[1]);
+    const ext = /<a:ext\b[^/>]*cx="(\d+)"[^/>]*cy="(\d+)"/.exec(xfrmMatch[1]);
+    if (!off || !ext) continue;
+    return {
+      x:  parseInt(off[1], 10),
+      y:  parseInt(off[2], 10),
+      cx: parseInt(ext[1], 10),
+      cy: parseInt(ext[2], 10),
+    };
+  }
+  return null;
+}
+
 // ─── Company logo discovery + injection ─────────────────────────────────────
 
 interface CompanyLogoFile {
@@ -1377,6 +1411,29 @@ async function injectLogo(
   const rId = await addImageRelToSlide(zip, location.slideKey, fileName);
   const picXml = buildPictureShapeXml(picId, 'Company Logo', rId, location.coords);
   let slideXml = await slideFile.async('string');
+
+  // Strip the split placeholder fragments ({{COMPANY, LOGO}}, etc.) from any
+  // <a:t> nodes inside the host shape so we don't leave leftover text visible
+  // around or behind the injected image. Same treatment for the unsplit form.
+  slideXml = slideXml.replace(
+    new RegExp('<p:sp\\b[^>]*>([\\s\\S]*?)</p:sp>', 'g'),
+    (whole, inner) => {
+      const visible = concatVisibleText(inner);
+      if (!visible.includes('{{COMPANY_LOGO}}')) return whole;
+      const stripped = inner.replace(
+        /<a:t[^>]*>[\s\S]*?<\/a:t>/g,
+        (run: string) => {
+          const text = run.replace(/<\/?a:t[^>]*>/g, '');
+          if (/\{\{COMPANY|LOGO\}\}|\{\{COMPANY_LOGO\}\}/.test(text)) {
+            return run.replace(/>[\s\S]*?</, '><');
+          }
+          return run;
+        },
+      );
+      return whole.replace(inner, stripped);
+    },
+  );
+
   slideXml = slideXml.replace('</p:spTree>', picXml + '</p:spTree>');
   zip.file(location.slideKey, slideXml);
   return true;
@@ -1618,13 +1675,16 @@ export async function generatePopulatedPptx(opts: {
       if (coords) chartLocations.set(chartPlaceholder, { slideKey: key, coords });
     }
 
-    // Capture the {{COMPANY_LOGO}} placeholder location while it's still in
-    // the slide XML. We use the placeholder's own shape coords (not an
-    // enclosing frame) because the cover-slide template usually puts the
-    // logo placeholder directly in a logo-sized box.
-    if (companyLogo && !logoLocation && xml.includes(COMPANY_LOGO_PLACEHOLDER)) {
-      const coords = findShapeCoordsContaining(xml, COMPANY_LOGO_PLACEHOLDER);
-      if (coords) logoLocation = { slideKey: key, coords };
+    // Capture the {{COMPANY_LOGO}} placeholder location. PowerPoint may split
+    // the placeholder across two adjacent text runs (e.g. <a:t>{{COMPANY</a:t>
+    // <a:t>LOGO}}</a:t>), so we use the fuzzy finder that concatenates every
+    // <a:t> within a shape before matching.
+    if (companyLogo && !logoLocation) {
+      const visibleText = concatVisibleText(xml);
+      if (visibleText.includes(COMPANY_LOGO_PLACEHOLDER)) {
+        const coords = findShapeCoordsFuzzy(xml, COMPANY_LOGO_PLACEHOLDER);
+        if (coords) logoLocation = { slideKey: key, coords };
+      }
     }
 
     const afterReplace  = applyReplacementsToSlideXml(xml, valueMap, mut);
