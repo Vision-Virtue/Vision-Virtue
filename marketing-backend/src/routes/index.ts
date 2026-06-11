@@ -522,6 +522,14 @@ router.delete(
   (req, res) => partnerController.adminDeleteCustomerKey(req, res),
 );
 
+// Admin diagnostic: confirms libreoffice (and other optional system deps)
+// are actually available in the Render image.
+router.get(
+  '/admin/system-check',
+  requireAdminPin,
+  (req, res) => partnerController.adminSystemCheck(req, res),
+);
+
 // ─── Admin: Investor Keys (Investors Marketplace) ────────────────────────────
 router.post(
   '/admin/investor-keys',

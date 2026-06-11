@@ -19,6 +19,7 @@ import {
 import { generatePopulatedNdaPdf } from '../services/nda-pdf-generator.service';
 import { extractMarketplaceTileData } from '../services/marketplace-extractor.service';
 import { getOrBuildAutoDeckPdf, invalidateAutoDeckCache } from '../services/pptx-to-pdf.service';
+import { runSystemCheck } from '../services/system-check.service';
 import { generateFinalizedXlsx, resolveStoredXlsx, storeUploadedXlsx } from '../services/partner-xlsx.service';
 import {
   storeAsset, resolveAsset, contentTypeForFilename, MAX_ASSET_BYTES,
@@ -1279,12 +1280,14 @@ export const partnerController = {
 
     const filename = listing.customerName.replace(/[^A-Za-z0-9_-]+/g, '_') + '_deck.pdf';
 
-    // Preferred path: auto-convert the customer's populated PPTX to PDF via
-    // libreoffice (cached on disk per source mtime). Falls back to a manually
-    // uploaded deck PDF if conversion isn't possible.
+    // Diagnostic state we accumulate so the 404 response can tell us WHY the
+    // deck is missing (no PPTX vs conversion failed vs no fallback PDF).
+    let pptxAbsPath: string | null = null;
+    let pptxConversionError: string | null = null;
+
     const sub = partnerSubmissionRepo.getById(listing.submissionId);
     if (sub) {
-      const pptxAbsPath = resolveStoredPptx(buildPptxFileName(sub.customerName, sub.id));
+      pptxAbsPath = resolveStoredPptx(buildPptxFileName(sub.customerName, sub.id));
       if (pptxAbsPath) {
         try {
           const buf = await getOrBuildAutoDeckPdf({ listingId: listing.id, pptxAbsPath });
@@ -1295,29 +1298,56 @@ export const partnerController = {
           res.end(buf);
           return;
         } catch (err) {
-          // Conversion failed (libreoffice missing, file corrupted, etc.) —
-          // log + fall through to the manually-uploaded PDF path below.
-          console.warn('[deck-view] auto-PPTX→PDF failed for listing ' + listing.id + ':',
-            err instanceof Error ? err.message : err);
+          pptxConversionError = err instanceof Error ? err.message : String(err);
+          console.warn('[deck-view] auto-PPTX→PDF failed for listing ' + listing.id + ':', pptxConversionError);
         }
       }
     }
 
     // Fallback: customer-uploaded PDF (legacy path / safety net).
-    if (!listing.deckPdfPath) {
-      res.status(404).json({ error: { code: 'DECK_MISSING', message: 'Investor deck is not yet available. The customer has not finalized their submission.' } });
-      return;
+    if (listing.deckPdfPath) {
+      const buf = readDeckPdf(listing.id);
+      if (buf) {
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'inline; filename="' + filename + '"');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Cache-Control', 'private, max-age=300');
+        res.end(buf);
+        return;
+      }
     }
-    const buf = readDeckPdf(listing.id);
-    if (!buf) {
-      res.status(404).json({ error: { code: 'DECK_MISSING', message: 'Deck PDF file not found.' } });
-      return;
+
+    // Build the most diagnostic error message we can manage based on what
+    // we observed above. The frontend surfaces this verbatim to the admin
+    // (and to the investor in a friendly form).
+    let detail: string;
+    if (!sub) {
+      detail = 'Submission record not found.';
+    } else if (!pptxAbsPath) {
+      detail = 'The customer\'s investor-deck PPTX has not been generated yet — admin needs to run Generate PPTX in Finance AI.';
+    } else if (pptxConversionError) {
+      detail = 'libreoffice conversion failed: ' + pptxConversionError.slice(0, 240);
+    } else {
+      detail = 'Deck PDF file not found.';
     }
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', 'inline; filename="' + filename + '"');
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Cache-Control', 'private, max-age=300');
-    res.end(buf);
+    res.status(404).json({
+      error: {
+        code:   'DECK_MISSING',
+        message: detail,
+        diagnostics: {
+          pptxOnDisk: !!pptxAbsPath,
+          pptxConversionError,
+          hasUploadedPdf: !!listing.deckPdfPath,
+        },
+      },
+    });
+  },
+
+  /** GET /api/admin/system-check — reports presence of optional system deps
+   *  (libreoffice) so we can confirm the Render image actually has what we
+   *  need for PPTX → PDF auto-conversion. */
+  adminSystemCheck(_req: Request, res: Response): void {
+    res.json(runSystemCheck());
   },
 
   // ────────────────────────────────────────────────────────────────────────────

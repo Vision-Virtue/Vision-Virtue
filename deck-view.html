@@ -155,7 +155,13 @@
           return;
         }
         if (res.status === 404) {
-          statusEl.innerHTML = 'Deck not available yet. <br><a href="investors-marketplace.html" style="color:#40c4c4;font-weight:600">Back to marketplace</a>';
+          let detail = 'Deck not available yet.';
+          try {
+            const body = await res.json();
+            if (body && body.error && body.error.message) detail = body.error.message;
+          } catch { /* keep default */ }
+          statusEl.innerHTML = escHtml(detail) +
+            '<br><br><a href="investors-marketplace.html" style="color:#40c4c4;font-weight:600">Back to marketplace</a>';
           return;
         }
         if (!res.ok) {
