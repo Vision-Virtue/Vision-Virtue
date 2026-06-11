@@ -18,6 +18,7 @@ import {
 } from '../services/marketplace-deck.service';
 import { generatePopulatedNdaPdf } from '../services/nda-pdf-generator.service';
 import { extractMarketplaceTileData } from '../services/marketplace-extractor.service';
+import { getOrBuildAutoDeckPdf, invalidateAutoDeckCache } from '../services/pptx-to-pdf.service';
 import { generateFinalizedXlsx, resolveStoredXlsx, storeUploadedXlsx } from '../services/partner-xlsx.service';
 import {
   storeAsset, resolveAsset, contentTypeForFilename, MAX_ASSET_BYTES,
@@ -946,6 +947,38 @@ export const partnerController = {
     res.json({ ok: true });
   },
 
+  /** DELETE /api/admin/investor-keys/:id — hard delete + cascade. */
+  adminDeleteInvestorKey(req: Request, res: Response): void {
+    const id = String(req.params.id || '').trim();
+    if (!id) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'id is required.' } });
+      return;
+    }
+    if (!investorKeyRepo.findById(id)) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Investor key not found.' } });
+      return;
+    }
+    investorKeyRepo.delete(id);
+    res.json({ ok: true });
+  },
+
+  /** DELETE /api/admin/customer-keys/:id — hard delete + cascade. Wipes the
+   *  customer's submissions, listings, NDAs and every dependent table. Used
+   *  by the trash-row action in Customer Submissions. */
+  adminDeleteCustomerKey(req: Request, res: Response): void {
+    const id = String(req.params.id || '').trim();
+    if (!id) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'id is required.' } });
+      return;
+    }
+    if (!customerKeyRepo.findById(id)) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Customer key not found.' } });
+      return;
+    }
+    customerKeyRepo.delete(id);
+    res.json({ ok: true });
+  },
+
   // ────────────────────────────────────────────────────────────────────────────
   // Investors Marketplace — Listings (Phase 2)
   // Customer side: publish / withdraw their submission to the marketplace.
@@ -995,6 +1028,10 @@ export const partnerController = {
       askAmountText:  extracted.askAmountText,
       kpis:           extracted.kpis,
     });
+    // Drop any cached auto-deck PDF — re-publish may mean the source PPTX has
+    // changed (admin regenerated after edits), so the next investor view re-
+    // converts from the freshest PPTX on disk.
+    try { invalidateAutoDeckCache(listing.id); } catch { /* best-effort */ }
     res.status(201).json({ listing });
   },
 
@@ -1216,7 +1253,7 @@ export const partnerController = {
    *   3. Deck PDF actually uploaded
    * Sends X-Content-Type-Options: nosniff and Content-Disposition: inline.
    */
-  investorViewDeck(req: Request, res: Response): void {
+  async investorViewDeck(req: Request, res: Response): Promise<void> {
     const keyRow = resolveInvestorKey(req);
     if (!keyRow) { send401Investor(res, 'Missing or invalid investor key.'); return; }
     const id = String(req.params.id || '').trim();
@@ -1230,8 +1267,36 @@ export const partnerController = {
       res.status(403).json({ error: { code: 'NDA_REQUIRED', message: 'Sign the NDA before viewing the deck.' } });
       return;
     }
+
+    const filename = listing.customerName.replace(/[^A-Za-z0-9_-]+/g, '_') + '_deck.pdf';
+
+    // Preferred path: auto-convert the customer's populated PPTX to PDF via
+    // libreoffice (cached on disk per source mtime). Falls back to a manually
+    // uploaded deck PDF if conversion isn't possible.
+    const sub = partnerSubmissionRepo.getById(listing.submissionId);
+    if (sub) {
+      const pptxAbsPath = resolveStoredPptx(buildPptxFileName(sub.customerName, sub.id));
+      if (pptxAbsPath) {
+        try {
+          const buf = await getOrBuildAutoDeckPdf({ listingId: listing.id, pptxAbsPath });
+          res.setHeader('Content-Type', 'application/pdf');
+          res.setHeader('Content-Disposition', 'inline; filename="' + filename + '"');
+          res.setHeader('X-Content-Type-Options', 'nosniff');
+          res.setHeader('Cache-Control', 'private, max-age=300');
+          res.end(buf);
+          return;
+        } catch (err) {
+          // Conversion failed (libreoffice missing, file corrupted, etc.) —
+          // log + fall through to the manually-uploaded PDF path below.
+          console.warn('[deck-view] auto-PPTX→PDF failed for listing ' + listing.id + ':',
+            err instanceof Error ? err.message : err);
+        }
+      }
+    }
+
+    // Fallback: customer-uploaded PDF (legacy path / safety net).
     if (!listing.deckPdfPath) {
-      res.status(404).json({ error: { code: 'DECK_MISSING', message: 'Deck PDF has not been provided yet.' } });
+      res.status(404).json({ error: { code: 'DECK_MISSING', message: 'Investor deck is not yet available. The customer has not finalized their submission.' } });
       return;
     }
     const buf = readDeckPdf(listing.id);
@@ -1240,7 +1305,7 @@ export const partnerController = {
       return;
     }
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `inline; filename="${listing.customerName.replace(/[^A-Za-z0-9_-]+/g, '_')}_deck.pdf"`);
+    res.setHeader('Content-Disposition', 'inline; filename="' + filename + '"');
     res.setHeader('X-Content-Type-Options', 'nosniff');
     res.setHeader('Cache-Control', 'private, max-age=300');
     res.end(buf);

@@ -1319,6 +1319,39 @@
 }
 .partner-subs-folder-head[aria-expanded="true"] .partner-subs-folder-caret { transform: rotate(180deg); }
 
+/* Trash button — appears in Customer Submissions folder head AND in
+   Investors Keys list rows. Hard-delete (cascades) with confirmation. */
+.partner-subs-trash {
+  background: transparent;
+  border: 1px solid rgba(220, 80, 80, 0.35);
+  color: #ff9aa2;
+  border-radius: 6px;
+  width: 30px; height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.partner-subs-trash:hover {
+  background: rgba(220, 80, 80, 0.16);
+  color: #ffcdd2;
+}
+.partner-subs-trash:disabled { opacity: 0.5; cursor: wait; }
+
+/* Investor-keys list rows share .partner-subs-folder styling but need a
+   horizontal layout (no expandable body), so we add a side container that
+   holds the KEY chip + trash side-by-side. */
+.partner-subs-folder .partner-subs-folder-main { flex: 1; min-width: 0; padding: 0.6rem 0.85rem; }
+.partner-subs-folder .partner-subs-folder-side {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding-right: 0.6rem;
+}
+.partner-subs-folder.is-revoked { opacity: 0.65; }
+
 .partner-subs-folder-key {
   display: inline-flex;
   align-items: center;

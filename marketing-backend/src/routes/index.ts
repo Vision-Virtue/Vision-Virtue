@@ -516,6 +516,11 @@ router.get(
   requireAdminPin,
   (req, res) => partnerController.adminListKeys(req, res),
 );
+router.delete(
+  '/admin/customer-keys/:id',
+  requireAdminPin,
+  (req, res) => partnerController.adminDeleteCustomerKey(req, res),
+);
 
 // ─── Admin: Investor Keys (Investors Marketplace) ────────────────────────────
 router.post(
@@ -532,6 +537,11 @@ router.post(
   '/admin/investor-keys/:id/revoke',
   requireAdminPin,
   (req, res) => partnerController.adminRevokeInvestorKey(req, res),
+);
+router.delete(
+  '/admin/investor-keys/:id',
+  requireAdminPin,
+  (req, res) => partnerController.adminDeleteInvestorKey(req, res),
 );
 
 // ─── Admin: Agreements (signed NDAs from the Investors Marketplace) ──────────

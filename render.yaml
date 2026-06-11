@@ -3,8 +3,16 @@ services:
     name: vv-marketing-api
     runtime: node
     rootDir: marketing-backend
+    # libreoffice-impress is required by the marketplace deck viewer to
+    # auto-convert the populated investor-deck PPTX into a view-only PDF for
+    # investors who have signed the NDA. Adding the meta package + java
+    # headless dependency covers the standard PPTX → PDF path.
     buildCommand: npm install && npm run build
     startCommand: npm start
+    aptPackages:
+      - libreoffice
+      - libreoffice-impress
+      - default-jre-headless
     disk:
       name: vv-marketing-data
       mountPath: /data

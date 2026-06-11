@@ -254,11 +254,11 @@ async function renderMarketplaceTile(sub) {
   const listing = listingForSubmission(sub.id);
 
   if (listing && listing.status === 'active') {
-    const deckLabel = listing.deckPdfPath ? 'Update Deck PDF' : 'Attach Deck PDF';
+    // The investor deck is auto-converted from the customer's populated PPTX
+    // on the backend — no need for a manual PDF attach action.
     statusEl.innerHTML =
       '<span class="partner-status-pill partner-status-finalized">Published</span>' +
-      '<button type="button" class="partner-tile-download" data-mkt-action="unpublish">Unpublish</button>' +
-      '<button type="button" class="partner-tile-download partner-tile-secondary" data-mkt-action="deck-pdf">' + deckLabel + '</button>';
+      '<button type="button" class="partner-tile-download" data-mkt-action="unpublish">Unpublish</button>';
     tile.classList.add('is-finalized');
     tile.classList.remove('is-review');
   } else {
@@ -301,7 +301,6 @@ async function handleMarketplaceAction(btn) {
   if (!sub) return;
   if (action === 'publish')    return publishMarketplace(sub.id);
   if (action === 'unpublish')  return unpublishMarketplace(sub.id);
-  if (action === 'deck-pdf')   return triggerDeckPdfUpload();
 }
 
 async function publishMarketplace(subId) {
@@ -331,30 +330,8 @@ async function unpublishMarketplace(subId) {
   }
 }
 
-function triggerDeckPdfUpload() {
-  const fileEl = document.getElementById('mktDeckPdfInput');
-  if (!fileEl) return;
-  fileEl.value = '';
-  fileEl.click();
-}
-document.getElementById('mktDeckPdfInput')?.addEventListener('change', async (ev) => {
-  const file = ev.target.files && ev.target.files[0];
-  if (!file) return;
-  const sub = _latestSubmission;
-  if (!sub) return;
-  const listing = listingForSubmission(sub.id);
-  if (!listing) {
-    alert('Publish to the marketplace first, then attach your deck PDF.');
-    return;
-  }
-  try {
-    await apiUploadDeckPdf(listing.id, file);
-    await renderTileState();
-    alert('Deck PDF attached. Investors who have signed the NDA can view it now.');
-  } catch (err) {
-    alert('Deck PDF upload failed.\n\n' + (err && err.message ? err.message : ''));
-  }
-});
+// (Manual deck PDF upload removed in Phase 6 — the investor deck is auto-
+// converted from the customer's populated PPTX on the backend.)
 
 // Customer name chip in the upper-left of the Products section — gives
 // signed-in customers a persistent reminder of which account they're on.

@@ -2706,6 +2706,10 @@ async function generatePptxDeck(d) {
           alert('Copy failed — select the key and copy manually.');
         }
       });
+      // Refresh the persistent list below so the new row appears immediately.
+      if (typeof window.__refreshInvestorKeysList === 'function') {
+        window.__refreshInvestorKeysList();
+      }
     } catch (err) {
       alert('Generate investor key failed.\n\n' + (err && err.message ? err.message : ''));
     } finally {
@@ -2713,6 +2717,120 @@ async function generatePptxDeck(d) {
       submit.textContent = original;
     }
   });
+})();
+
+/* ============================================================
+   INVESTORS KEYS — persistent list (with trash-delete)
+   Mirrors the Customer Submissions list pattern below; one row
+   per investor key the admin has minted.
+   ============================================================ */
+(function investorKeysListPanel() {
+  const list      = document.getElementById('investorKeysList');
+  const summary   = document.getElementById('investorKeysListSummary');
+  const refresh   = document.getElementById('investorKeysListRefresh');
+  if (!list || !summary || !refresh) return;
+
+  const API = 'https://vv-marketing-api.onrender.com';
+  function pin() { return sessionStorage.getItem('vv_admin_pin') || ''; }
+  function adminUrl(path) {
+    const sep = path.includes('?') ? '&' : '?';
+    return `${API}${path}${sep}pin=${encodeURIComponent(pin())}`;
+  }
+  function htmlEsc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+  function fmtDate(iso) {
+    if (!iso) return '';
+    try { return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); }
+    catch { return iso; }
+  }
+
+  async function load() {
+    summary.textContent = 'Loading…';
+    list.innerHTML = '';
+    let rows = [];
+    try {
+      const res = await fetch(adminUrl('/api/admin/investor-keys'), {
+        headers: { 'X-Admin-Pin': pin() },
+      });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      rows = Array.isArray(data.keys) ? data.keys : [];
+    } catch (err) {
+      summary.textContent = 'Failed to load investor keys.';
+      return;
+    }
+    if (!rows.length) {
+      summary.textContent = 'No investor keys yet.';
+      list.innerHTML = '<div class="partner-subs-empty">Generated keys will appear here as soon as you create one above.</div>';
+      return;
+    }
+    summary.textContent = rows.length + ' investor key' + (rows.length === 1 ? '' : 's');
+    list.innerHTML = rows.map(renderRow).join('');
+    list.querySelectorAll('[data-delete-id]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const id   = btn.getAttribute('data-delete-id');
+        const name = btn.getAttribute('data-delete-name');
+        if (!confirm(`Delete the investor key for "${name}"? This wipes any signed NDAs for this investor. The investor's deck access will be revoked.`)) return;
+        btn.disabled = true;
+        try {
+          const res = await fetch(adminUrl('/api/admin/investor-keys/' + encodeURIComponent(id)), {
+            method: 'DELETE',
+            headers: { 'X-Admin-Pin': pin() },
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          await load();
+        } catch (err) {
+          alert('Delete failed.\n\n' + (err && err.message ? err.message : ''));
+          btn.disabled = false;
+        }
+      });
+    });
+    list.querySelectorAll('[data-copy-key]').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const key = btn.getAttribute('data-copy-key');
+        try {
+          await navigator.clipboard.writeText(key);
+          const orig = btn.textContent;
+          btn.textContent = 'Copied ✓';
+          setTimeout(() => { btn.textContent = orig; }, 1200);
+        } catch {}
+      });
+    });
+  }
+
+  function renderRow(r) {
+    const revoked = !!r.revoked;
+    return '' +
+      '<div class="partner-subs-folder' + (revoked ? ' is-revoked' : '') + '" data-id="' + htmlEsc(r.id) + '">' +
+        '<div class="partner-subs-folder-main">' +
+          '<div class="partner-subs-folder-name">' + htmlEsc(r.investorName || '(unnamed)') + (revoked ? ' <span class="partner-subs-folder-key-revoked">revoked</span>' : '') + '</div>' +
+          '<div class="partner-subs-folder-meta">Created ' + htmlEsc(fmtDate(r.createdAt)) + '</div>' +
+        '</div>' +
+        '<div class="partner-subs-folder-side">' +
+          '<button type="button" class="partner-subs-folder-key" data-copy-key="' + htmlEsc(r.key) + '" title="Click to copy">' +
+            '<span class="partner-subs-folder-key-label">KEY</span>' +
+            '<span class="partner-subs-folder-key-val">' + htmlEsc(r.key) + '</span>' +
+            '<span class="partner-subs-folder-key-copy">⧉</span>' +
+          '</button>' +
+          '<button type="button" class="partner-subs-trash" data-delete-id="' + htmlEsc(r.id) + '" data-delete-name="' + htmlEsc(r.investorName || '') + '" title="Delete investor key + all signed NDAs" aria-label="Delete">' +
+            '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' +
+              '<polyline points="3 6 5 6 21 6"/>' +
+              '<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>' +
+              '<path d="M10 11v6M14 11v6"/>' +
+              '<path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>' +
+            '</svg>' +
+          '</button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  refresh.addEventListener('click', load);
+  load();
+  // Expose so the generator panel can refresh us after minting a new key.
+  window.__refreshInvestorKeysList = load;
 })();
 
 /* ============================================================
@@ -2960,6 +3078,19 @@ async function generatePptxDeck(d) {
            <span class="partner-subs-folder-key-val">—</span>
          </span>`;
 
+    // Trash button: delete the customer key + every dependent row (cascade).
+    // Hidden when no key id is attached (legacy submissions without a key).
+    const trashBtn = sub.customerKeyId
+      ? `<button type="button" class="partner-subs-trash" data-delete-customer-key="${htmlEsc(sub.customerKeyId)}" data-delete-customer-name="${htmlEsc(sub.customerName || '')}" title="Delete this customer and all their data" aria-label="Delete customer">
+           <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+             <polyline points="3 6 5 6 21 6"/>
+             <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+             <path d="M10 11v6M14 11v6"/>
+             <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+           </svg>
+         </button>`
+      : '';
+
     card.innerHTML = `
       <button type="button" class="partner-subs-folder-head" aria-expanded="true">
         <svg class="partner-subs-folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -2971,12 +3102,38 @@ async function generatePptxDeck(d) {
         </div>
         ${keyChip}
         <span class="partner-status-pill ${pillCls}">${pillTxt}</span>
+        ${trashBtn}
         <span class="partner-subs-folder-caret">▾</span>
       </button>
       <div class="partner-subs-folder-body">
         ${renderDeliverables(sub)}
       </div>
     `;
+
+    // Trash-button handler. Stops propagation so it doesn't toggle the folder.
+    const trashEl = card.querySelector('[data-delete-customer-key]');
+    if (trashEl) {
+      trashEl.addEventListener('click', async (ev) => {
+        ev.stopPropagation();
+        const keyId = trashEl.getAttribute('data-delete-customer-key');
+        const name  = trashEl.getAttribute('data-delete-customer-name') || '(unnamed)';
+        if (!confirm('Delete customer "' + name + '" and EVERY piece of their data?\n\n' +
+                     'This wipes: submission, finalized xlsx/pptx, marketplace tile, signed NDAs ' +
+                     'against this customer, and the customer key itself.\n\nThis cannot be undone.')) return;
+        trashEl.disabled = true;
+        try {
+          const res = await fetch(adminUrl('/api/admin/customer-keys/' + encodeURIComponent(keyId)), {
+            method: 'DELETE',
+            headers: { 'X-Admin-Pin': adminPin() },
+          });
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          await loadSubmissions();
+        } catch (err) {
+          alert('Delete failed.\n\n' + (err && err.message ? err.message : ''));
+          trashEl.disabled = false;
+        }
+      });
+    }
 
     // Copy-to-clipboard handler on the key chip. Stops propagation so it
     // doesn't toggle the folder open/closed.

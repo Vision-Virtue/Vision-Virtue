@@ -85,6 +85,13 @@ export const customerKeyRepo = {
   revoke(id: string): void {
     getDb().prepare('UPDATE customer_keys SET revoked = 1 WHERE id = ?').run(id);
   },
+
+  /** Hard-delete a customer key and cascade through every dependent table
+   *  (submissions, listings, NDAs, GL accounts, budgets, etc.) via FK
+   *  ON DELETE CASCADE. Used by the Finance AI trash-row action. */
+  delete(id: string): void {
+    getDb().prepare('DELETE FROM customer_keys WHERE id = ?').run(id);
+  },
 };
 
 /** Random {PREFIX}-XXXXXX key (6 chars, A-Z+0-9, unambiguous).
@@ -156,6 +163,11 @@ export const investorKeyRepo = {
 
   revoke(id: string): void {
     getDb().prepare('UPDATE investor_keys SET revoked = 1 WHERE id = ?').run(id);
+  },
+
+  /** Hard-delete an investor key. Cascades to nda_signatures via the FK. */
+  delete(id: string): void {
+    getDb().prepare('DELETE FROM investor_keys WHERE id = ?').run(id);
   },
 };
 
