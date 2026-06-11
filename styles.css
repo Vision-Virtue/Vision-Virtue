@@ -170,6 +170,9 @@ body {
   font-weight: 700;
   letter-spacing: 0.18em;
   color: var(--white);
+  line-height: 1.05;
+  max-width: 6.5rem;
+  display: inline-block;
 }
 
 .nav-links {
@@ -180,10 +183,10 @@ body {
   gap: 1.1rem;
 }
 
-/* Keep every link's text on a single line — otherwise as the nav gets crowded
-   (Get in Touch + Investors Marketplace + Authorized Personnel all share the
-   row) each link starts breaking on word boundaries and stacks vertically. */
-.nav-links li { white-space: nowrap; }
+/* Multi-word nav items (e.g. "What Sets Us Apart?") wrap onto at most 2 rows
+   with a tight line-height so the navbar stays vertically compact. Items of
+   2 words or less stay on one line naturally. */
+.nav-links li { line-height: 1.05; }
 .nav-links a {
   font-size: 0.78rem;
   font-weight: 500;
@@ -191,7 +194,10 @@ body {
   color: rgba(255,255,255,0.8);
   text-decoration: none;
   transition: color var(--transition);
-  white-space: nowrap;
+  line-height: 1.05;
+  text-align: center;
+  display: inline-block;
+  max-width: 7.5rem;
 }
 
 .nav-links a:hover { color: var(--white); }
@@ -212,17 +218,18 @@ body {
 .nav-investor-link {
   background: rgba(58, 167, 167, 0.18);
   color: #9fe2e2;
-  padding: 0.4rem 1.1rem;
+  padding: 0.4rem 0.85rem;
   border-radius: 3px;
   border: 1px solid rgba(58, 167, 167, 0.4);
   font-family: var(--font-sans);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   cursor: pointer;
-  line-height: 1;
+  line-height: 1.05;
+  text-align: center;
+  max-width: 7rem;
   transition: background 0.2s, color 0.2s;
-  white-space: nowrap;
 }
 .nav-investor-link:hover {
   background: rgba(58, 167, 167, 0.35);
@@ -237,20 +244,21 @@ body {
 .nav-auth-btn {
   background: rgba(130,80,200,0.18);
   color: #c99af0;
-  padding: 0.4rem 1.1rem;
+  padding: 0.4rem 0.85rem;
   border-radius: 3px;
   border: 1px solid rgba(130,80,200,0.35);
   font-family: var(--font-sans);
-  font-size: 0.8rem;
+  font-size: 0.78rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.05em;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 0.4rem;
-  line-height: 1;
+  gap: 0.35rem;
+  line-height: 1.05;
+  text-align: center;
+  max-width: 8rem;
   transition: background 0.2s, color 0.2s;
-  white-space: nowrap;
 }
 
 .nav-auth-btn:hover,
