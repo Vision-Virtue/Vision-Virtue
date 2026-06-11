@@ -25,6 +25,17 @@
     .dv-pdf { width: 100%; height: 100%; border: none; background: #fff; }
     .dv-status { position: absolute; inset: 0; display: grid; place-items: center; color: #c8d7eb; font-size: 0.95rem; padding: 1rem; text-align: center; }
     .dv-foot { padding: 0.4rem 1.4rem; font-size: 0.72rem; color: #6b7c97; text-align: center; background: #08182f; border-top: 1px solid rgba(200,215,235,0.08); }
+    /* Anti-screenshot overlay — drawn over the deck whenever the window loses
+       focus or becomes hidden. Print-Screen on Windows often triggers a brief
+       focus loss, which gives us a chance to redact the deck before the
+       capture lands. Not bulletproof — phone camera of the screen still works
+       — but raises the bar substantially. */
+    .dv-shield { position: fixed; inset: 0; z-index: 20; background: #0a1533; display: none; align-items: center; justify-content: center; flex-direction: column; gap: 0.6rem; color: #c8d7eb; text-align: center; padding: 2rem; }
+    .dv-shield.is-active { display: flex; }
+    .dv-shield-title { font-size: 1.3rem; font-weight: 700; color: #fff; }
+    .dv-shield-sub { font-size: 0.92rem; max-width: 560px; line-height: 1.5; }
+    /* Block user-selection on the chrome so it can't be highlight-copied. */
+    .dv-topbar, .dv-foot, .dv-watermark { user-select: none; -webkit-user-select: none; }
   </style>
 </head>
 <body oncontextmenu="return false">
@@ -53,6 +64,14 @@
 
   <div class="dv-watermark" aria-hidden="true">
     <div class="dv-watermark-text" id="dvWatermark">CONFIDENTIAL</div>
+  </div>
+
+  <!-- Anti-screenshot shield — shown whenever the window loses focus or the
+       page becomes hidden, so PrintScreen on Windows captures this instead of
+       the deck. -->
+  <div class="dv-shield" id="dvShield" aria-hidden="true">
+    <div class="dv-shield-title">Confidential Deck Hidden</div>
+    <div class="dv-shield-sub">For confidentiality, the deck is hidden while this window is inactive. Click the window to resume viewing.</div>
   </div>
 
   <script>
@@ -92,14 +111,36 @@
     });
 
     // Soft view-only deterrents (won't stop a determined download, but block
-    // the casual paths: right-click, Ctrl+S/P, drag, common dev shortcuts).
+    // the casual paths: right-click, Ctrl+S/P, drag, common dev shortcuts,
+    // and macOS screenshot shortcuts where we can intercept them).
     document.addEventListener('keydown', (ev) => {
       const ctrl = ev.ctrlKey || ev.metaKey;
       const k = ev.key.toLowerCase();
-      if (ctrl && (k === 's' || k === 'p' || k === 'u')) { ev.preventDefault(); }
+      if (ctrl && (k === 's' || k === 'p' || k === 'u' || k === 'c' || k === 'a')) { ev.preventDefault(); }
       if (ev.key === 'F12') { ev.preventDefault(); }
+      if (ev.key === 'PrintScreen' || ev.key === 'PrintScrn') { ev.preventDefault(); flashShield(); }
+      // macOS screenshot combos: Cmd+Shift+3/4/5 — best-effort intercept
+      if (ev.metaKey && ev.shiftKey && (k === '3' || k === '4' || k === '5')) { ev.preventDefault(); flashShield(); }
+      // Windows snipping: Win+Shift+S
+      if (ev.shiftKey && (ev.metaKey || ev.key === 'Meta') && k === 's') { ev.preventDefault(); flashShield(); }
     }, true);
     document.addEventListener('dragstart', (ev) => ev.preventDefault());
+    document.addEventListener('copy', (ev) => ev.preventDefault());
+
+    // Anti-screenshot shield: hide the deck whenever the window loses focus or
+    // the tab becomes hidden. Many screenshot tools briefly defocus the
+    // browser as they activate, which lets us redact the deck in time.
+    const shield = document.getElementById('dvShield');
+    function showShield() { shield.classList.add('is-active'); shield.setAttribute('aria-hidden', 'false'); }
+    function hideShield() { shield.classList.remove('is-active'); shield.setAttribute('aria-hidden', 'true'); }
+    function flashShield() { showShield(); setTimeout(hideShield, 1200); }
+    window.addEventListener('blur',  showShield);
+    window.addEventListener('focus', hideShield);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') showShield(); else hideShield();
+    });
+    // Snipping Tool on Windows often arrives via "fullscreenchange" too.
+    document.addEventListener('fullscreenchange', flashShield);
 
     async function loadDeck() {
       const statusEl = document.getElementById('dvStatus');
