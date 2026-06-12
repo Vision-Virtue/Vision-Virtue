@@ -12,8 +12,8 @@
    ============================================================ */
 
 import Anthropic from '@anthropic-ai/sdk';
-import { PartnerSubmission, MarketplaceListingKpis } from '../db/partner.repository';
-import { resolveStoredXlsx } from './partner-xlsx.service';
+import { CapitaFlowSubmission, MarketplaceListingKpis } from '../db/capitaflow.repository';
+import { resolveStoredXlsx } from './capitaflow-xlsx.service';
 import { readWorkbookAsText } from './pptx-generator.service';
 
 const EXTRACTOR_MODEL = 'claude-sonnet-4-20250514';
@@ -83,7 +83,7 @@ function normalizeKpiValue(v: unknown): string | undefined {
  * publish never blocks on the LLM call.
  */
 export async function extractMarketplaceTileData(
-  submission: PartnerSubmission,
+  submission: CapitaFlowSubmission,
 ): Promise<MarketplaceTileExtract> {
   const f = (submission.formData && typeof submission.formData === 'object'
     ? submission.formData

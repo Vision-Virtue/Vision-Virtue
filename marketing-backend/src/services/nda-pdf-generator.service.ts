@@ -8,7 +8,7 @@
 import fs from 'fs';
 import path from 'path';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
-import { NdaSignature } from '../db/partner.repository';
+import { NdaSignature } from '../db/capitaflow.repository';
 
 const TEMPLATE_RELATIVE = path.join(__dirname, '..', '..', 'templates', 'Vision_Virtue_NDA_VC_PE_Investors.pdf');
 

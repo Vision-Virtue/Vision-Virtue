@@ -22,7 +22,7 @@ const VIS_API = 'https://vv-marketing-api.onrender.com';
   history.replaceState({}, '', window.location.pathname + window.location.hash);
 })();
 
-// Auth check — same sessionStorage handshake as the partner area.
+// Auth check — same sessionStorage handshake as the CapitaFlow area.
 if (sessionStorage.getItem('vv_customer_auth') !== '1') {
   window.location.replace('index.html');
 }

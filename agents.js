@@ -623,7 +623,7 @@ function generatePptTemplate_UNUSED() {
 // ── File Drop Zone removed in the 2026-06 pivot ──────────────
 //
 // Customers now upload their PDF/DOCX/PPTX/XLSX files directly from
-// section 10 of the partner portal questionnaire. Admins review the
+// section 10 of the capitaflow portal questionnaire. Admins review the
 // uploads inside each submission's folder under "Customer Submissions"
 // further down this page.
 //
@@ -645,7 +645,7 @@ function fmtSize(bytes) {
 // FINANCE WORKFLOW ENGINE
 // ══════════════════════════════════════════════════════════════════
 
-const WF_STAGES = ['analysis','build','cfo_review','vc_review','partner_review','final'];
+const WF_STAGES = ['analysis','build','cfo_review','vc_review','capitaflow_review','final'];
 
 function getCompanyContext() {
   return {
@@ -1297,7 +1297,7 @@ If ready, approve for Partner review. If minor issues, correct them yourself and
     wfComment('Ethan Caldwell (VC Expert)', vcReview.substring(0, 500) + (vcReview.length > 500 ? '…' : ''));
 
     // ─── STAGE 5: PARTNER REVIEW ───────────────────────────────
-    wfSetStage('partner_review');
+    wfSetStage('capitaflow_review');
     wfLog('Partner', 'Raphael reviewing deliverables for final approval…');
 
     const partnerPrompt = `You are Raphael, Partner at Vision & Virtue. You have final authority over all deliverables that go to clients.
@@ -2644,7 +2644,7 @@ async function generatePptxDeck(d) {
 
 /* ============================================================
    INVESTORS KEYS — generate IV-XXXXXX keys for the
-   Investors Marketplace (Partner offering, investor side)
+   Investors Marketplace (CapitaFlow offering, investor side)
    ============================================================ */
 (function investorKeysPanel() {
   const form    = document.getElementById('investorKeysForm');
@@ -2685,13 +2685,13 @@ async function generatePptxDeck(d) {
       }
       const data = await res.json();
       result.innerHTML = `
-        <div class="partner-keys-card">
-          <div class="partner-keys-card-label">New investor key for <strong>${htmlEsc(data.investorName)}</strong></div>
-          <div class="partner-keys-card-row">
-            <code class="partner-keys-code" id="investorKeysCode">${htmlEsc(data.key)}</code>
-            <button type="button" class="partner-keys-copy" id="investorKeysCopy">Copy</button>
+        <div class="capitaflow-keys-card">
+          <div class="capitaflow-keys-card-label">New investor key for <strong>${htmlEsc(data.investorName)}</strong></div>
+          <div class="capitaflow-keys-card-row">
+            <code class="capitaflow-keys-code" id="investorKeysCode">${htmlEsc(data.key)}</code>
+            <button type="button" class="capitaflow-keys-copy" id="investorKeysCopy">Copy</button>
           </div>
-          <div class="partner-keys-card-hint">Share this key with the investor. They enter it on the Investors Marketplace gate to view customer tiles.</div>
+          <div class="capitaflow-keys-card-hint">Share this key with the investor. They enter it on the Investors Marketplace gate to view customer tiles.</div>
         </div>
       `;
       result.hidden = false;
@@ -2764,7 +2764,7 @@ async function generatePptxDeck(d) {
     }
     if (!rows.length) {
       summary.textContent = 'No investor keys yet.';
-      list.innerHTML = '<div class="partner-subs-empty">Generated keys will appear here as soon as you create one above.</div>';
+      list.innerHTML = '<div class="capitaflow-subs-empty">Generated keys will appear here as soon as you create one above.</div>';
       return;
     }
     summary.textContent = rows.length + ' investor key' + (rows.length === 1 ? '' : 's');
@@ -2804,18 +2804,18 @@ async function generatePptxDeck(d) {
   function renderRow(r) {
     const revoked = !!r.revoked;
     return '' +
-      '<div class="partner-subs-folder' + (revoked ? ' is-revoked' : '') + '" data-id="' + htmlEsc(r.id) + '">' +
-        '<div class="partner-subs-folder-main">' +
-          '<div class="partner-subs-folder-name">' + htmlEsc(r.investorName || '(unnamed)') + (revoked ? ' <span class="partner-subs-folder-key-revoked">revoked</span>' : '') + '</div>' +
-          '<div class="partner-subs-folder-meta">Created ' + htmlEsc(fmtDate(r.createdAt)) + '</div>' +
+      '<div class="capitaflow-subs-folder' + (revoked ? ' is-revoked' : '') + '" data-id="' + htmlEsc(r.id) + '">' +
+        '<div class="capitaflow-subs-folder-main">' +
+          '<div class="capitaflow-subs-folder-name">' + htmlEsc(r.investorName || '(unnamed)') + (revoked ? ' <span class="capitaflow-subs-folder-key-revoked">revoked</span>' : '') + '</div>' +
+          '<div class="capitaflow-subs-folder-meta">Created ' + htmlEsc(fmtDate(r.createdAt)) + '</div>' +
         '</div>' +
-        '<div class="partner-subs-folder-side">' +
-          '<button type="button" class="partner-subs-folder-key" data-copy-key="' + htmlEsc(r.key) + '" title="Click to copy">' +
-            '<span class="partner-subs-folder-key-label">KEY</span>' +
-            '<span class="partner-subs-folder-key-val">' + htmlEsc(r.key) + '</span>' +
-            '<span class="partner-subs-folder-key-copy">⧉</span>' +
+        '<div class="capitaflow-subs-folder-side">' +
+          '<button type="button" class="capitaflow-subs-folder-key" data-copy-key="' + htmlEsc(r.key) + '" title="Click to copy">' +
+            '<span class="capitaflow-subs-folder-key-label">KEY</span>' +
+            '<span class="capitaflow-subs-folder-key-val">' + htmlEsc(r.key) + '</span>' +
+            '<span class="capitaflow-subs-folder-key-copy">⧉</span>' +
           '</button>' +
-          '<button type="button" class="partner-subs-trash" data-delete-id="' + htmlEsc(r.id) + '" data-delete-name="' + htmlEsc(r.investorName || '') + '" title="Delete investor key + all signed NDAs" aria-label="Delete">' +
+          '<button type="button" class="capitaflow-subs-trash" data-delete-id="' + htmlEsc(r.id) + '" data-delete-name="' + htmlEsc(r.investorName || '') + '" title="Delete investor key + all signed NDAs" aria-label="Delete">' +
             '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">' +
               '<polyline points="3 6 5 6 21 6"/>' +
               '<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>' +
@@ -2834,13 +2834,13 @@ async function generatePptxDeck(d) {
 })();
 
 /* ============================================================
-   PARTNER CUSTOMER KEYS — generate VV-XXXXXX keys
+   CAPITAFLOW CUSTOMER KEYS — generate VV-XXXXXX keys
    ============================================================ */
-(function partnerKeysPanel() {
-  const form    = document.getElementById('partnerKeysForm');
-  const nameInp = document.getElementById('partnerKeysCustomerName');
-  const submit  = document.getElementById('partnerKeysSubmit');
-  const result  = document.getElementById('partnerKeysResult');
+(function capitaflowKeysPanel() {
+  const form    = document.getElementById('capitaflowKeysForm');
+  const nameInp = document.getElementById('capitaflowKeysCustomerName');
+  const submit  = document.getElementById('capitaflowKeysSubmit');
+  const result  = document.getElementById('capitaflowKeysResult');
   if (!form || !nameInp || !submit || !result) return;
 
   const API = 'https://vv-marketing-api.onrender.com';
@@ -2875,18 +2875,18 @@ async function generatePptxDeck(d) {
       }
       const data = await res.json();
       result.innerHTML = `
-        <div class="partner-keys-card">
-          <div class="partner-keys-card-label">New key for <strong>${htmlEsc(data.customerName)}</strong></div>
-          <div class="partner-keys-card-row">
-            <code class="partner-keys-code" id="partnerKeysCode">${htmlEsc(data.key)}</code>
-            <button type="button" class="partner-keys-copy" id="partnerKeysCopy">Copy</button>
+        <div class="capitaflow-keys-card">
+          <div class="capitaflow-keys-card-label">New key for <strong>${htmlEsc(data.customerName)}</strong></div>
+          <div class="capitaflow-keys-card-row">
+            <code class="capitaflow-keys-code" id="capitaflowKeysCode">${htmlEsc(data.key)}</code>
+            <button type="button" class="capitaflow-keys-copy" id="capitaflowKeysCopy">Copy</button>
           </div>
-          <div class="partner-keys-card-hint">Share this key with the customer. They paste it on the partner page to open their portal.</div>
+          <div class="capitaflow-keys-card-hint">Share this key with the customer. They paste it on the capitaflow page to open their portal.</div>
         </div>
       `;
       result.hidden = false;
       nameInp.value = '';
-      const copyBtn = result.querySelector('#partnerKeysCopy');
+      const copyBtn = result.querySelector('#capitaflowKeysCopy');
       copyBtn.addEventListener('click', async () => {
         try {
           await navigator.clipboard.writeText(data.key);
@@ -2906,12 +2906,12 @@ async function generatePptxDeck(d) {
 })();
 
 /* ============================================================
-   PARTNER CUSTOMER SUBMISSIONS — Raphael's review panel
+   CAPITAFLOW CUSTOMER SUBMISSIONS — Raphael's review panel
    ============================================================ */
-(function partnerSubsPanel() {
-  const list    = document.getElementById('partnerSubsList');
-  const summary = document.getElementById('partnerSubsSummary');
-  const refresh = document.getElementById('partnerSubsRefresh');
+(function capitaflowSubsPanel() {
+  const list    = document.getElementById('capitaflowSubsList');
+  const summary = document.getElementById('capitaflowSubsSummary');
+  const refresh = document.getElementById('capitaflowSubsRefresh');
   if (!list || !summary || !refresh) return;
 
   const API = 'https://vv-marketing-api.onrender.com';
@@ -2953,7 +2953,7 @@ async function generatePptxDeck(d) {
   }
 
   function renderEmpty() {
-    list.innerHTML = '<div class="partner-subs-empty">No customer submissions yet. Folders appear here as soon as a partner customer submits the Customer’s Questionnaire.</div>';
+    list.innerHTML = '<div class="capitaflow-subs-empty">No customer submissions yet. Folders appear here as soon as a capitaflow customer submits the Customer’s Questionnaire.</div>';
   }
 
   function renderDeliverables(sub) {
@@ -2963,13 +2963,13 @@ async function generatePptxDeck(d) {
     // ── Customer-uploaded materials (Section 10 of the questionnaire) ──
     // List is fetched async on folder expand; placeholder rendered here.
     const uploadsBlock = `
-      <div class="partner-subs-uploads" data-uploads-sub="${esc(sub.id)}">
-        <div class="partner-subs-uploads-head">
-          <span class="partner-subs-uploads-title">Customer Uploads</span>
-          <span class="partner-subs-uploads-count" data-uploads-count></span>
+      <div class="capitaflow-subs-uploads" data-uploads-sub="${esc(sub.id)}">
+        <div class="capitaflow-subs-uploads-head">
+          <span class="capitaflow-subs-uploads-title">Customer Uploads</span>
+          <span class="capitaflow-subs-uploads-count" data-uploads-count></span>
         </div>
-        <div class="partner-subs-uploads-list" data-uploads-list>
-          <span class="partner-subs-uploads-loading">Loading…</span>
+        <div class="capitaflow-subs-uploads-list" data-uploads-list>
+          <span class="capitaflow-subs-uploads-loading">Loading…</span>
         </div>
       </div>
     `;
@@ -2981,52 +2981,52 @@ async function generatePptxDeck(d) {
     // Finalize button reappears for a re-finalize after the correction.
     const excelActions = `
       ${xlsxReady
-        ? `<button type="button" class="partner-subs-action partner-subs-download" data-action="download" data-product="excel">⬇ Download</button>
-           <button type="button" class="partner-subs-action partner-subs-generate" data-action="generate">↻ Regenerate</button>
-           <button type="button" class="partner-subs-action partner-subs-reupload" data-action="reupload">⤴ Reupload</button>`
-        : `<button type="button" class="partner-subs-action partner-subs-generate" data-action="generate">Generate xlsx</button>`}
+        ? `<button type="button" class="capitaflow-subs-action capitaflow-subs-download" data-action="download" data-product="excel">⬇ Download</button>
+           <button type="button" class="capitaflow-subs-action capitaflow-subs-generate" data-action="generate">↻ Regenerate</button>
+           <button type="button" class="capitaflow-subs-action capitaflow-subs-reupload" data-action="reupload">⤴ Reupload</button>`
+        : `<button type="button" class="capitaflow-subs-action capitaflow-subs-generate" data-action="generate">Generate xlsx</button>`}
       ${isFinal
-        ? `<span class="partner-status-pill partner-status-finalized">Finalized</span>`
-        : `<button type="button" class="partner-subs-action partner-subs-finalize" data-action="finalize">Finalize</button>`}
+        ? `<span class="capitaflow-status-pill capitaflow-status-finalized">Finalized</span>`
+        : `<button type="button" class="capitaflow-subs-action capitaflow-subs-finalize" data-action="finalize">Finalize</button>`}
     `;
 
     const pptxActions = `
       ${sub.hasPptx === true
-        ? `<button type="button" class="partner-subs-action partner-subs-download" data-action="download" data-product="pptx">⬇ Download</button>
-           <button type="button" class="partner-subs-action partner-subs-generate" data-action="generate" data-product="pptx">↻ Regenerate</button>
-           <button type="button" class="partner-subs-action partner-subs-reupload" data-action="reupload" data-product="pptx">⤴ Reupload</button>`
-        : `<button type="button" class="partner-subs-action partner-subs-generate" data-action="generate" data-product="pptx" ${xlsxReady ? '' : 'disabled'}>${xlsxReady ? 'Generate pptx' : 'Generate xlsx first'}</button>`}
+        ? `<button type="button" class="capitaflow-subs-action capitaflow-subs-download" data-action="download" data-product="pptx">⬇ Download</button>
+           <button type="button" class="capitaflow-subs-action capitaflow-subs-generate" data-action="generate" data-product="pptx">↻ Regenerate</button>
+           <button type="button" class="capitaflow-subs-action capitaflow-subs-reupload" data-action="reupload" data-product="pptx">⤴ Reupload</button>`
+        : `<button type="button" class="capitaflow-subs-action capitaflow-subs-generate" data-action="generate" data-product="pptx" ${xlsxReady ? '' : 'disabled'}>${xlsxReady ? 'Generate pptx' : 'Generate xlsx first'}</button>`}
     `;
 
     return `
-      <div class="partner-subs-deliverables">
+      <div class="capitaflow-subs-deliverables">
         ${uploadsBlock}
-        <div class="partner-subs-deliverable">
-          <div class="partner-subs-deliverable-icon partner-subs-deliverable-icon-excel">
+        <div class="capitaflow-subs-deliverable">
+          <div class="capitaflow-subs-deliverable-icon capitaflow-subs-deliverable-icon-excel">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2"/>
               <line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/>
               <line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>
             </svg>
           </div>
-          <div class="partner-subs-deliverable-meta">
-            <div class="partner-subs-deliverable-title">Financial Model</div>
-            <div class="partner-subs-deliverable-sub">Customer's Questionnaire populated · downstream sheets calculated by formulas</div>
+          <div class="capitaflow-subs-deliverable-meta">
+            <div class="capitaflow-subs-deliverable-title">Financial Model</div>
+            <div class="capitaflow-subs-deliverable-sub">Customer's Questionnaire populated · downstream sheets calculated by formulas</div>
           </div>
-          <div class="partner-subs-deliverable-actions">${excelActions}</div>
+          <div class="capitaflow-subs-deliverable-actions">${excelActions}</div>
         </div>
-        <div class="partner-subs-deliverable">
-          <div class="partner-subs-deliverable-icon partner-subs-deliverable-icon-ppt">
+        <div class="capitaflow-subs-deliverable">
+          <div class="capitaflow-subs-deliverable-icon capitaflow-subs-deliverable-icon-ppt">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
               <rect x="2" y="3" width="20" height="14" rx="2"/>
               <line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
             </svg>
           </div>
-          <div class="partner-subs-deliverable-meta">
-            <div class="partner-subs-deliverable-title">Investor Deck</div>
-            <div class="partner-subs-deliverable-sub">PowerPoint populated from xlsx · regenerate after refreshing calculations in Excel</div>
+          <div class="capitaflow-subs-deliverable-meta">
+            <div class="capitaflow-subs-deliverable-title">Investor Deck</div>
+            <div class="capitaflow-subs-deliverable-sub">PowerPoint populated from xlsx · regenerate after refreshing calculations in Excel</div>
           </div>
-          <div class="partner-subs-deliverable-actions">${pptxActions}</div>
+          <div class="capitaflow-subs-deliverable-actions">${pptxActions}</div>
         </div>
       </div>
     `;
@@ -3034,15 +3034,15 @@ async function generatePptxDeck(d) {
 
   function renderFolder(sub) {
     const isFinal = sub.status === 'finalized';
-    const pillCls = isFinal ? 'partner-status-finalized' : 'partner-status-review';
+    const pillCls = isFinal ? 'capitaflow-status-finalized' : 'capitaflow-status-review';
     const pillTxt = isFinal ? 'Finalized' : 'Under Vision’s Review';
 
     const card = document.createElement('div');
-    card.className = 'partner-subs-folder';
+    card.className = 'capitaflow-subs-folder';
     card.dataset.subId = sub.id;
     // Customer key chip: shows VV-XXXXXX in the folder header. Authorized
     // personnel can copy it to clipboard for the customer if they lose it,
-    // or open the customer's Visibility / Partner portal directly via the
+    // or open the customer's Visibility / CapitaFlow portal directly via the
     // adjacent pills (both offerings share the same customer key).
     const portalKey = sub.customerKey && !sub.customerKeyRevoked ? sub.customerKey : '';
     const portalName = sub.customerName || '';
@@ -3050,38 +3050,38 @@ async function generatePptxDeck(d) {
       `?adminKey=${encodeURIComponent(portalKey)}` +
       `&adminName=${encodeURIComponent(portalName)}`;
     const portalPills = portalKey
-      ? `<a class="partner-subs-folder-portal"
+      ? `<a class="capitaflow-subs-folder-portal"
              href="${buildPortalUrl('visibility.html')}"
              target="_blank" rel="noopener" data-open-portal="1"
              title="Open this customer's Visibility portal in a new tab">
-           <span class="partner-subs-folder-portal-icon" aria-hidden="true">📊</span>
-           <span class="partner-subs-folder-portal-label">Visibility</span>
+           <span class="capitaflow-subs-folder-portal-icon" aria-hidden="true">📊</span>
+           <span class="capitaflow-subs-folder-portal-label">Visibility</span>
          </a>
-         <a class="partner-subs-folder-portal"
-             href="${buildPortalUrl('partner.html')}"
+         <a class="capitaflow-subs-folder-portal"
+             href="${buildPortalUrl('capitaflow.html')}"
              target="_blank" rel="noopener" data-open-portal="1"
-             title="Open this customer's Partner portal in a new tab">
-           <span class="partner-subs-folder-portal-icon" aria-hidden="true">🤝</span>
-           <span class="partner-subs-folder-portal-label">Partner</span>
+             title="Open this customer's CapitaFlow portal in a new tab">
+           <span class="capitaflow-subs-folder-portal-icon" aria-hidden="true">🤝</span>
+           <span class="capitaflow-subs-folder-portal-label">CapitaFlow</span>
          </a>`
       : '';
     const keyChip = sub.customerKey
-      ? `<span class="partner-subs-folder-key${sub.customerKeyRevoked ? ' is-revoked' : ''}"
+      ? `<span class="capitaflow-subs-folder-key${sub.customerKeyRevoked ? ' is-revoked' : ''}"
               data-customer-key="${htmlEsc(sub.customerKey)}"
               title="${sub.customerKeyRevoked ? 'Key revoked' : 'Click to copy'}">
-           <span class="partner-subs-folder-key-label">KEY</span>
-           <span class="partner-subs-folder-key-val">${htmlEsc(sub.customerKey)}</span>
-           ${sub.customerKeyRevoked ? '<span class="partner-subs-folder-key-revoked">revoked</span>' : '<span class="partner-subs-folder-key-copy">⧉</span>'}
+           <span class="capitaflow-subs-folder-key-label">KEY</span>
+           <span class="capitaflow-subs-folder-key-val">${htmlEsc(sub.customerKey)}</span>
+           ${sub.customerKeyRevoked ? '<span class="capitaflow-subs-folder-key-revoked">revoked</span>' : '<span class="capitaflow-subs-folder-key-copy">⧉</span>'}
          </span>${portalPills}`
-      : `<span class="partner-subs-folder-key is-missing" title="Customer key not found in database">
-           <span class="partner-subs-folder-key-label">KEY</span>
-           <span class="partner-subs-folder-key-val">—</span>
+      : `<span class="capitaflow-subs-folder-key is-missing" title="Customer key not found in database">
+           <span class="capitaflow-subs-folder-key-label">KEY</span>
+           <span class="capitaflow-subs-folder-key-val">—</span>
          </span>`;
 
     // Trash button: delete the customer key + every dependent row (cascade).
     // Hidden when no key id is attached (legacy submissions without a key).
     const trashBtn = sub.customerKeyId
-      ? `<button type="button" class="partner-subs-trash" data-delete-customer-key="${htmlEsc(sub.customerKeyId)}" data-delete-customer-name="${htmlEsc(sub.customerName || '')}" title="Delete this customer and all their data" aria-label="Delete customer">
+      ? `<button type="button" class="capitaflow-subs-trash" data-delete-customer-key="${htmlEsc(sub.customerKeyId)}" data-delete-customer-name="${htmlEsc(sub.customerName || '')}" title="Delete this customer and all their data" aria-label="Delete customer">
            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
              <polyline points="3 6 5 6 21 6"/>
              <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
@@ -3092,20 +3092,20 @@ async function generatePptxDeck(d) {
       : '';
 
     card.innerHTML = `
-      <button type="button" class="partner-subs-folder-head" aria-expanded="true">
-        <svg class="partner-subs-folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <button type="button" class="capitaflow-subs-folder-head" aria-expanded="true">
+        <svg class="capitaflow-subs-folder-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
           <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
         </svg>
-        <div class="partner-subs-folder-meta">
-          <div class="partner-subs-folder-name">${htmlEsc(sub.customerName) || '(no name)'}</div>
-          <div class="partner-subs-folder-sub">Submitted ${htmlEsc(fmtDate(sub.submittedAt))}${sub.finalizedAt ? ' · Finalized ' + htmlEsc(fmtDate(sub.finalizedAt)) : ''}</div>
+        <div class="capitaflow-subs-folder-meta">
+          <div class="capitaflow-subs-folder-name">${htmlEsc(sub.customerName) || '(no name)'}</div>
+          <div class="capitaflow-subs-folder-sub">Submitted ${htmlEsc(fmtDate(sub.submittedAt))}${sub.finalizedAt ? ' · Finalized ' + htmlEsc(fmtDate(sub.finalizedAt)) : ''}</div>
         </div>
         ${keyChip}
-        <span class="partner-status-pill ${pillCls}">${pillTxt}</span>
+        <span class="capitaflow-status-pill ${pillCls}">${pillTxt}</span>
         ${trashBtn}
-        <span class="partner-subs-folder-caret">▾</span>
+        <span class="capitaflow-subs-folder-caret">▾</span>
       </button>
-      <div class="partner-subs-folder-body">
+      <div class="capitaflow-subs-folder-body">
         ${renderDeliverables(sub)}
       </div>
     `;
@@ -3144,7 +3144,7 @@ async function generatePptxDeck(d) {
         const key = keyEl.getAttribute('data-customer-key') || '';
         try {
           await navigator.clipboard.writeText(key);
-          const copy = keyEl.querySelector('.partner-subs-folder-key-copy');
+          const copy = keyEl.querySelector('.capitaflow-subs-folder-key-copy');
           if (copy) {
             const original = copy.textContent;
             copy.textContent = '✓';
@@ -3163,15 +3163,15 @@ async function generatePptxDeck(d) {
       });
     }
 
-    // Open-Portal anchors (Visibility + Partner): let the native target="_blank"
+    // Open-Portal anchors (Visibility + CapitaFlow): let the native target="_blank"
     // handle the navigation, just stop the click from bubbling to the
     // folder-head toggle so the folder doesn't collapse under the admin.
     card.querySelectorAll('[data-open-portal]').forEach((el) => {
       el.addEventListener('click', (ev) => ev.stopPropagation());
     });
 
-    const head = card.querySelector('.partner-subs-folder-head');
-    const body = card.querySelector('.partner-subs-folder-body');
+    const head = card.querySelector('.capitaflow-subs-folder-head');
+    const body = card.querySelector('.capitaflow-subs-folder-body');
     head.addEventListener('click', () => {
       const isOpen = head.getAttribute('aria-expanded') === 'true';
       head.setAttribute('aria-expanded', String(!isOpen));
@@ -3179,7 +3179,7 @@ async function generatePptxDeck(d) {
     });
 
     // Fetch customer uploads for this submission and render them
-    // inside the .partner-subs-uploads block.
+    // inside the .capitaflow-subs-uploads block.
     (async () => {
       const block = card.querySelector(`[data-uploads-sub="${esc(sub.id)}"]`);
       if (!block) return;
@@ -3192,7 +3192,7 @@ async function generatePptxDeck(d) {
         const rows = Array.isArray(data.uploads) ? data.uploads : [];
         if (countEl) countEl.textContent = `${rows.length} file${rows.length === 1 ? '' : 's'}`;
         if (rows.length === 0) {
-          listEl.innerHTML = '<span class="partner-subs-uploads-empty">No supporting materials uploaded yet.</span>';
+          listEl.innerHTML = '<span class="capitaflow-subs-uploads-empty">No supporting materials uploaded yet.</span>';
           return;
         }
         listEl.innerHTML = rows.map((u) => {
@@ -3203,19 +3203,19 @@ async function generatePptxDeck(d) {
           })[ext] || ext.toUpperCase();
           const dlUrl = adminUrl(`/api/admin/submissions/${encodeURIComponent(sub.id)}/uploads/${encodeURIComponent(u.id)}`);
           return `
-            <div class="partner-subs-upload-row">
-              <span class="partner-subs-upload-pill">${esc(pill)}</span>
-              <a class="partner-subs-upload-name" href="${esc(dlUrl)}" target="_blank" rel="noopener" title="${esc(u.originalName)}">${esc(u.originalName)}</a>
-              <span class="partner-subs-upload-size">${esc(fmtSize(u.sizeBytes))}</span>
-              <span class="partner-subs-upload-status" data-upload-id="${esc(u.id)}">${u.hasExtractedText ? '✓ text extracted' : ''}</span>
-              <button type="button" class="partner-subs-upload-extract" data-upload-id="${esc(u.id)}" title="Re-extract text">↻ Extract</button>
+            <div class="capitaflow-subs-upload-row">
+              <span class="capitaflow-subs-upload-pill">${esc(pill)}</span>
+              <a class="capitaflow-subs-upload-name" href="${esc(dlUrl)}" target="_blank" rel="noopener" title="${esc(u.originalName)}">${esc(u.originalName)}</a>
+              <span class="capitaflow-subs-upload-size">${esc(fmtSize(u.sizeBytes))}</span>
+              <span class="capitaflow-subs-upload-status" data-upload-id="${esc(u.id)}">${u.hasExtractedText ? '✓ text extracted' : ''}</span>
+              <button type="button" class="capitaflow-subs-upload-extract" data-upload-id="${esc(u.id)}" title="Re-extract text">↻ Extract</button>
             </div>
           `;
         }).join('');
-        block.querySelectorAll('.partner-subs-upload-extract').forEach((btn) => {
+        block.querySelectorAll('.capitaflow-subs-upload-extract').forEach((btn) => {
           btn.addEventListener('click', async () => {
             const id = btn.getAttribute('data-upload-id');
-            const statusEl = block.querySelector(`.partner-subs-upload-status[data-upload-id="${id}"]`);
+            const statusEl = block.querySelector(`.capitaflow-subs-upload-status[data-upload-id="${id}"]`);
             btn.disabled = true;
             if (statusEl) statusEl.textContent = 'extracting…';
             try {
@@ -3231,7 +3231,7 @@ async function generatePptxDeck(d) {
           });
         });
       } catch {
-        listEl.innerHTML = '<span class="partner-subs-uploads-empty">Could not load uploads.</span>';
+        listEl.innerHTML = '<span class="capitaflow-subs-uploads-empty">Could not load uploads.</span>';
       }
     })();
 
@@ -3403,7 +3403,7 @@ async function generatePptxDeck(d) {
       list.appendChild(frag);
     } catch (err) {
       summary.textContent = 'Connection error — could not reach the API.';
-      console.warn('[partner-subs]', err);
+      console.warn('[capitaflow-subs]', err);
     }
   }
 

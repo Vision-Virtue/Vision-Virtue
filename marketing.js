@@ -25,7 +25,7 @@ const CHAT_AGENTS = {
   economist: { name: 'Dr. Ethan Ross', role: 'Chief Economist',  photo: 'agent_economist.jpg', color: 'blue'   },
   sofia:     { name: 'Sofia Chen',     role: 'Mgr. Marketing',   photo: 'agent_sofia.jpg',     color: 'purple' },
   daniel:    { name: 'Daniel Berg',    role: 'VP Marketing',      photo: 'agent_daniel.jpg',    color: 'teal'   },
-  raphael:   { name: 'Raphael',        role: 'Partner',           photo: 'team_raphael.png',    color: 'gold'   },
+  raphael:   { name: 'Raphael',        role: 'Partner',              photo: 'team_raphael.png',    color: 'gold'   },
 };
 
 // ── Workflow state config ──────────────────────────────────────

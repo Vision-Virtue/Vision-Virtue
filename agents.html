@@ -215,49 +215,49 @@
         </div>
 
         <!-- INVESTORS KEYS (mint new IV-XXXXXX keys for VCs/PEs/Investors) -->
-        <div class="fin-upload-section partner-keys-section">
+        <div class="fin-upload-section capitaflow-keys-section">
           <div class="fin-upload-header">
             <h3 class="fin-upload-title">Investors Keys</h3>
-            <p class="fin-upload-sub">Generate a one-per-investor access key for the Investors Marketplace. Each key opens the marketplace view where the VC/PE/Investor can browse Vision's customers raising capital under the Partner offering.</p>
+            <p class="fin-upload-sub">Generate a one-per-investor access key for the Investors Marketplace. Each key opens the marketplace view where the VC/PE/Investor can browse Vision's customers raising capital under the CapitaFlow offering.</p>
           </div>
-          <form class="partner-keys-form" id="investorKeysForm" autocomplete="off">
-            <input type="text" id="investorKeysInvestorName" class="partner-keys-input" placeholder="Investor / Fund name (e.g. Sequoia Capital)" required maxlength="200">
-            <button type="submit" class="partner-keys-submit" id="investorKeysSubmit">Generate Key</button>
+          <form class="capitaflow-keys-form" id="investorKeysForm" autocomplete="off">
+            <input type="text" id="investorKeysInvestorName" class="capitaflow-keys-input" placeholder="Investor / Fund name (e.g. Sequoia Capital)" required maxlength="200">
+            <button type="submit" class="capitaflow-keys-submit" id="investorKeysSubmit">Generate Key</button>
           </form>
-          <div class="partner-keys-result" id="investorKeysResult" hidden></div>
+          <div class="capitaflow-keys-result" id="investorKeysResult" hidden></div>
 
           <!-- Persistent list of every investor key (with delete) -->
-          <div class="partner-subs-toolbar" style="margin-top:1.2rem">
-            <button type="button" class="partner-subs-refresh" id="investorKeysListRefresh">↻ Refresh</button>
-            <span class="partner-subs-summary" id="investorKeysListSummary">Loading…</span>
+          <div class="capitaflow-subs-toolbar" style="margin-top:1.2rem">
+            <button type="button" class="capitaflow-subs-refresh" id="investorKeysListRefresh">↻ Refresh</button>
+            <span class="capitaflow-subs-summary" id="investorKeysListSummary">Loading…</span>
           </div>
-          <div class="partner-subs-list" id="investorKeysList"></div>
+          <div class="capitaflow-subs-list" id="investorKeysList"></div>
         </div>
 
         <!-- CUSTOMER KEYS (mint new VV-XXXXXX keys) -->
-        <div class="fin-upload-section partner-keys-section">
+        <div class="fin-upload-section capitaflow-keys-section">
           <div class="fin-upload-header">
             <h3 class="fin-upload-title">Customer Keys</h3>
-            <p class="fin-upload-sub">Generate a one-per-customer access key. Each key opens its own customer portal — the customer enters the key on the partner page and fills out the Customer's Questionnaire.</p>
+            <p class="fin-upload-sub">Generate a one-per-customer access key. Each key opens its own customer portal — the customer enters the key on the capitaflow page and fills out the Customer's Questionnaire.</p>
           </div>
-          <form class="partner-keys-form" id="partnerKeysForm" autocomplete="off">
-            <input type="text" id="partnerKeysCustomerName" class="partner-keys-input" placeholder="Customer name (e.g. Acme Corp)" required maxlength="200">
-            <button type="submit" class="partner-keys-submit" id="partnerKeysSubmit">Generate Key</button>
+          <form class="capitaflow-keys-form" id="capitaflowKeysForm" autocomplete="off">
+            <input type="text" id="capitaflowKeysCustomerName" class="capitaflow-keys-input" placeholder="Customer name (e.g. Acme Corp)" required maxlength="200">
+            <button type="submit" class="capitaflow-keys-submit" id="capitaflowKeysSubmit">Generate Key</button>
           </form>
-          <div class="partner-keys-result" id="partnerKeysResult" hidden></div>
+          <div class="capitaflow-keys-result" id="capitaflowKeysResult" hidden></div>
         </div>
 
-        <!-- CUSTOMER SUBMISSIONS (Partner area folders) -->
-        <div class="fin-upload-section partner-subs-section">
+        <!-- CUSTOMER SUBMISSIONS (CapitaFlow area folders) -->
+        <div class="fin-upload-section capitaflow-subs-section">
           <div class="fin-upload-header">
             <h3 class="fin-upload-title">Customer Submissions</h3>
-            <p class="fin-upload-sub">Folders below are auto-created when a partner customer submits the Customer's Questionnaire. Review the data and click <strong>Finalize</strong> to generate the personalized financial model and release it to the customer.</p>
+            <p class="fin-upload-sub">Folders below are auto-created when a capitaflow customer submits the Customer's Questionnaire. Review the data and click <strong>Finalize</strong> to generate the personalized financial model and release it to the customer.</p>
           </div>
-          <div class="partner-subs-toolbar">
-            <button type="button" class="partner-subs-refresh" id="partnerSubsRefresh">↻ Refresh</button>
-            <span class="partner-subs-summary" id="partnerSubsSummary">Loading…</span>
+          <div class="capitaflow-subs-toolbar">
+            <button type="button" class="capitaflow-subs-refresh" id="capitaflowSubsRefresh">↻ Refresh</button>
+            <span class="capitaflow-subs-summary" id="capitaflowSubsSummary">Loading…</span>
           </div>
-          <div class="partner-subs-list" id="partnerSubsList"></div>
+          <div class="capitaflow-subs-list" id="capitaflowSubsList"></div>
         </div>
 
       </div>
@@ -315,7 +315,7 @@
               <div class="wf-stage-agent">Ethan Caldwell — VC Expert</div>
             </div>
           </div>
-          <div class="wf-stage" data-stage="partner_review">
+          <div class="wf-stage" data-stage="capitaflow_review">
             <div class="wf-stage-dot"></div>
             <div class="wf-stage-info">
               <div class="wf-stage-name">Partner Review</div>

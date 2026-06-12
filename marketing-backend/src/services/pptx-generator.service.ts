@@ -307,7 +307,7 @@ export async function extractPlaceholdersFromXlsx(
 // Replaces the rigid sheet-name + column-letter lookup with a single LLM call
 // that:
 //   1. Reads ALL sheets from the customer's xlsx (no schema assumption)
-//   2. Reads any text the customer dropped into the partner-portal dropzone
+//   2. Reads any text the customer dropped into the capitaflow-portal dropzone
 //   3. Reads the unique {{PLACEHOLDER}} list from the template pptx
 //   4. Asks Claude to produce a JSON map { "{{X}}": "formatted value", ... }
 //
@@ -1604,7 +1604,7 @@ export async function generatePopulatedPptx(opts: {
   outputPptxPath: string;
   /**
    * Customer key id -- used to gather extracted text from any files the
-   * customer dropped into the partner-portal dropzone so Claude can pull
+   * customer dropped into the capitaflow-portal dropzone so Claude can pull
    * qualitative content (founders, market thesis, etc.) from them.
    */
   customerKeyId?: string;
@@ -2005,7 +2005,7 @@ async function injectCompanyLogoPostBuild(opts: {
   console.log('[pptx-gen] post-build: logo embedded successfully on ' + logoLocation.slideKey);
 }
 
-// ─── Storage path helpers (mirrors partner-xlsx.service) ─────────────────────
+// ─── Storage path helpers (mirrors capitaflow-xlsx.service) ─────────────────────
 
 export function customerPptxDir(): string {
   const dbPath = process.env.DB_PATH || './data/marketing.db';

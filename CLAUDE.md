@@ -22,7 +22,7 @@ Vision-Virtue/
 ├── visibility.html/css/js  # מודול ה-Visibility (פורטל לקוחות)
 ├── agents.html/css/js      # סוכני ה-AI הפיננסיים
 ├── marketing.html/css/js   # פלטפורמת שיווק + LinkedIn
-├── partner.html/css/js     # פורטל שותפים ומודלים פיננסיים
+├── capitaflow.html/css/js     # פורטל CapitaFlow ומודלים פיננסיים
 │
 ├── privacy.html            # מדיניות פרטיות (עודכן מאי 2026 — כולל Visibility Portal)
 ├── terms.html              # תנאי שימוש (עודכן מאי 2026 — כולל Visibility Portal)
@@ -33,7 +33,7 @@ Vision-Virtue/
 │   │   ├── controllers/
 │   │   ├── services/
 │   │   ├── db/
-│   │   │   └── partner.repository.ts   # ← generateKey() עם crypto.randomBytes
+│   │   │   └── capitaflow.repository.ts   # ← generateKey() עם crypto.randomBytes
 │   │   ├── middleware/
 │   │   ├── routes/
 │   │   └── utils/
@@ -122,7 +122,7 @@ Vision-Virtue/
 ### 3. 📈 Growth
 אסטרטגיות להגדלת ההכנסות.
 
-### 4. 🤝 Partner — פורטל שותפים
+### 4. 🤝 CapitaFlow — Fundraising Fast & Simple
 - מודל פיננסי מלא לסטארטאפים דרך שאלון ממוקד
 - תשאול: סקטור, סבב גיוס, לקוחות, מוצרים, עלויות, כוח אדם
 - הצוות של Vision & Virtue מאכלס את המודל ומעביר ללקוח
@@ -232,10 +232,10 @@ $blobSha = (Invoke-RestMethod -Uri ".../git/blobs" -Method Post -Body $body -Hea
 | `visibility.html/js/css` | המוצר המרכזי — Visibility Portal |
 | `agents.html/js/css` | מערכת סוכני ה-AI |
 | `marketing.html/js/css` | כלי LinkedIn |
-| `partner.html/js/css` | פורטל שותפים |
+| `capitaflow.html/js/css` | פורטל CapitaFlow |
 | `marketing-backend/src/` | Backend לשיווק (TypeScript) |
 | `marketing-backend/src/app.ts` | Rate limiting, CORS, security headers |
-| `marketing-backend/src/db/partner.repository.ts` | Customer key generation + CRUD |
+| `marketing-backend/src/db/capitaflow.repository.ts` | Customer key generation + CRUD |
 | `vision-virtue-spec.txt` | מפרט Budget Module |
 | `CF-spec` | מפרט Cash Flow Module |
 | `build_vc_ppt.py` | יצירת PPT אוטומטי |
@@ -379,7 +379,7 @@ node generate-narration-elevenlabs.js
 | `/api/customer/auth` | 20 req / 15 min / IP ← נוסף מאי 2026 |
 | `/api/chat/*` | 20 req / 60 sec / IP |
 
-### Key Generation (partner.repository.ts)
+### Key Generation (capitaflow.repository.ts)
 - פורמט: `VV-XXXXXX` (6 תווים מ-alphabet של 32: `ABCDEFGHJKLMNPQRSTUVWXYZ23456789`)
 - ~1 מיליארד קומבינציות אפשריות
 - **מאי 2026**: הוחלף `Math.random()` ב-`crypto.randomBytes()` (rejection-sampling, ללא bias)
@@ -1072,13 +1072,13 @@ KEEP_LARGEST  = True          # discard everything except the biggest blob
 
 ---
 
-## Partner Investor Deck — End-to-End Generation Pipeline (יוני 2026)
+## CapitaFlow Investor Deck — End-to-End Generation Pipeline (יוני 2026)
 
-הקוד הזה רץ עבור **כל** לקוח בdoor של Partner — אין שום branch ייעודי לפי-לקוח. Submission מגיע (כולל / או רק עם uploads → או רק עם שאלון → או שני שניהם), Raphael לוחץ "Generate PPTX" בFinance AI, ה-pipeline ב`pptx-generator.service.ts` רץ.
+הקוד הזה רץ עבור **כל** לקוח בdoor של CapitaFlow — אין שום branch ייעודי לפי-לקוח. Submission מגיע (כולל / או רק עם uploads → או רק עם שאלון → או שני שניהם), Raphael לוחץ "Generate PPTX" בFinance AI, ה-pipeline ב`pptx-generator.service.ts` רץ.
 
 ### Inputs (3 מקורות נתונים)
 1. **xlsx הלקוח** (Financial Model המאוכלס) — כל ה-sheets נקראים
-2. **uploads** של הלקוח (drag&drop מsection 10 בPartner portal) — PDF/DOCX/PPTX/XLSX → טקסט שכבר חולץ ע"י `deck-upload.service`
+2. **uploads** של הלקוח (drag&drop מsection 10 בCapitaFlow portal) — PDF/DOCX/PPTX/XLSX → טקסט שכבר חולץ ע"י `deck-upload.service`
 3. **Master template**: `marketing-backend/templates/VisionVirtue_InvestorDeck.pptx`
 
 ### Pipeline phases
@@ -1127,20 +1127,20 @@ KEEP_LARGEST  = True          # discard everything except the biggest blob
 - `marketing-backend/src/services/chart-renderer.service.ts` — SVG→PNG chart renderer
 - `marketing-backend/src/services/slide-rewriter.service.ts` — Phase 4 LLM rewrite (disabled by default)
 - `marketing-backend/src/services/deck-upload.service.ts` — customer uploads + text extraction
-- `marketing-backend/src/controllers/partner.controller.ts` — admin generate / download endpoints
+- `marketing-backend/src/controllers/capitaflow.controller.ts` — admin generate / download endpoints
 - `marketing-backend/templates/VisionVirtue_InvestorDeck.pptx` — master template (on Render disk)
 
 ---
 
 ## Investors Marketplace — End-to-End (יוני 2026)
 
-A second public surface for the Partner offering: lets VCs / PEs / family offices browse Vision's Partner customers raising capital, sign a standard NDA, and view the customer's investor deck — all gated by per-investor keys. Shipped in 10 phases over 2026-06-10 → 2026-06-11.
+A second public surface for the CapitaFlow offering: lets VCs / PEs / family offices browse Vision's CapitaFlow customers raising capital, sign a standard NDA, and view the customer's investor deck — all gated by per-investor keys. Shipped in 10 phases over 2026-06-10 → 2026-06-11.
 
 ### High-level flow
 
 1. **Admin (Finance AI → Investors Keys)** mints an `IV-XXXXXX` key per fund. The key shows up in a persistent list with a trash icon (cascade-delete).
 2. **Investor** lands on `visionvirtuepartnership.com`, clicks the new **Investors Marketplace** nav item (between "Get in Touch" and "Authorized Personnel"), enters their IV key.
-3. **Customer side** (Partner area, after finalization): one click on the Investors Marketplace tile → status flips from *Ready to Publish* → *Published*. All tile fields (sector, description, ask, GM%/ARR/Top-Line YR1→YR5, EBITDA YR5, NRR) are auto-extracted server-side from the customer's Financial Model xlsx. No form, no manual entry. **Unpublish** button reverses it.
+3. **Customer side** (CapitaFlow area, after finalization): one click on the Investors Marketplace tile → status flips from *Ready to Publish* → *Published*. All tile fields (sector, description, ask, GM%/ARR/Top-Line YR1→YR5, EBITDA YR5, NRR) are auto-extracted server-side from the customer's Financial Model xlsx. No form, no manual entry. **Unpublish** button reverses it.
 4. **Investor view** (`investors-marketplace.html`): grid of customer tiles. Hover → popover shows the KPIs with YR1/YR5 labels next to each value. "Other" sector pill is hidden.
 5. **Click a tile** → **NDA modal** (PDF iframe of the master NDA + form fields + typed-or-drawn signature canvas + checkbox). On Sign → backend persists the NDA record AND redirects to `deck-view.html`.
 6. **Deck viewer** embeds **Microsoft Office Online Viewer** in an iframe. Microsoft fetches the customer's populated PPTX via a short-lived signed URL (10 min TTL) and renders it as a slideshow — no download / edit UI. Anti-screenshot shield activates on window blur / Print-Screen / Cmd+Shift+3/4/5 / Win+Shift+S.
@@ -1151,7 +1151,7 @@ A second public surface for the Partner offering: lets VCs / PEs / family office
 | Table | Purpose | Cascade |
 |-------|---------|---------|
 | `investor_keys` | IV-XXXXXX key + investor name + revoked flag | NDA signatures cascade-delete |
-| `marketplace_listings` | One row per published submission. Fields: customer_name, logo_path, description, sector, ask_amount_text, kpis (JSON), deck_pdf_path (legacy), status, published_at, withdrawn_at | Linked to customer_keys + partner_submissions ON DELETE CASCADE |
+| `marketplace_listings` | One row per published submission. Fields: customer_name, logo_path, description, sector, ask_amount_text, kpis (JSON), deck_pdf_path (legacy), status, published_at, withdrawn_at | Linked to customer_keys + capitaflow_submissions ON DELETE CASCADE |
 | `nda_signatures` | Investor name + fund + title + email + sign_date + typed/drawn signature_value + signed_at + IP + user-agent. UNIQUE (investor_key_id, listing_id) | Cascades from investor_keys + marketplace_listings |
 
 ### Endpoints
@@ -1192,15 +1192,15 @@ A second public surface for the Partner offering: lets VCs / PEs / family office
 | `auth.js` | Routes admin PIN to `agreements.html` when target is `'agreements'`. |
 | `script.js` | `setupInvestorKeyGate()` posts to `/api/investor/auth`, sets sessionStorage, redirects. Wired to both desktop nav + mobile menu. |
 | `agents.html` + `agents.js` | "Investors Keys" generator form + persistent list with copy-key chips and trash icons. Trash on Customer Submissions folder head deletes the customer key + all dependent rows. |
-| `partner.html` + `partner.js` | Investors Marketplace tile in Partner area. **Inline buttons only** (no modal): `Publish to Marketplace` → `Published` + `Unpublish`. Auto-extracted data. The "Attach Deck PDF" UI was removed once Office Online Viewer landed. |
-| `investors-marketplace.html` | Tile grid with hover KPI popover. NDA modal (PDF iframe + form + typed/drawn signature canvas + checkbox + sign button + download-NDA link). Design mirrors Partner area (off-white body + navy hero + Raleway titles + accent blue). |
+| `capitaflow.html` + `capitaflow.js` | Investors Marketplace tile in CapitaFlow area. **Inline buttons only** (no modal): `Publish to Marketplace` → `Published` + `Unpublish`. Auto-extracted data. The "Attach Deck PDF" UI was removed once Office Online Viewer landed. |
+| `investors-marketplace.html` | Tile grid with hover KPI popover. NDA modal (PDF iframe + form + typed/drawn signature canvas + checkbox + sign button + download-NDA link). Design mirrors CapitaFlow area (off-white body + navy hero + Raleway titles + accent blue). |
 | `deck-view.html` | Embeds Office Online Viewer iframe. Anti-screenshot shield on window-blur / visibility-change / Print-Screen / Cmd+Shift+3/4/5 / Win+Shift+S. CONFIDENTIAL · `<investor>` watermark. Ctrl+S/P/U/C/A blocked, drag/copy blocked, F12 blocked. |
-| `agreements.html` | Card grid of signed NDAs with Download (populated PDF) and Delete per row. Matches Partner area design. |
+| `agreements.html` | Card grid of signed NDAs with Download (populated PDF) and Delete per row. Matches CapitaFlow area design. |
 | `Vision_Virtue_NDA_VC_PE_Investors.pdf` | Static NDA asset served from root. |
 
 ### Key design decisions
 
-- **Investor key prefix `IV-`** vs customer `VV-` so the two audiences never cross over. Same alphabet + 6-char body via `generateKey(prefix)` in `partner.repository.ts`.
+- **Investor key prefix `IV-`** vs customer `VV-` so the two audiences never cross over. Same alphabet + 6-char body via `generateKey(prefix)` in `capitaflow.repository.ts`.
 - **Auto-extraction over manual form**: the customer doesn't fill anything to publish — `marketplaceExtractor` reads their existing xlsx + form_data and fills the tile in one Claude call.
 - **Office Online Viewer over libreoffice**: Render's `aptPackages` doesn't install libreoffice on the Node native runtime. Rather than switch to Docker + plan upgrade, the deck-view pipes the customer's PPTX (via a signed token URL) to Microsoft Office Online Viewer which renders the slideshow client-side in an iframe.
 - **Token TTL 10 min**: enough time for Microsoft to fetch + render; short enough to limit a leaked-URL window. NDA does the legal heavy lifting; the TTL is defense-in-depth.

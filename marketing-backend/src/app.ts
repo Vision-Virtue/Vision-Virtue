@@ -43,6 +43,10 @@ const allowedOrigins = [
   'https://vision-virtue.github.io',
   'https://visionvirtuepartnership.com',
   'https://www.visionvirtuepartnership.com',
+  // Local dev server (dev.sh serves on :8000). Always allowed so the
+  // workflow of "edit locally, hit live backend" works without redeploys.
+  'http://localhost:8000',
+  'http://127.0.0.1:8000',
   ...(process.env.NODE_ENV !== 'production'
     ? ['http://localhost:3000', 'http://127.0.0.1:3000']
     : []),

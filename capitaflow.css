@@ -1,0 +1,894 @@
+/* ============================================================
+   VISION & VIRTUE — CapitaFlow Customer Area
+   Inherits root tokens (--navy-*, --accent, --gray-*, --font-*)
+   from styles.css
+   ============================================================ */
+
+.capitaflow-page {
+  background: var(--off-white, #f4f6fa);
+  min-height: 100vh;
+}
+
+.capitaflow-nav .capitaflow-nav-badge {
+  background: rgba(58, 107, 196, 0.18);
+  color: #cfd8e9;
+}
+
+/* ── HERO ─────────────────────────────────────────────────── */
+.capitaflow-hero {
+  position: relative;
+  padding: 6.5rem 2rem 4.5rem;
+  background-color: var(--navy-900);
+  background-image: linear-gradient(180deg, rgba(10,18,38,0.92) 0%, rgba(10,18,38,0.85) 100%), url('bg_arrows.jpg');
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+}
+.capitaflow-hero-bg { position: absolute; inset: 0; pointer-events: none; }
+.capitaflow-hero-content {
+  position: relative;
+  max-width: 1100px;
+  margin: 0 auto;
+  text-align: center;
+}
+.capitaflow-hero-title {
+  font-family: var(--font-head);
+  font-size: clamp(2.4rem, 5vw, 3.8rem);
+  font-weight: 800;
+  color: var(--white);
+  letter-spacing: 0.02em;
+  margin: 0.5rem 0 1rem;
+  line-height: 1.1;
+}
+.capitaflow-hero-sub {
+  font-size: 1.05rem;
+  color: rgba(255, 255, 255, 0.78);
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+/* ── PRODUCTS SECTION ────────────────────────────────────── */
+.capitaflow-products-section {
+  padding: 4rem 2rem 5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+  position: relative;
+}
+.capitaflow-section-head {
+  text-align: center;
+  margin-bottom: 2.5rem;
+}
+
+/* Customer name chip — sits in the upper-left of the products section so
+   the customer sees which account they're signed into without having to
+   scroll back to the hero. Driven by capitaflow.js renderTileState. */
+.capitaflow-customer-badge {
+  position: absolute;
+  top: 4.4rem;
+  left: 2rem;
+  background: #fff;
+  border: 1px solid var(--gray-100, #e5e7eb);
+  border-radius: 10px;
+  padding: 0.7rem 1rem;
+  box-shadow: 0 1px 3px rgba(8, 15, 32, 0.05);
+  max-width: 260px;
+  line-height: 1.2;
+  z-index: 2;
+}
+.capitaflow-customer-badge-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--gray-600, #6b7280);
+  margin-bottom: 0.25rem;
+}
+.capitaflow-customer-badge-name {
+  display: block;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--navy-900, #0a1226);
+}
+@media (max-width: 900px) {
+  /* Stack the chip above the centered header on narrower viewports
+     so it never overlaps the title. */
+  .capitaflow-customer-badge {
+    position: static;
+    margin: 0 auto 1.25rem;
+    max-width: 100%;
+    text-align: center;
+  }
+}
+.capitaflow-section-title {
+  font-family: var(--font-head);
+  font-size: clamp(1.8rem, 3.5vw, 2.4rem);
+  font-weight: 700;
+  color: var(--navy-900);
+  margin: 0.4rem 0 0.6rem;
+}
+.capitaflow-section-sub {
+  color: var(--gray-600);
+  max-width: 720px;
+  margin: 0 auto;
+  font-size: 0.95rem;
+  line-height: 1.6;
+}
+
+.capitaflow-tiles-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2rem;
+}
+
+/* ── TILE ────────────────────────────────────────────────── */
+.capitaflow-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  text-align: left;
+  background: var(--white);
+  border: 1px solid var(--gray-100);
+  border-radius: 12px;
+  padding: 1.75rem 1.5rem 1.5rem;
+  cursor: pointer;
+  font-family: inherit;
+  color: inherit;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+  position: relative;
+  min-height: 220px;
+}
+.capitaflow-tile:hover:not(.is-coming-soon) {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 28px rgba(0,0,0,0.10);
+  border-color: rgba(58, 107, 196, 0.4);
+}
+.capitaflow-tile.is-coming-soon {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.capitaflow-tile-icon {
+  width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(58, 107, 196, 0.10);
+  color: var(--accent, #3a6bc4);
+  border-radius: 10px;
+  margin-bottom: 1rem;
+}
+.capitaflow-tile-icon svg { width: 24px; height: 24px; }
+
+.capitaflow-tile-title {
+  font-family: var(--font-head);
+  font-size: 1.15rem;
+  font-weight: 700;
+  color: var(--navy-900);
+  margin: 0 0 0.4rem;
+}
+.capitaflow-tile-desc {
+  font-size: 0.86rem;
+  color: var(--gray-600);
+  line-height: 1.6;
+  margin: 0 0 1.25rem;
+  flex: 1;
+}
+.capitaflow-tile-status { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+
+.capitaflow-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.capitaflow-status-new {
+  background: rgba(58, 107, 196, 0.12);
+  color: var(--accent, #3a6bc4);
+}
+.capitaflow-status-review {
+  background: rgba(217, 156, 33, 0.15);
+  color: #a87b1c;
+}
+.capitaflow-status-finalized {
+  background: rgba(74, 124, 63, 0.15);
+  color: #356a2e;
+}
+.capitaflow-status-soon {
+  background: var(--gray-100, #e5e7eb);
+  color: var(--gray-600, #4b5563);
+}
+
+.capitaflow-tile-download {
+  font-size: 0.78rem;
+  color: var(--accent, #3a6bc4);
+  font-weight: 600;
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 1px;
+  background: transparent;
+  border-top: 0; border-left: 0; border-right: 0;
+  cursor: pointer;
+}
+.capitaflow-tile-download:hover { color: var(--accent-light, #5b8de0); }
+
+/* Secondary marketplace action (Attach/Update Deck PDF) — subtler than the
+   primary Unpublish / Publish actions on the Investors Marketplace tile. */
+.capitaflow-tile-download.capitaflow-tile-secondary {
+  color: var(--gray-600, #4a5568);
+  font-weight: 500;
+  border-bottom-style: dashed;
+}
+.capitaflow-tile-download.capitaflow-tile-secondary:hover {
+  color: var(--navy-700, #112045);
+}
+
+.capitaflow-edit-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin: 0 0 1.2rem;
+  padding: 0.75rem 1rem;
+  background: #fff;
+  border: 1px solid var(--gray-100, #e5e7eb);
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(8, 15, 32, 0.04);
+  flex-wrap: wrap;
+}
+.capitaflow-edit-banner-text {
+  flex: 1 1 320px;
+  font-size: 0.85rem;
+  color: var(--gray-600, #4b5563);
+  line-height: 1.45;
+}
+.capitaflow-edit-banner-btn {
+  flex: 0 0 auto;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--navy-900, #0a1226);
+  background: transparent;
+  border: 1px solid var(--navy-900, #0a1226);
+  padding: 0.42rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  letter-spacing: 0.02em;
+  transition: background 0.14s, color 0.14s;
+}
+.capitaflow-edit-banner-btn:hover {
+  background: var(--navy-900, #0a1226);
+  color: #fff;
+}
+.capitaflow-edit-banner-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ── QUESTIONNAIRE SECTION ──────────────────────────────── */
+.capitaflow-questionnaire-section {
+  padding: 3.5rem 2rem 5rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+.capitaflow-q-head { text-align: center; position: relative; margin-bottom: 2rem; }
+.capitaflow-q-back {
+  position: absolute; left: 0; top: 0;
+  background: transparent; border: none;
+  color: var(--accent, #3a6bc4);
+  font-family: inherit; font-size: 0.88rem; font-weight: 600;
+  cursor: pointer;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+}
+.capitaflow-q-back:hover { background: rgba(58, 107, 196, 0.08); }
+
+.capitaflow-q-form {
+  display: flex; flex-direction: column; gap: 1.5rem;
+}
+
+.capitaflow-q-block {
+  background: var(--white);
+  border: 1px solid var(--gray-100);
+  border-radius: 10px;
+  padding: 1.6rem 1.5rem 1.75rem;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+}
+.capitaflow-q-block-title {
+  font-family: var(--font-head);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--navy-900);
+  margin: 0 0 0.35rem;
+}
+.capitaflow-q-block-sub {
+  color: var(--gray-600);
+  font-size: 0.85rem;
+  margin: 0 0 1.25rem;
+  line-height: 1.55;
+}
+
+.capitaflow-q-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem 1.25rem;
+}
+.capitaflow-q-field { display: flex; flex-direction: column; gap: 0.4rem; }
+.capitaflow-q-label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--navy-900);
+  letter-spacing: 0.02em;
+}
+.capitaflow-q-req { color: #b94a4a; }
+
+.capitaflow-q-input,
+.capitaflow-q-select {
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--gray-200, #d1d5db);
+  border-radius: 6px;
+  background: var(--white);
+  font-family: var(--font-sans);
+  font-size: 0.88rem;
+  color: var(--navy-900);
+  outline: none;
+  transition: border-color 0.18s, box-shadow 0.18s;
+}
+.capitaflow-q-input:focus,
+.capitaflow-q-select:focus {
+  border-color: var(--accent, #3a6bc4);
+  box-shadow: 0 0 0 3px rgba(58, 107, 196, 0.15);
+}
+
+.capitaflow-q-checkline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.8rem;
+  color: var(--gray-600);
+  margin-top: 0.35rem;
+  user-select: none;
+  cursor: pointer;
+}
+
+/* ── TABLES ─────────────────────────────────────────────── */
+.capitaflow-q-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--gray-100);
+  border-radius: 8px;
+  background: var(--white);
+}
+.capitaflow-q-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.83rem;
+  min-width: 720px;
+}
+.capitaflow-q-table-narrow { min-width: 360px; }
+.capitaflow-q-table thead th {
+  background: var(--off-white, #f4f6fa);
+  color: var(--navy-900);
+  font-weight: 600;
+  text-align: left;
+  padding: 0.6rem 0.7rem;
+  border-bottom: 1px solid var(--gray-100);
+  white-space: nowrap;
+}
+.capitaflow-q-table tbody td {
+  padding: 0.4rem 0.5rem;
+  border-bottom: 1px solid var(--gray-100);
+  vertical-align: middle;
+}
+.capitaflow-q-table tbody tr:last-child td { border-bottom: none; }
+.capitaflow-q-cell { padding: 0.45rem 0.55rem; font-size: 0.83rem; }
+.capitaflow-q-cell[type="number"] { text-align: right; }
+.capitaflow-q-custom { display: block; width: 100%; }
+/* HTML5 `hidden` attribute would normally collapse the element, but our
+   class above sets a non-default `display`, which clobbers it. Restore
+   the hide behaviour explicitly so the input only appears when JS shows
+   it after the customer picks "Other (specify)". */
+.capitaflow-q-custom[hidden] { display: none; }
+.capitaflow-q-select[hidden] { display: none; }
+
+.capitaflow-q-rmrow {
+  background: transparent;
+  border: none;
+  color: var(--gray-400, #9ca3af);
+  cursor: pointer;
+  padding: 0.35rem 0.55rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  transition: color 0.15s, background 0.15s;
+}
+.capitaflow-q-rmrow:hover { color: #b94a4a; background: rgba(185, 74, 74, 0.08); }
+
+.capitaflow-q-addrow {
+  margin-top: 0.85rem;
+  background: transparent;
+  border: 1px dashed rgba(58, 107, 196, 0.5);
+  color: var(--accent, #3a6bc4);
+  font-family: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  padding: 0.5rem 0.95rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+}
+.capitaflow-q-addrow:hover {
+  background: rgba(58, 107, 196, 0.06);
+  border-color: var(--accent, #3a6bc4);
+}
+
+/* ── ACTIONS ────────────────────────────────────────────── */
+.capitaflow-q-actions {
+  display: flex; flex-direction: column; align-items: center; gap: 0.85rem;
+  padding: 1.5rem 0 0;
+}
+.capitaflow-q-submit {
+  background: var(--accent, #3a6bc4);
+  color: var(--white);
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  padding: 0.85rem 2rem;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+  min-width: 240px;
+}
+.capitaflow-q-submit:hover { background: var(--accent-light, #5b8de0); transform: translateY(-1px); }
+.capitaflow-q-submit:active { transform: translateY(0); }
+.capitaflow-q-disclaimer {
+  font-size: 0.78rem;
+  color: var(--gray-600);
+  text-align: center;
+  margin: 0;
+  max-width: 540px;
+}
+
+/* ── THANK-YOU CARD ─────────────────────────────────────── */
+.capitaflow-q-thanks {
+  text-align: center;
+  background: var(--white);
+  border: 1px solid var(--gray-100);
+  border-radius: 12px;
+  padding: 3rem 2rem;
+  max-width: 640px;
+  margin: 1rem auto 0;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.06);
+}
+.capitaflow-q-thanks-icon {
+  width: 56px; height: 56px;
+  margin: 0 auto 1rem;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(74, 124, 63, 0.12);
+  color: #356a2e;
+}
+.capitaflow-q-thanks-icon svg { width: 32px; height: 32px; }
+.capitaflow-q-thanks h3 {
+  font-family: var(--font-head);
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: var(--navy-900);
+  margin: 0 0 0.6rem;
+}
+.capitaflow-q-thanks p {
+  color: var(--gray-600);
+  font-size: 0.92rem;
+  line-height: 1.65;
+  margin: 0 auto 1.5rem;
+  max-width: 480px;
+}
+.capitaflow-q-back-btn {
+  background: transparent;
+  border: 1px solid var(--accent, #3a6bc4);
+  color: var(--accent, #3a6bc4);
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  padding: 0.55rem 1.25rem;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+}
+.capitaflow-q-back-btn:hover {
+  background: var(--accent, #3a6bc4);
+  color: var(--white);
+}
+
+/* ── SUB-BLOCK TITLES (e.g. 6.a / 6.b inside section 6) ─── */
+.capitaflow-q-subblock-title {
+  font-family: var(--font-sans);
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--navy-900);
+  margin: 0 0 0.6rem;
+  letter-spacing: 0.01em;
+}
+.capitaflow-q-subblock-spaced { margin-top: 1.5rem; }
+
+/* ── READ-ONLY AUTO-FILL CELLS (Section 7 Let's Scale) ─── */
+.capitaflow-q-readonly {
+  display: inline-block;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  background: rgba(58, 107, 196, 0.06);
+  color: var(--navy-900);
+  border: 1px dashed rgba(58, 107, 196, 0.25);
+  border-radius: 4px;
+  font-size: 0.82rem;
+  font-style: normal;
+  white-space: nowrap;
+  text-align: left;
+}
+.capitaflow-q-readonly-cell {
+  font-weight: 600;
+  color: var(--navy-900);
+  background: rgba(58, 107, 196, 0.04);
+}
+
+/* ── EMPTY-STATE ROW (e.g. Unit Costs before any product) ─ */
+.capitaflow-q-empty {
+  text-align: center;
+  color: var(--gray-600);
+  font-style: italic;
+  font-size: 0.82rem;
+  padding: 1rem 0.75rem;
+}
+
+/* ── RESPONSIVE ────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .capitaflow-hero          { padding: 5rem 1.25rem 3.5rem; }
+  .capitaflow-products-section,
+  .capitaflow-questionnaire-section { padding: 2.5rem 1rem 4rem; }
+  .capitaflow-q-block       { padding: 1.25rem 1rem 1.5rem; }
+  .capitaflow-q-back        { position: static; display: inline-block; margin-bottom: 0.75rem; }
+}
+
+/* ============================================================
+   DARK THEME — applied while the customer is filling out the
+   Customer's Questionnaire. Body gets `.is-questionnaire-open`
+   from capitaflow.js (showQuestionnaire / showProducts), and the
+   styles below switch the questionnaire view to the same navy
+   palette used on the Finance AI page. The light-theme rules
+   above remain untouched for the rest of the capitaflow area.
+   ============================================================ */
+body.capitaflow-page.is-questionnaire-open {
+  background: var(--navy-900);
+}
+
+.is-questionnaire-open .capitaflow-q-back { color: #9bbdf2; }
+.is-questionnaire-open .capitaflow-q-back:hover { background: rgba(91, 141, 224, 0.15); }
+
+.is-questionnaire-open .capitaflow-q-block {
+  background: var(--navy-800);
+  border: 1px solid rgba(91, 141, 224, 0.18);
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.25);
+}
+.is-questionnaire-open .capitaflow-q-block-title { color: #ffffff; }
+.is-questionnaire-open .capitaflow-q-block-sub   { color: rgba(255, 255, 255, 0.55); }
+
+.is-questionnaire-open .capitaflow-q-label       { color: rgba(255, 255, 255, 0.78); }
+.is-questionnaire-open .capitaflow-q-checkline   { color: rgba(255, 255, 255, 0.6); }
+.is-questionnaire-open .capitaflow-q-subblock-title { color: #ffffff; }
+
+/* Inputs & selects — dark with light text. The browser still
+   draws the native <select> dropdown menu in OS colors, which
+   is fine. */
+.is-questionnaire-open .capitaflow-q-input,
+.is-questionnaire-open .capitaflow-q-select {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: #ffffff;
+}
+.is-questionnaire-open .capitaflow-q-input::placeholder { color: rgba(255, 255, 255, 0.35); }
+.is-questionnaire-open .capitaflow-q-input:focus,
+.is-questionnaire-open .capitaflow-q-select:focus {
+  border-color: rgba(155, 189, 242, 0.7);
+  background: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 0 0 3px rgba(58, 107, 196, 0.25);
+}
+.is-questionnaire-open .capitaflow-q-select option {
+  background: var(--navy-800);
+  color: #ffffff;
+}
+
+/* Tables */
+.is-questionnaire-open .capitaflow-q-table-wrap {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.is-questionnaire-open .capitaflow-q-table thead th {
+  background: rgba(91, 141, 224, 0.10);
+  color: rgba(255, 255, 255, 0.85);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.is-questionnaire-open .capitaflow-q-table tbody td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.is-questionnaire-open .capitaflow-q-rmrow { color: rgba(255, 255, 255, 0.45); }
+.is-questionnaire-open .capitaflow-q-rmrow:hover {
+  color: #ff9c9c;
+  background: rgba(255, 80, 80, 0.12);
+}
+
+.is-questionnaire-open .capitaflow-q-addrow {
+  border: 1px dashed rgba(155, 189, 242, 0.5);
+  color: #9bbdf2;
+}
+.is-questionnaire-open .capitaflow-q-addrow:hover {
+  background: rgba(91, 141, 224, 0.12);
+  border-color: #9bbdf2;
+}
+
+/* Read-only auto-filled cells in section 7 */
+.is-questionnaire-open .capitaflow-q-readonly {
+  background: rgba(91, 141, 224, 0.10);
+  color: rgba(255, 255, 255, 0.85);
+  border: 1px dashed rgba(91, 141, 224, 0.35);
+}
+.is-questionnaire-open .capitaflow-q-readonly-cell {
+  background: rgba(91, 141, 224, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.is-questionnaire-open .capitaflow-q-empty { color: rgba(255, 255, 255, 0.45); }
+
+.is-questionnaire-open .capitaflow-q-disclaimer { color: rgba(255, 255, 255, 0.5); }
+
+/* Thank-you card — same dark treatment so the post-submit view
+   doesn't flash back to a light card. */
+.is-questionnaire-open .capitaflow-q-thanks {
+  background: var(--navy-800);
+  border: 1px solid rgba(91, 141, 224, 0.18);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+.is-questionnaire-open .capitaflow-q-thanks h3 { color: #ffffff; }
+.is-questionnaire-open .capitaflow-q-thanks p  { color: rgba(255, 255, 255, 0.65); }
+.is-questionnaire-open .capitaflow-q-thanks-icon {
+  background: rgba(74, 124, 63, 0.20);
+  color: #8ed47b;
+}
+.is-questionnaire-open .capitaflow-q-back-btn {
+  border-color: #9bbdf2;
+  color: #9bbdf2;
+}
+.is-questionnaire-open .capitaflow-q-back-btn:hover {
+  background: #9bbdf2;
+  color: var(--navy-900);
+}
+
+/* Inline help text under questionnaire inputs */
+.capitaflow-q-help {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
+  color: var(--gray-600, #6b7280);
+  line-height: 1.5;
+}
+
+/* ── Section 10 — Supporting Materials dropzone ─────────────── */
+.capitaflow-q-dropzone {
+  position: relative;
+  margin-top: 0.6rem;
+  border: 2px dashed var(--accent, #3a6bc4);
+  border-radius: 10px;
+  background: rgba(58,107,196,0.04);
+  padding: 2.2rem 1.5rem 1.6rem;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.16s, border-color 0.16s, transform 0.16s;
+}
+.capitaflow-q-dropzone:hover { background: rgba(58,107,196,0.08); }
+.capitaflow-q-dropzone.is-drag-over {
+  background: rgba(58,107,196,0.14);
+  border-color: var(--navy-900, #0a1226);
+  transform: scale(1.005);
+}
+.capitaflow-q-drop-icon {
+  width: 38px; height: 38px;
+  color: var(--accent, #3a6bc4);
+  display: block; margin: 0 auto 0.5rem;
+}
+.capitaflow-q-drop-primary {
+  font-weight: 600; color: var(--navy-900, #0a1226);
+  font-size: 0.95rem; margin: 0 0 0.25rem;
+}
+.capitaflow-q-drop-types {
+  font-size: 0.78rem; color: var(--gray-600, #6b7280);
+  margin: 0 0 0.85rem;
+}
+.capitaflow-q-drop-browse {
+  display: inline-block;
+  padding: 0.45rem 1.1rem;
+  font-size: 0.85rem; font-weight: 600;
+  border-radius: 6px;
+  background: var(--accent, #3a6bc4);
+  color: var(--white, #fff);
+  cursor: pointer;
+}
+.capitaflow-q-drop-browse:hover { background: #2f5aac; }
+.capitaflow-q-drop-status {
+  margin-top: 0.85rem;
+  font-size: 0.78rem;
+  color: var(--gray-600, #6b7280);
+  min-height: 1.1em;
+}
+
+.capitaflow-q-uploads-list { margin-top: 0.9rem; }
+.capitaflow-q-upload-row {
+  display: flex; align-items: center; gap: 0.7rem;
+  padding: 0.55rem 0.75rem;
+  border: 1px solid var(--gray-200, #e2e7ef);
+  border-radius: 8px;
+  background: var(--white, #fff);
+  margin-bottom: 0.45rem;
+}
+.capitaflow-q-upload-pill {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  font-size: 0.7rem; font-weight: 700;
+  background: var(--navy-900, #0a1226);
+  color: var(--white, #fff);
+  border-radius: 4px; letter-spacing: 0.04em;
+}
+.capitaflow-q-upload-name {
+  flex: 1; min-width: 0;
+  font-size: 0.86rem; color: var(--navy-900, #0a1226);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.capitaflow-q-upload-size {
+  font-size: 0.75rem; color: var(--gray-600, #6b7280);
+  font-variant-numeric: tabular-nums;
+}
+.capitaflow-q-upload-remove {
+  background: transparent; border: 0; cursor: pointer;
+  color: var(--gray-600, #6b7280); font-size: 1rem;
+  padding: 0.15rem 0.4rem; border-radius: 4px;
+  transition: background 0.14s, color 0.14s;
+}
+.capitaflow-q-upload-remove:hover { background: rgba(220,50,50,0.12); color: #c0392b; }
+.capitaflow-q-empty {
+  font-size: 0.78rem; color: var(--gray-600, #6b7280);
+  font-style: italic; margin: 0.4rem 0 0;
+}
+
+/* ── ETHAN CALDWELL CONSULTATION TILE ─────────────────────── */
+.capitaflow-tile-consult {
+  background: linear-gradient(160deg, #0d1830 0%, #1b2c54 100%);
+  color: #e9eef8;
+  border-color: #1b2c54;
+}
+.capitaflow-tile-consult .capitaflow-tile-title,
+.capitaflow-tile-consult .capitaflow-tile-desc { color: #e9eef8; }
+.capitaflow-tile-consult .capitaflow-tile-desc { opacity: 0.82; }
+.capitaflow-tile-consult .capitaflow-tile-icon { color: #5b8de0; }
+.capitaflow-tile-icon-consult { background: rgba(91,141,224,0.18); }
+
+/* ── CONSULTATION MODAL ───────────────────────────────────── */
+.consult-overlay {
+  position: fixed; inset: 0;
+  background: rgba(8, 15, 32, 0.72);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+.consult-overlay[hidden] { display: none; }
+.consult-modal {
+  background: #fff; color: var(--navy-900, #0a1226);
+  width: min(720px, 100%);
+  max-height: min(820px, 92vh);
+  border-radius: 14px;
+  display: flex; flex-direction: column;
+  box-shadow: 0 30px 70px rgba(0,0,0,0.45);
+  overflow: hidden;
+}
+.consult-head {
+  padding: 1rem 1.2rem;
+  border-bottom: 1px solid #e7eaf3;
+  display: flex; align-items: center; justify-content: space-between;
+  background: #f7f9fd;
+}
+.consult-head-meta { display: flex; align-items: center; gap: 0.85rem; }
+.consult-avatar {
+  width: 44px; height: 44px; border-radius: 50%;
+  background: linear-gradient(135deg, #0d1830 0%, #3a6bc4 100%);
+  color: #fff; font-weight: 700; font-size: 0.95rem;
+  display: flex; align-items: center; justify-content: center;
+  letter-spacing: 0.04em;
+}
+.consult-title {
+  margin: 0; font-size: 1rem; font-weight: 700;
+  color: var(--navy-900, #0a1226);
+}
+.consult-sub {
+  margin: 0.1rem 0 0; font-size: 0.78rem; color: var(--gray-600, #6b7280);
+}
+.consult-close {
+  background: transparent; border: 0; cursor: pointer;
+  font-size: 1.6rem; color: var(--gray-600, #6b7280);
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.14s;
+}
+.consult-close:hover { background: #e7eaf3; }
+
+.consult-body {
+  flex: 1; min-height: 280px;
+  padding: 1.1rem 1.2rem;
+  overflow-y: auto;
+  display: flex; flex-direction: column; gap: 0.85rem;
+  background: #fbfcfe;
+}
+.consult-msg {
+  max-width: 86%;
+  padding: 0.65rem 0.9rem;
+  border-radius: 10px;
+  font-size: 0.92rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+.consult-msg-user {
+  align-self: flex-end;
+  background: #0d1830; color: #fff;
+  border-bottom-right-radius: 3px;
+}
+.consult-msg-bot {
+  align-self: flex-start;
+  background: #fff; color: var(--navy-900, #0a1226);
+  border: 1px solid #e7eaf3;
+  border-bottom-left-radius: 3px;
+}
+.consult-msg-system {
+  align-self: center;
+  background: rgba(13, 24, 48, 0.06);
+  color: var(--gray-600, #6b7280);
+  font-size: 0.8rem; font-style: italic;
+}
+.consult-msg-error {
+  align-self: center;
+  background: rgba(220, 60, 60, 0.1);
+  color: #c0392b;
+  font-size: 0.85rem;
+}
+
+.consult-input-row {
+  display: flex; gap: 0.6rem;
+  padding: 0.9rem 1.2rem;
+  border-top: 1px solid #e7eaf3;
+  background: #fff;
+}
+.consult-input {
+  flex: 1;
+  resize: none;
+  font: inherit;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid #d6dce8;
+  border-radius: 8px;
+  outline: none;
+  transition: border-color 0.14s, box-shadow 0.14s;
+}
+.consult-input:focus {
+  border-color: #3a6bc4;
+  box-shadow: 0 0 0 3px rgba(58,107,196,0.15);
+}
+.consult-send {
+  background: #0d1830;
+  color: #fff;
+  border: 0;
+  padding: 0 1.3rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  transition: background 0.14s, opacity 0.14s;
+}
+.consult-send:hover:not(:disabled) { background: #1b2c54; }
+.consult-send:disabled { opacity: 0.5; cursor: not-allowed; }

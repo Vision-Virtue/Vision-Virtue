@@ -3,7 +3,7 @@
 
    Triggered after the personalized Financial Model xlsx is built,
    when the customer has uploaded supporting materials (PDF, DOCX,
-   PPTX) via the partner portal drag-and-drop. Reads those docs,
+   PPTX) via the capitaflow portal drag-and-drop. Reads those docs,
    asks Claude for business-presentation-relevant numbers/metrics
    that are NOT already represented in the workbook, and appends
    them as a new "Business Presentation Calcs" sheet.
