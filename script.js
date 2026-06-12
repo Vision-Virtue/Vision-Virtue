@@ -114,7 +114,7 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
   });
 });
 
-// ---------- Customer Key gate (Partner offering CTA) ----------
+// ---------- Customer Key gate (CapitaFlow offering CTA) ----------
 (function setupCustomerKeyGate() {
   const CK_BACKEND   = 'https://vv-marketing-api.onrender.com';
   const CK_TEST_KEY  = 'VV-TEST123';
@@ -124,10 +124,10 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
   const ckKey      = document.getElementById('ckKey');
   const ckEnterBtn = document.getElementById('ckEnterBtn');
   const ckError      = document.getElementById('ckError');
-  const partnerCta   = document.getElementById('partnerCustomerCta');
+  const capitaflowCta = document.getElementById('capitaflowCustomerCta');
   const visibilityCta = document.getElementById('visibilityCustomerCta');
 
-  if (!ckOverlay || (!partnerCta && !visibilityCta)) return;
+  if (!ckOverlay || (!capitaflowCta && !visibilityCta)) return;
 
   let pendingTarget = null;
 
@@ -147,7 +147,7 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
   }
 
   function targetUrl(t) {
-    if (t === 'partner') return 'partner.html';
+    if (t === 'capitaflow') return 'capitaflow.html';
     if (t === 'visibility') return 'visibility.html';
     return null;
   }
@@ -213,7 +213,7 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     if (url) window.location.href = url;
   }
 
-  partnerCta?.addEventListener('click', () => openCk('partner'));
+  capitaflowCta?.addEventListener('click', () => openCk('capitaflow'));
   visibilityCta?.addEventListener('click', () => openCk('visibility'));
   ckClose.addEventListener('click', closeCk);
   ckOverlay.addEventListener('click', e => { if (e.target === ckOverlay) closeCk(); });
@@ -300,7 +300,7 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 })();
 
 // ---------- Authorized Personnel notification badge ----------
-// Fetches the count of pending partner submissions from the public
+// Fetches the count of pending CapitaFlow submissions from the public
 // /api/notifications/pending-count endpoint and shows a small red bubble
 // on the Authorized Personnel button (and the mobile menu copy).
 (function setupAuthNotifBadge() {

@@ -1231,17 +1231,17 @@
 .api-error strong { color: #ef5350; }
 
 /* ============================================================
-   PARTNER CUSTOMER SUBMISSIONS PANEL — Finance AI
+   CAPITAFLOW CUSTOMER SUBMISSIONS PANEL — Finance AI
    ============================================================ */
-.partner-subs-section { margin-top: 1.5rem; }
+.capitaflow-subs-section { margin-top: 1.5rem; }
 
-.partner-subs-toolbar {
+.capitaflow-subs-toolbar {
   display: flex;
   align-items: center;
   gap: 0.85rem;
   margin: 0.5rem 0 1rem;
 }
-.partner-subs-refresh {
+.capitaflow-subs-refresh {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.18);
   color: var(--white, #fff);
@@ -1253,16 +1253,16 @@
   cursor: pointer;
   transition: background 0.18s, border-color 0.18s;
 }
-.partner-subs-refresh:hover {
+.capitaflow-subs-refresh:hover {
   background: rgba(255, 255, 255, 0.08);
   border-color: rgba(255, 255, 255, 0.35);
 }
-.partner-subs-summary {
+.capitaflow-subs-summary {
   font-size: 0.82rem;
   color: rgba(255, 255, 255, 0.7);
 }
 
-.partner-subs-empty {
+.capitaflow-subs-empty {
   background: rgba(255, 255, 255, 0.04);
   border: 1px dashed rgba(255, 255, 255, 0.18);
   border-radius: 8px;
@@ -1272,15 +1272,15 @@
   font-size: 0.86rem;
 }
 
-.partner-subs-list { display: flex; flex-direction: column; gap: 0.6rem; }
+.capitaflow-subs-list { display: flex; flex-direction: column; gap: 0.6rem; }
 
-.partner-subs-folder {
+.capitaflow-subs-folder {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 8px;
   overflow: hidden;
 }
-.partner-subs-folder-head {
+.capitaflow-subs-folder-head {
   display: flex;
   align-items: center;
   gap: 0.85rem;
@@ -1294,34 +1294,34 @@
   cursor: pointer;
   transition: background 0.18s;
 }
-.partner-subs-folder-head:hover { background: rgba(255, 255, 255, 0.05); }
-.partner-subs-folder-icon {
+.capitaflow-subs-folder-head:hover { background: rgba(255, 255, 255, 0.05); }
+.capitaflow-subs-folder-icon {
   width: 22px; height: 22px;
   color: var(--accent-light, #5b8de0);
   flex-shrink: 0;
 }
-.partner-subs-folder-meta { flex: 1; min-width: 0; }
-.partner-subs-folder-name {
+.capitaflow-subs-folder-meta { flex: 1; min-width: 0; }
+.capitaflow-subs-folder-name {
   font-weight: 700;
   font-size: 0.95rem;
   color: var(--white, #fff);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
-.partner-subs-folder-sub {
+.capitaflow-subs-folder-sub {
   font-size: 0.74rem;
   color: rgba(255, 255, 255, 0.55);
   margin-top: 0.15rem;
 }
-.partner-subs-folder-caret {
+.capitaflow-subs-folder-caret {
   color: rgba(255, 255, 255, 0.45);
   font-size: 0.85rem;
   transition: transform 0.18s;
 }
-.partner-subs-folder-head[aria-expanded="true"] .partner-subs-folder-caret { transform: rotate(180deg); }
+.capitaflow-subs-folder-head[aria-expanded="true"] .capitaflow-subs-folder-caret { transform: rotate(180deg); }
 
 /* Trash button — appears in Customer Submissions folder head AND in
    Investors Keys list rows. Hard-delete (cascades) with confirmation. */
-.partner-subs-trash {
+.capitaflow-subs-trash {
   background: transparent;
   border: 1px solid rgba(220, 80, 80, 0.35);
   color: #ff9aa2;
@@ -1334,25 +1334,25 @@
   flex-shrink: 0;
   transition: background 0.15s ease, color 0.15s ease;
 }
-.partner-subs-trash:hover {
+.capitaflow-subs-trash:hover {
   background: rgba(220, 80, 80, 0.16);
   color: #ffcdd2;
 }
-.partner-subs-trash:disabled { opacity: 0.5; cursor: wait; }
+.capitaflow-subs-trash:disabled { opacity: 0.5; cursor: wait; }
 
-/* Investor-keys list rows share .partner-subs-folder styling but need a
+/* Investor-keys list rows share .capitaflow-subs-folder styling but need a
    horizontal layout (no expandable body), so we add a side container that
    holds the KEY chip + trash side-by-side. */
-.partner-subs-folder .partner-subs-folder-main { flex: 1; min-width: 0; padding: 0.6rem 0.85rem; }
-.partner-subs-folder .partner-subs-folder-side {
+.capitaflow-subs-folder .capitaflow-subs-folder-main { flex: 1; min-width: 0; padding: 0.6rem 0.85rem; }
+.capitaflow-subs-folder .capitaflow-subs-folder-side {
   display: inline-flex;
   align-items: center;
   gap: 0.55rem;
   padding-right: 0.6rem;
 }
-.partner-subs-folder.is-revoked { opacity: 0.65; }
+.capitaflow-subs-folder.is-revoked { opacity: 0.65; }
 
-.partner-subs-folder-key {
+.capitaflow-subs-folder-key {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -1368,46 +1368,46 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
-.partner-subs-folder-key:hover {
+.capitaflow-subs-folder-key:hover {
   background: rgba(91, 141, 224, 0.20);
   border-color: rgba(91, 141, 224, 0.55);
 }
-.partner-subs-folder-key:active { transform: scale(0.97); }
-.partner-subs-folder-key-label {
+.capitaflow-subs-folder-key:active { transform: scale(0.97); }
+.capitaflow-subs-folder-key-label {
   font-size: 0.62rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
   color: rgba(255, 255, 255, 0.55);
 }
-.partner-subs-folder-key-val {
+.capitaflow-subs-folder-key-val {
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
   font-size: 0.78rem;
   color: var(--white, #fff);
   letter-spacing: 0.02em;
 }
-.partner-subs-folder-key-copy {
+.capitaflow-subs-folder-key-copy {
   font-size: 0.78rem;
   color: rgba(255, 255, 255, 0.55);
   transition: color 0.15s;
 }
-.partner-subs-folder-key:hover .partner-subs-folder-key-copy {
+.capitaflow-subs-folder-key:hover .capitaflow-subs-folder-key-copy {
   color: var(--white, #fff);
 }
-.partner-subs-folder-key.is-revoked {
+.capitaflow-subs-folder-key.is-revoked {
   background: rgba(220, 80, 80, 0.10);
   border-color: rgba(220, 80, 80, 0.32);
   color: rgba(255, 180, 180, 0.85);
   cursor: not-allowed;
 }
-.partner-subs-folder-key.is-revoked:hover {
+.capitaflow-subs-folder-key.is-revoked:hover {
   background: rgba(220, 80, 80, 0.12);
   border-color: rgba(220, 80, 80, 0.32);
 }
-.partner-subs-folder-key.is-revoked .partner-subs-folder-key-val {
+.capitaflow-subs-folder-key.is-revoked .capitaflow-subs-folder-key-val {
   color: rgba(255, 200, 200, 0.65);
   text-decoration: line-through;
 }
-.partner-subs-folder-key-revoked {
+.capitaflow-subs-folder-key-revoked {
   font-size: 0.62rem;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -1416,24 +1416,24 @@
   background: rgba(220, 80, 80, 0.25);
   color: #ffb4b4;
 }
-.partner-subs-folder-key.is-missing {
+.capitaflow-subs-folder-key.is-missing {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.12);
   color: rgba(255, 255, 255, 0.45);
   cursor: default;
 }
-.partner-subs-folder-key.is-missing:hover {
+.capitaflow-subs-folder-key.is-missing:hover {
   background: rgba(255, 255, 255, 0.04);
   border-color: rgba(255, 255, 255, 0.12);
 }
-.partner-subs-folder-key.is-missing .partner-subs-folder-key-val {
+.capitaflow-subs-folder-key.is-missing .capitaflow-subs-folder-key-val {
   color: rgba(255, 255, 255, 0.45);
 }
 
-/* Open-Portal pills — open the customer's Visibility or Partner portal in a
+/* Open-Portal pills — open the customer's Visibility or CapitaFlow portal in a
    new tab. Same customer key authenticates both offerings; pills sit
    immediately to the right of the key chip in the folder header. */
-.partner-subs-folder-portal {
+.capitaflow-subs-folder-portal {
   display: inline-flex;
   align-items: center;
   gap: 0.3rem;
@@ -1452,31 +1452,31 @@
   white-space: nowrap;
   flex-shrink: 0;
 }
-.partner-subs-folder-portal:hover {
+.capitaflow-subs-folder-portal:hover {
   background: rgba(91, 141, 224, 0.22);
   border-color: rgba(91, 141, 224, 0.6);
   color: var(--white, #fff);
 }
-.partner-subs-folder-portal:active { transform: scale(0.95); }
-.partner-subs-folder-portal:focus-visible {
+.capitaflow-subs-folder-portal:active { transform: scale(0.95); }
+.capitaflow-subs-folder-portal:focus-visible {
   outline: 2px solid var(--accent-light, #5b8de0);
   outline-offset: 2px;
 }
-.partner-subs-folder-portal-icon {
+.capitaflow-subs-folder-portal-icon {
   font-size: 0.85rem;
   line-height: 1;
 }
-.partner-subs-folder-portal-label {
+.capitaflow-subs-folder-portal-label {
   font-size: 0.72rem;
 }
 
-.partner-subs-folder-body {
+.capitaflow-subs-folder-body {
   padding: 0.5rem 1rem 1.1rem;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(0, 0, 0, 0.15);
 }
 
-.partner-subs-detail h5 {
+.capitaflow-subs-detail h5 {
   font-family: var(--font-sans, inherit);
   font-size: 0.78rem;
   font-weight: 700;
@@ -1485,10 +1485,10 @@
   letter-spacing: 0.05em;
   margin: 1rem 0 0.4rem;
 }
-.partner-subs-detail h5:first-child { margin-top: 0.5rem; }
+.capitaflow-subs-detail h5:first-child { margin-top: 0.5rem; }
 
-.partner-subs-table-wrap { overflow-x: auto; }
-.partner-subs-table {
+.capitaflow-subs-table-wrap { overflow-x: auto; }
+.capitaflow-subs-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.78rem;
@@ -1496,7 +1496,7 @@
   background: rgba(255, 255, 255, 0.03);
   border-radius: 4px;
 }
-.partner-subs-table thead th {
+.capitaflow-subs-table thead th {
   text-align: left;
   font-weight: 600;
   color: rgba(255, 255, 255, 0.7);
@@ -1505,25 +1505,25 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   white-space: nowrap;
 }
-.partner-subs-table tbody td {
+.capitaflow-subs-table tbody td {
   padding: 0.35rem 0.55rem;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
   vertical-align: top;
 }
-.partner-subs-table tbody tr:last-child td { border-bottom: none; }
-.partner-subs-empty-row {
+.capitaflow-subs-table tbody tr:last-child td { border-bottom: none; }
+.capitaflow-subs-empty-row {
   text-align: center;
   font-style: italic;
   color: rgba(255, 255, 255, 0.45) !important;
 }
 
-.partner-subs-folder-actions {
+.capitaflow-subs-folder-actions {
   margin-top: 1.1rem;
   display: flex;
   gap: 0.6rem;
   justify-content: flex-end;
 }
-.partner-subs-action {
+.capitaflow-subs-action {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -1536,27 +1536,27 @@
   cursor: pointer;
   transition: background 0.18s, transform 0.12s;
 }
-.partner-subs-action:disabled { opacity: 0.6; cursor: not-allowed; }
-.partner-subs-finalize {
+.capitaflow-subs-action:disabled { opacity: 0.6; cursor: not-allowed; }
+.capitaflow-subs-finalize {
   background: var(--accent, #3a6bc4);
   color: var(--white, #fff);
 }
-.partner-subs-finalize:hover:not(:disabled) {
+.capitaflow-subs-finalize:hover:not(:disabled) {
   background: var(--accent-light, #5b8de0);
   transform: translateY(-1px);
 }
-.partner-subs-download {
+.capitaflow-subs-download {
   background: rgba(74, 124, 63, 0.20);
   color: #a4d49a;
   border: 1px solid rgba(74, 124, 63, 0.4);
 }
-.partner-subs-download:hover:not(:disabled) {
+.capitaflow-subs-download:hover:not(:disabled) {
   background: rgba(74, 124, 63, 0.35);
   transform: translateY(-1px);
 }
 
 /* Re-use status pill styles from styles.css if loaded; fall back here */
-.partner-status-pill {
+.capitaflow-status-pill {
   display: inline-flex;
   align-items: center;
   padding: 0.3rem 0.75rem;
@@ -1566,76 +1566,76 @@
   letter-spacing: 0.05em;
   text-transform: uppercase;
 }
-.partner-status-pill.partner-status-review {
+.capitaflow-status-pill.capitaflow-status-review {
   background: rgba(217, 156, 33, 0.18);
   color: #e9b95a;
 }
-.partner-status-pill.partner-status-finalized {
+.capitaflow-status-pill.capitaflow-status-finalized {
   background: rgba(74, 124, 63, 0.20);
   color: #8fc683;
 }
-.partner-status-pill.partner-status-soon {
+.capitaflow-status-pill.capitaflow-status-soon {
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.55);
 }
 
 /* ── Customer uploads block (top of folder) ─────────────────── */
-.partner-subs-uploads {
+.capitaflow-subs-uploads {
   background: rgba(108,99,255,.05);
   border: 1px solid rgba(108,99,255,.2);
   border-radius: 8px;
   padding: 0.7rem 0.85rem;
   margin-bottom: 0.6rem;
 }
-.partner-subs-uploads-head {
+.capitaflow-subs-uploads-head {
   display: flex; align-items: center; justify-content: space-between;
   margin-bottom: 0.5rem;
 }
-.partner-subs-uploads-title {
+.capitaflow-subs-uploads-title {
   font-size: 0.78rem; font-weight: 700;
   letter-spacing: 0.05em; text-transform: uppercase;
   color: rgba(255,255,255,.85);
 }
-.partner-subs-uploads-count {
+.capitaflow-subs-uploads-count {
   font-size: 0.75rem; color: rgba(255,255,255,.55);
   font-variant-numeric: tabular-nums;
 }
-.partner-subs-uploads-empty,
-.partner-subs-uploads-loading {
+.capitaflow-subs-uploads-empty,
+.capitaflow-subs-uploads-loading {
   font-size: 0.78rem; color: rgba(255,255,255,.5);
   font-style: italic;
 }
-.partner-subs-upload-row {
+.capitaflow-subs-upload-row {
   display: flex; align-items: center; gap: 0.55rem;
   padding: 0.35rem 0;
   font-size: 0.82rem;
   color: rgba(255,255,255,.9);
   border-top: 1px solid rgba(255,255,255,.06);
 }
-.partner-subs-upload-row:first-child { border-top: 0; }
-.partner-subs-upload-pill {
+.capitaflow-subs-upload-row:first-child { border-top: 0; }
+.capitaflow-subs-upload-pill {
   display: inline-block; padding: 0.1rem 0.45rem;
   font-size: 0.65rem; font-weight: 700;
   background: rgba(108,99,255,.35);
   color: #fff; border-radius: 3px;
   letter-spacing: 0.04em;
 }
-.partner-subs-upload-name {
+.capitaflow-subs-upload-name {
   flex: 1; min-width: 0;
   color: #cfd8e9;
   text-decoration: none;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.partner-subs-upload-name:hover { color: #fff; text-decoration: underline; }
-.partner-subs-upload-size {
+.capitaflow-subs-upload-name:hover { color: #fff; text-decoration: underline; }
+.capitaflow-subs-upload-size {
   font-size: 0.72rem; color: rgba(255,255,255,.5);
   font-variant-numeric: tabular-nums;
 }
-.partner-subs-upload-status {
+.capitaflow-subs-upload-status {
   font-size: 0.72rem; color: rgba(120,200,120,.85);
   min-width: 6ch;
 }
-.partner-subs-upload-extract {
+.capitaflow-subs-upload-extract {
   font-size: 0.72rem;
   background: transparent;
   border: 1px solid rgba(255,255,255,.18);
@@ -1643,19 +1643,19 @@
   padding: 0.2rem 0.55rem; border-radius: 4px;
   cursor: pointer;
 }
-.partner-subs-upload-extract:hover {
+.capitaflow-subs-upload-extract:hover {
   background: rgba(108,99,255,.25);
   border-color: rgba(108,99,255,.5);
   color: #fff;
 }
 
 /* ── Two-row deliverables list inside each folder ───────────── */
-.partner-subs-deliverables {
+.capitaflow-subs-deliverables {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
-.partner-subs-deliverable {
+.capitaflow-subs-deliverable {
   display: flex;
   align-items: center;
   gap: 0.85rem;
@@ -1664,85 +1664,85 @@
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 6px;
 }
-.partner-subs-deliverable.is-coming-soon { opacity: 0.55; }
-.partner-subs-deliverable-icon {
+.capitaflow-subs-deliverable.is-coming-soon { opacity: 0.55; }
+.capitaflow-subs-deliverable-icon {
   width: 36px;
   height: 36px;
   flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   border-radius: 6px;
 }
-.partner-subs-deliverable-icon-excel {
+.capitaflow-subs-deliverable-icon-excel {
   background: rgba(33, 130, 70, 0.18);
   color: #6ab576;
 }
-.partner-subs-deliverable-icon-ppt {
+.capitaflow-subs-deliverable-icon-ppt {
   background: rgba(196, 78, 35, 0.18);
   color: #d68b6c;
 }
-.partner-subs-deliverable-icon svg { width: 20px; height: 20px; }
-.partner-subs-deliverable-meta { flex: 1; min-width: 0; }
-.partner-subs-deliverable-title {
+.capitaflow-subs-deliverable-icon svg { width: 20px; height: 20px; }
+.capitaflow-subs-deliverable-meta { flex: 1; min-width: 0; }
+.capitaflow-subs-deliverable-title {
   font-weight: 600;
   font-size: 0.88rem;
   color: var(--white, #fff);
 }
-.partner-subs-deliverable-sub {
+.capitaflow-subs-deliverable-sub {
   font-size: 0.74rem;
   color: rgba(255, 255, 255, 0.5);
   margin-top: 0.15rem;
 }
-.partner-subs-deliverable-actions {
+.capitaflow-subs-deliverable-actions {
   display: flex;
   align-items: center;
   gap: 0.5rem;
   flex-shrink: 0;
 }
-.partner-subs-action-disabled {
+.capitaflow-subs-action-disabled {
   font-size: 0.74rem;
   color: rgba(255, 255, 255, 0.45);
   font-style: italic;
 }
 
-.partner-subs-generate {
+.capitaflow-subs-generate {
   background: rgba(58, 107, 196, 0.20);
   color: #9bbdf2;
   border: 1px solid rgba(58, 107, 196, 0.4);
 }
-.partner-subs-generate:hover:not(:disabled) {
+.capitaflow-subs-generate:hover:not(:disabled) {
   background: rgba(58, 107, 196, 0.32);
   transform: translateY(-1px);
 }
 
-.partner-subs-reupload {
+.capitaflow-subs-reupload {
   background: rgba(196, 134, 58, 0.20);
   color: #f2c69b;
   border: 1px solid rgba(196, 134, 58, 0.4);
 }
-.partner-subs-reupload:hover:not(:disabled) {
+.capitaflow-subs-reupload:hover:not(:disabled) {
   background: rgba(196, 134, 58, 0.32);
   transform: translateY(-1px);
 }
 
-.partner-subs-edit {
+.capitaflow-subs-edit {
   background: rgba(155, 100, 196, 0.18);
   color: #d4b3f2;
   border: 1px solid rgba(155, 100, 196, 0.4);
 }
-.partner-subs-edit:hover:not(:disabled) {
+.capitaflow-subs-edit:hover:not(:disabled) {
   background: rgba(155, 100, 196, 0.32);
   transform: translateY(-1px);
 }
 
 /* Customer Keys minter */
-.partner-keys-section { margin-bottom: 1.25rem; }
-.partner-keys-form {
+.capitaflow-keys-section { margin-bottom: 1.25rem; }
+.capitaflow-keys-form {
   display: flex;
   gap: 0.65rem;
   flex-wrap: wrap;
   margin-top: 0.85rem;
 }
-.partner-keys-input {
+.capitaflow-keys-input {
   flex: 1 1 280px;
   min-width: 0;
   padding: 0.6rem 0.85rem;
@@ -1753,12 +1753,12 @@
   font-family: inherit;
   font-size: 0.92rem;
 }
-.partner-keys-input:focus {
+.capitaflow-keys-input:focus {
   outline: none;
   border-color: rgba(155, 189, 242, 0.7);
   background: rgba(255, 255, 255, 0.09);
 }
-.partner-keys-submit {
+.capitaflow-keys-submit {
   padding: 0.6rem 1.3rem;
   border-radius: 6px;
   border: 1px solid rgba(58, 107, 196, 0.4);
@@ -1770,30 +1770,30 @@
   cursor: pointer;
   transition: background 0.18s, transform 0.12s;
 }
-.partner-keys-submit:hover:not(:disabled) {
+.capitaflow-keys-submit:hover:not(:disabled) {
   background: rgba(58, 107, 196, 0.32);
   transform: translateY(-1px);
 }
-.partner-keys-submit:disabled { opacity: 0.6; cursor: not-allowed; }
-.partner-keys-result { margin-top: 1rem; }
-.partner-keys-card {
+.capitaflow-keys-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+.capitaflow-keys-result { margin-top: 1rem; }
+.capitaflow-keys-card {
   padding: 1rem 1.1rem;
   border-radius: 8px;
   background: rgba(58, 107, 196, 0.12);
   border: 1px solid rgba(58, 107, 196, 0.35);
 }
-.partner-keys-card-label {
+.capitaflow-keys-card-label {
   font-size: 0.85rem;
   color: rgba(255, 255, 255, 0.75);
   margin-bottom: 0.5rem;
 }
-.partner-keys-card-row {
+.capitaflow-keys-card-row {
   display: flex;
   align-items: center;
   gap: 0.65rem;
   flex-wrap: wrap;
 }
-.partner-keys-code {
+.capitaflow-keys-code {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 1.15rem;
   font-weight: 700;
@@ -1804,7 +1804,7 @@
   background: rgba(0, 0, 0, 0.32);
   user-select: all;
 }
-.partner-keys-copy {
+.capitaflow-keys-copy {
   padding: 0.5rem 0.95rem;
   border-radius: 6px;
   border: 1px solid rgba(255, 255, 255, 0.22);
@@ -1815,8 +1815,8 @@
   font-weight: 600;
   cursor: pointer;
 }
-.partner-keys-copy:hover { background: rgba(255, 255, 255, 0.14); }
-.partner-keys-card-hint {
+.capitaflow-keys-copy:hover { background: rgba(255, 255, 255, 0.14); }
+.capitaflow-keys-card-hint {
   margin-top: 0.55rem;
   font-size: 0.8rem;
   color: rgba(255, 255, 255, 0.55);

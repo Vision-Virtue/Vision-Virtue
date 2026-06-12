@@ -1,7 +1,7 @@
 /* ============================================================
    Customer "drag-and-drop" upload store + text extractor
 
-   Customer drops PDF / DOCX / PPTX / XLSX files in the partner
+   Customer drops PDF / DOCX / PPTX / XLSX files in the capitaflow
    portal; we persist them on the same disk as customer-xlsx
    and customer-assets, then surface them to AI Finance where
    text extraction + Claude orchestration produce the deck.
@@ -27,7 +27,7 @@
      }
 
    Why sidecars and not a DB row? Mirrors the existing pattern
-   used by partner-xlsx and deck-asset services — file system
+   used by capitaflow-xlsx and deck-asset services — file system
    is the source of truth, no schema migration needed, and the
    admin can sort by mtime to see new uploads.
    ============================================================ */
@@ -65,6 +65,14 @@ const MIME_EXT: Record<string, string> = {
   'application/vnd.openxmlformats-officedocument.presentationml.presentation':'pptx',
   'application/vnd.ms-excel':                                                 'xls',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':        'xlsx',
+  // Images — used as company logos for the Investors Marketplace tile and
+  // the investor-deck cover. Accepted in the customer drag&drop area.
+  'image/png':     'png',
+  'image/jpeg':    'jpg',
+  'image/jpg':     'jpg',
+  'image/webp':    'webp',
+  'image/svg+xml': 'svg',
+  'image/gif':     'gif',
 };
 
 // Fallback: try to infer extension from the original filename when the

@@ -1,10 +1,10 @@
 /* ============================================================
-   VISION & VIRTUE — Partner Customer Area
+   VISION & VIRTUE — CapitaFlow Customer Area
    Phase 2: submissions live on the backend
    (vv-marketing-api.onrender.com), keyed by customer key.
    ============================================================ */
 
-const PARTNER_API = 'https://vv-marketing-api.onrender.com';
+const CAPITAFLOW_API = 'https://vv-marketing-api.onrender.com';
 
 // Admin shortcut: ?adminKey=VV-XXX[&adminName=...] lets Authorized Personnel
 // open a customer's portal directly from the Finance AI submissions list
@@ -45,7 +45,7 @@ function customerKey() { return sessionStorage.getItem('vv_customer_key') || '';
 async function apiFetchMySubmissions() {
   const key = customerKey();
   if (!key) return [];
-  const res = await fetch(`${PARTNER_API}/api/customer/me/submissions`, {
+  const res = await fetch(`${CAPITAFLOW_API}/api/customer/me/submissions`, {
     headers: { 'X-Customer-Key': key },
   });
   if (res.status === 401) {
@@ -61,7 +61,7 @@ async function apiFetchMySubmissions() {
 async function apiSubmitQuestionnaire(customerName, formData) {
   const key = customerKey();
   if (!key) throw new Error('Missing customer key');
-  const res = await fetch(`${PARTNER_API}/api/submissions`, {
+  const res = await fetch(`${CAPITAFLOW_API}/api/submissions`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Customer-Key': key },
     body: JSON.stringify({ customerName, formData }),
@@ -76,7 +76,7 @@ async function apiSubmitQuestionnaire(customerName, formData) {
 async function apiUpdateMySubmission(submissionId, customerName, formData) {
   const key = customerKey();
   if (!key) throw new Error('Missing customer key');
-  const res = await fetch(`${PARTNER_API}/api/customer/me/submissions/${encodeURIComponent(submissionId)}`, {
+  const res = await fetch(`${CAPITAFLOW_API}/api/customer/me/submissions/${encodeURIComponent(submissionId)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', 'X-Customer-Key': key },
     body: JSON.stringify({ customerName, formData }),
@@ -110,7 +110,7 @@ function formatMoney(el) {
   el.value = '$ ' + (decPart !== undefined ? `${intFormatted}.${decPart}` : intFormatted);
 }
 function bindMoneyInputs(scope) {
-  scope.querySelectorAll('.partner-q-money').forEach(el => {
+  scope.querySelectorAll('.capitaflow-q-money').forEach(el => {
     if (el.dataset.moneyBound === '1') return;
     el.dataset.moneyBound = '1';
     el.addEventListener('input', () => formatMoney(el));
@@ -130,14 +130,14 @@ async function renderTileState() {
   if (!xlsxStatusEl || !xlsxTile) return;
 
   // Loading placeholders while we fetch
-  xlsxStatusEl.innerHTML = '<span class="partner-status-pill partner-status-new">Loading...</span>';
-  if (pptxStatusEl) pptxStatusEl.innerHTML = '<span class="partner-status-pill partner-status-new">Loading...</span>';
+  xlsxStatusEl.innerHTML = '<span class="capitaflow-status-pill capitaflow-status-new">Loading...</span>';
+  if (pptxStatusEl) pptxStatusEl.innerHTML = '<span class="capitaflow-status-pill capitaflow-status-new">Loading...</span>';
 
   let subs;
   try { subs = await apiFetchMySubmissions(); }
   catch (err) {
-    xlsxStatusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Connection error — retry</span>';
-    if (pptxStatusEl) pptxStatusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Connection error — retry</span>';
+    xlsxStatusEl.innerHTML = '<span class="capitaflow-status-pill capitaflow-status-review">Connection error — retry</span>';
+    if (pptxStatusEl) pptxStatusEl.innerHTML = '<span class="capitaflow-status-pill capitaflow-status-review">Connection error — retry</span>';
     return;
   }
 
@@ -148,7 +148,7 @@ async function renderTileState() {
   // Welcome line uses the customer name we got from the auth response
   const knownName = sessionStorage.getItem('vv_customer_name') || sub?.customerName || '';
   if (knownName) {
-    const welcome = document.getElementById('partnerWelcome');
+    const welcome = document.getElementById('capitaflowWelcome');
     if (welcome) welcome.textContent = `Welcome, ${knownName}. Select a product below to view its status.`;
   }
   renderCustomerBadge(knownName);
@@ -167,7 +167,7 @@ async function apiListMyListings() {
   const key = customerKey();
   if (!key) return [];
   try {
-    const res = await fetch(`${PARTNER_API}/api/customer/me/marketplace-listings`, {
+    const res = await fetch(`${CAPITAFLOW_API}/api/customer/me/marketplace-listings`, {
       headers: { 'X-Customer-Key': key },
     });
     if (!res.ok) return [];
@@ -180,7 +180,7 @@ async function apiListMyListings() {
 async function apiPublishListing(submissionId) {
   const key = customerKey();
   if (!key) throw new Error('Missing customer key');
-  const res = await fetch(`${PARTNER_API}/api/customer/me/marketplace-listings`, {
+  const res = await fetch(`${CAPITAFLOW_API}/api/customer/me/marketplace-listings`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Customer-Key': key },
     body: JSON.stringify({ submissionId }),
@@ -197,7 +197,7 @@ async function apiWithdrawListing(listingId) {
   const key = customerKey();
   if (!key) throw new Error('Missing customer key');
   const res = await fetch(
-    `${PARTNER_API}/api/customer/me/marketplace-listings/${encodeURIComponent(listingId)}/withdraw`,
+    `${CAPITAFLOW_API}/api/customer/me/marketplace-listings/${encodeURIComponent(listingId)}/withdraw`,
     { method: 'POST', headers: { 'X-Customer-Key': key } },
   );
   if (!res.ok) {
@@ -215,7 +215,7 @@ async function apiUploadDeckPdf(listingId, file) {
   if (file.size > 30 * 1024 * 1024) throw new Error('PDF exceeds 30 MB');
   const buf = await file.arrayBuffer();
   const res = await fetch(
-    `${PARTNER_API}/api/customer/me/marketplace-listings/${encodeURIComponent(listingId)}/deck-pdf`,
+    `${CAPITAFLOW_API}/api/customer/me/marketplace-listings/${encodeURIComponent(listingId)}/deck-pdf`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/pdf', 'X-Customer-Key': key },
@@ -243,7 +243,7 @@ async function renderMarketplaceTile(sub) {
 
   const finalized = !!(sub && sub.status === 'finalized');
   if (!finalized) {
-    statusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Available after finalization</span>';
+    statusEl.innerHTML = '<span class="capitaflow-status-pill capitaflow-status-review">Available after finalization</span>';
     tile.classList.add('is-review');
     tile.classList.remove('is-finalized');
     tile.disabled = false;
@@ -257,14 +257,14 @@ async function renderMarketplaceTile(sub) {
     // The investor deck is auto-converted from the customer's populated PPTX
     // on the backend — no need for a manual PDF attach action.
     statusEl.innerHTML =
-      '<span class="partner-status-pill partner-status-finalized">Published</span>' +
-      '<button type="button" class="partner-tile-download" data-mkt-action="unpublish">Unpublish</button>';
+      '<span class="capitaflow-status-pill capitaflow-status-finalized">Published</span>' +
+      '<button type="button" class="capitaflow-tile-download" data-mkt-action="unpublish">Unpublish</button>';
     tile.classList.add('is-finalized');
     tile.classList.remove('is-review');
   } else {
     statusEl.innerHTML =
-      '<span class="partner-status-pill partner-status-new">Ready to Publish</span>' +
-      '<button type="button" class="partner-tile-download" data-mkt-action="publish">Publish to Marketplace</button>';
+      '<span class="capitaflow-status-pill capitaflow-status-new">Ready to Publish</span>' +
+      '<button type="button" class="capitaflow-tile-download" data-mkt-action="publish">Publish to Marketplace</button>';
     tile.classList.remove('is-finalized', 'is-review');
   }
   tile.disabled = false;
@@ -308,7 +308,7 @@ async function publishMarketplace(subId) {
   if (!tile) return;
   const original = tile.querySelector('#statusInvestorsMarketplace').innerHTML;
   tile.querySelector('#statusInvestorsMarketplace').innerHTML =
-    '<span class="partner-status-pill partner-status-new">Extracting tile data…</span>';
+    '<span class="capitaflow-status-pill capitaflow-status-new">Extracting tile data…</span>';
   try {
     await apiPublishListing(subId);
     await renderTileState();
@@ -336,13 +336,13 @@ async function unpublishMarketplace(subId) {
 // Customer name chip in the upper-left of the Products section — gives
 // signed-in customers a persistent reminder of which account they're on.
 function renderCustomerBadge(name) {
-  const el = document.getElementById('partnerCustomerBadge');
+  const el = document.getElementById('capitaflowCustomerBadge');
   if (!el) return;
   if (!name) { el.hidden = true; el.innerHTML = ''; return; }
   el.hidden = false;
   el.innerHTML =
-    '<span class="partner-customer-badge-label">Customer</span>' +
-    '<span class="partner-customer-badge-name">' + escHtml(name) + '</span>';
+    '<span class="capitaflow-customer-badge-label">Customer</span>' +
+    '<span class="capitaflow-customer-badge-name">' + escHtml(name) + '</span>';
 }
 
 // One Edit Submission button shown above all three tiles — edits cascade to
@@ -374,12 +374,12 @@ function renderConsultTile(sub) {
 
   const finalized = !!(sub && sub.status === 'finalized');
   if (finalized) {
-    statusEl.innerHTML = '<span class="partner-status-pill partner-status-finalized">Live</span>';
+    statusEl.innerHTML = '<span class="capitaflow-status-pill capitaflow-status-finalized">Live</span>';
     tile.classList.add('is-finalized');
     tile.classList.remove('is-review');
     tile.disabled = false;
   } else {
-    statusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Available after finalization</span>';
+    statusEl.innerHTML = '<span class="capitaflow-status-pill capitaflow-status-review">Available after finalization</span>';
     tile.classList.add('is-review');
     tile.classList.remove('is-finalized');
     // Allow clicks even when not finalized — the click handler explains why
@@ -390,14 +390,14 @@ function renderConsultTile(sub) {
 
 function renderXlsxTile(tile, statusEl, sub) {
   if (!sub) {
-    statusEl.innerHTML = '<span class="partner-status-pill partner-status-new">Get Started</span>';
+    statusEl.innerHTML = '<span class="capitaflow-status-pill capitaflow-status-new">Get Started</span>';
     tile.classList.remove('is-review', 'is-finalized');
     return;
   }
   if (sub.status === 'finalized' && sub.hasFinalizedXlsx) {
     statusEl.innerHTML = `
-      <span class="partner-status-pill partner-status-finalized">Finalized</span>
-      <button type="button" class="partner-tile-download" data-download-id="${sub.id}">Download Model</button>
+      <span class="capitaflow-status-pill capitaflow-status-finalized">Finalized</span>
+      <button type="button" class="capitaflow-tile-download" data-download-id="${sub.id}">Download Model</button>
     `;
     tile.classList.add('is-finalized');
     tile.classList.remove('is-review');
@@ -415,7 +415,7 @@ function renderXlsxTile(tile, statusEl, sub) {
       }
     });
   } else {
-    statusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Under Vision’s Review</span>';
+    statusEl.innerHTML = '<span class="capitaflow-status-pill capitaflow-status-review">Under Vision’s Review</span>';
     tile.classList.add('is-review');
     tile.classList.remove('is-finalized');
   }
@@ -423,14 +423,14 @@ function renderXlsxTile(tile, statusEl, sub) {
 
 function renderPptxTile(tile, statusEl, sub) {
   if (!sub) {
-    statusEl.innerHTML = '<span class="partner-status-pill partner-status-new">Awaiting submission</span>';
+    statusEl.innerHTML = '<span class="capitaflow-status-pill capitaflow-status-new">Awaiting submission</span>';
     tile.classList.remove('is-review', 'is-finalized');
     return;
   }
   if (sub.status === 'finalized' && sub.hasFinalizedPptx) {
     statusEl.innerHTML = `
-      <span class="partner-status-pill partner-status-finalized">Finalized</span>
-      <button type="button" class="partner-tile-download" data-download-pptx="${sub.id}">Download Presentation</button>
+      <span class="capitaflow-status-pill capitaflow-status-finalized">Finalized</span>
+      <button type="button" class="capitaflow-tile-download" data-download-pptx="${sub.id}">Download Presentation</button>
     `;
     tile.classList.add('is-finalized');
     tile.classList.remove('is-review');
@@ -448,7 +448,7 @@ function renderPptxTile(tile, statusEl, sub) {
       }
     });
   } else {
-    statusEl.innerHTML = '<span class="partner-status-pill partner-status-review">Under Vision’s Review</span>';
+    statusEl.innerHTML = '<span class="capitaflow-status-pill capitaflow-status-review">Under Vision’s Review</span>';
     tile.classList.add('is-review');
     tile.classList.remove('is-finalized');
   }
@@ -456,7 +456,7 @@ function renderPptxTile(tile, statusEl, sub) {
 
 async function downloadFinalizedXlsx(submissionId, customerName) {
   const key = customerKey();
-  const res = await fetch(`${PARTNER_API}/api/customer/me/submissions/${encodeURIComponent(submissionId)}/xlsx`, {
+  const res = await fetch(`${CAPITAFLOW_API}/api/customer/me/submissions/${encodeURIComponent(submissionId)}/xlsx`, {
     headers: { 'X-Customer-Key': key },
   });
   if (!res.ok) {
@@ -474,7 +474,7 @@ async function downloadFinalizedXlsx(submissionId, customerName) {
 
 async function downloadFinalizedPptx(submissionId, customerName) {
   const key = customerKey();
-  const res = await fetch(`${PARTNER_API}/api/customer/me/submissions/${encodeURIComponent(submissionId)}/pptx`, {
+  const res = await fetch(`${CAPITAFLOW_API}/api/customer/me/submissions/${encodeURIComponent(submissionId)}/pptx`, {
     headers: { 'X-Customer-Key': key },
   });
   if (!res.ok) {
@@ -492,7 +492,7 @@ async function downloadFinalizedPptx(submissionId, customerName) {
 
 // â”€â”€ Tile click â†’ questionnaire or status view â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const tile     = document.getElementById('tileFinancialModel');
-const products = document.querySelector('.partner-products-section');
+const products = document.querySelector('.capitaflow-products-section');
 const qSection = document.getElementById('questionnaireSection');
 const qForm    = document.getElementById('customerQuestionnaire');
 const qThanks  = document.getElementById('questionnaireThanks');
@@ -595,7 +595,7 @@ consultForm?.addEventListener('submit', async (ev) => {
 async function sendConsultMessage(message, history) {
   const key = customerKey();
   if (!key) throw new Error('Session expired — please sign in again.');
-  const res = await fetch(`${PARTNER_API}/api/customer/me/consult`, {
+  const res = await fetch(`${CAPITAFLOW_API}/api/customer/me/consult`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Customer-Key': key },
     body: JSON.stringify({ message, history, agent: 'vc_expert' }),
@@ -673,24 +673,24 @@ function makeCustomerRow() {
   const tr = document.createElement('tr');
   tr.dataset.custId = nextId('cust');
   tr.innerHTML = `
-    <td><input type="text" class="partner-q-input partner-q-cell" data-cust-name placeholder="Customer name" /></td>
+    <td><input type="text" class="capitaflow-q-input capitaflow-q-cell" data-cust-name placeholder="Customer name" /></td>
     <td>
-      <select class="partner-q-select partner-q-cell" data-cust-type>
+      <select class="capitaflow-q-select capitaflow-q-cell" data-cust-type>
         <option value="">— Select —</option>
         ${CUSTOMER_TYPES.map(o => `<option value="${o}">${o}</option>`).join('')}
         <option value="${CUSTOM_OPT}">Other (specify)</option>
       </select>
-      <input type="text" class="partner-q-input partner-q-cell partner-q-custom" data-cust-type-custom placeholder="Type…" hidden />
+      <input type="text" class="capitaflow-q-input capitaflow-q-cell capitaflow-q-custom" data-cust-type-custom placeholder="Type…" hidden />
     </td>
     <td>
-      <select class="partner-q-select partner-q-cell" data-cust-territory>
+      <select class="capitaflow-q-select capitaflow-q-cell" data-cust-territory>
         <option value="">— Select —</option>
         ${TERRITORIES.map(o => `<option value="${o}">${o}</option>`).join('')}
         <option value="${CUSTOM_OPT}">Other (specify)</option>
       </select>
-      <input type="text" class="partner-q-input partner-q-cell partner-q-custom" data-cust-territory-custom placeholder="Territory…" hidden />
+      <input type="text" class="capitaflow-q-input capitaflow-q-cell capitaflow-q-custom" data-cust-territory-custom placeholder="Territory…" hidden />
     </td>
-    <td><button type="button" class="partner-q-rmrow" aria-label="Remove row">&#x2715;</button></td>
+    <td><button type="button" class="capitaflow-q-rmrow" aria-label="Remove row">&#x2715;</button></td>
   `;
   // When the user picks "Other (specify)" we swap the select OUT of the cell
   // and put the free-text input in its place (same row, same cell — not a
@@ -720,7 +720,7 @@ function makeCustomerRow() {
   wireCustomToggle('data-cust-type',      'data-cust-type-custom');
   wireCustomToggle('data-cust-territory', 'data-cust-territory-custom');
 
-  tr.querySelector('.partner-q-rmrow').addEventListener('click', () => {
+  tr.querySelector('.capitaflow-q-rmrow').addEventListener('click', () => {
     tr.remove();
     syncDerivedSections();
   });
@@ -743,18 +743,18 @@ function makeProductRow() {
   const tr = document.createElement('tr');
   tr.dataset.prodId = nextId('prod');
   tr.innerHTML = `
-    <td><input type="text" class="partner-q-input partner-q-cell" data-prod-name placeholder="Product name" /></td>
+    <td><input type="text" class="capitaflow-q-input capitaflow-q-cell" data-prod-name placeholder="Product name" /></td>
     <td>
-      <select class="partner-q-select partner-q-cell" data-prod-revtype>
+      <select class="capitaflow-q-select capitaflow-q-cell" data-prod-revtype>
         <option value="">— Select —</option>
         ${REVENUE_TYPES.map(o => `<option value="${o}">${o}</option>`).join('')}
       </select>
     </td>
-    <td><input type="text" class="partner-q-input partner-q-cell partner-q-money" data-prod-price inputmode="decimal" autocomplete="off" placeholder="$ 0" /></td>
-    <td><input type="text" class="partner-q-input partner-q-cell partner-q-money" data-prod-cost inputmode="decimal" autocomplete="off" placeholder="$ 0" /></td>
-    <td><button type="button" class="partner-q-rmrow" aria-label="Remove row">&#x2715;</button></td>
+    <td><input type="text" class="capitaflow-q-input capitaflow-q-cell capitaflow-q-money" data-prod-price inputmode="decimal" autocomplete="off" placeholder="$ 0" /></td>
+    <td><input type="text" class="capitaflow-q-input capitaflow-q-cell capitaflow-q-money" data-prod-cost inputmode="decimal" autocomplete="off" placeholder="$ 0" /></td>
+    <td><button type="button" class="capitaflow-q-rmrow" aria-label="Remove row">&#x2715;</button></td>
   `;
-  tr.querySelector('.partner-q-rmrow').addEventListener('click', () => {
+  tr.querySelector('.capitaflow-q-rmrow').addEventListener('click', () => {
     tr.remove();
     syncDerivedSections();
   });
@@ -777,28 +777,28 @@ function makeLetsScaleRow() {
   const tr = document.createElement('tr');
   tr.innerHTML = `
     <td>
-      <select class="partner-q-select partner-q-cell" data-ls-cust>
+      <select class="capitaflow-q-select capitaflow-q-cell" data-ls-cust>
         <option value="">— Select —</option>
       </select>
     </td>
-    <td><span class="partner-q-readonly" data-ls-type>—</span></td>
-    <td><span class="partner-q-readonly" data-ls-territory>—</span></td>
+    <td><span class="capitaflow-q-readonly" data-ls-type>—</span></td>
+    <td><span class="capitaflow-q-readonly" data-ls-territory>—</span></td>
     <td>
-      <select class="partner-q-select partner-q-cell" data-ls-prod>
+      <select class="capitaflow-q-select capitaflow-q-cell" data-ls-prod>
         <option value="">— Select —</option>
       </select>
     </td>
-    <td><span class="partner-q-readonly" data-ls-revtype>—</span></td>
-    <td><span class="partner-q-readonly" data-ls-price>—</span></td>
-    <td><span class="partner-q-readonly" data-ls-cost>—</span></td>
-    <td><input type="number" class="partner-q-input partner-q-cell" data-ls-q1 min="0" step="1" placeholder="0" /></td>
-    <td><input type="number" class="partner-q-input partner-q-cell" data-ls-q2 min="0" step="1" placeholder="0" /></td>
-    <td><input type="number" class="partner-q-input partner-q-cell" data-ls-q3 min="0" step="1" placeholder="0" /></td>
-    <td><input type="number" class="partner-q-input partner-q-cell" data-ls-q4 min="0" step="1" placeholder="0" /></td>
-    <td><input type="number" class="partner-q-input partner-q-cell" data-ls-y2 min="0" step="1" placeholder="0" /></td>
-    <td><button type="button" class="partner-q-rmrow" aria-label="Remove row">&#x2715;</button></td>
+    <td><span class="capitaflow-q-readonly" data-ls-revtype>—</span></td>
+    <td><span class="capitaflow-q-readonly" data-ls-price>—</span></td>
+    <td><span class="capitaflow-q-readonly" data-ls-cost>—</span></td>
+    <td><input type="number" class="capitaflow-q-input capitaflow-q-cell" data-ls-q1 min="0" step="1" placeholder="0" /></td>
+    <td><input type="number" class="capitaflow-q-input capitaflow-q-cell" data-ls-q2 min="0" step="1" placeholder="0" /></td>
+    <td><input type="number" class="capitaflow-q-input capitaflow-q-cell" data-ls-q3 min="0" step="1" placeholder="0" /></td>
+    <td><input type="number" class="capitaflow-q-input capitaflow-q-cell" data-ls-q4 min="0" step="1" placeholder="0" /></td>
+    <td><input type="number" class="capitaflow-q-input capitaflow-q-cell" data-ls-y2 min="0" step="1" placeholder="0" /></td>
+    <td><button type="button" class="capitaflow-q-rmrow" aria-label="Remove row">&#x2715;</button></td>
   `;
-  tr.querySelector('.partner-q-rmrow').addEventListener('click', () => tr.remove());
+  tr.querySelector('.capitaflow-q-rmrow').addEventListener('click', () => tr.remove());
   // When the customer or product dropdown changes, refresh that row's auto-fill cells
   tr.querySelector('[data-ls-cust]').addEventListener('change', () => updateLetsScaleRow(tr));
   tr.querySelector('[data-ls-prod]').addEventListener('change', () => updateLetsScaleRow(tr));
@@ -995,7 +995,7 @@ qForm?.addEventListener('submit', async e => {
     fte,
   };
 
-  const submitBtn = qForm.querySelector('.partner-q-submit');
+  const submitBtn = qForm.querySelector('.capitaflow-q-submit');
   const originalText = submitBtn?.textContent;
   const isEdit = !!_editingSubmissionId;
   if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = isEdit ? 'Saving…' : 'Submitting…'; }
@@ -1023,7 +1023,7 @@ qForm?.addEventListener('submit', async e => {
 let _editingSubmissionId = null;
 
 function setSubmitButtonMode(mode) {
-  const submitBtn = qForm?.querySelector('.partner-q-submit');
+  const submitBtn = qForm?.querySelector('.capitaflow-q-submit');
   if (!submitBtn) return;
   submitBtn.textContent = mode === 'edit' ? 'Save Changes' : 'Submit';
 }
@@ -1031,7 +1031,7 @@ function setSubmitButtonMode(mode) {
 async function openEditFlow(submissionId) {
   const key = customerKey();
   if (!key) throw new Error('Session expired — please sign in again.');
-  const res = await fetch(`${PARTNER_API}/api/customer/me/submissions/${encodeURIComponent(submissionId)}`, {
+  const res = await fetch(`${CAPITAFLOW_API}/api/customer/me/submissions/${encodeURIComponent(submissionId)}`, {
     headers: { 'X-Customer-Key': key },
   });
   if (!res.ok) {
@@ -1155,7 +1155,7 @@ function populateFormFromSubmission(sub) {
 
 // ---- Initial render ------------------------------------------------------
 // Clean up any leftover localStorage from Phase 1 (now backend-backed).
-try { localStorage.removeItem('vv_partner_submission'); } catch { /* ignore */ }
+try { localStorage.removeItem('vv_capitaflow_submission'); } catch { /* ignore */ }
 renderTileState();
 
 
@@ -1192,30 +1192,30 @@ async function deckUploadsRefresh() {
   const key  = customerKey();
   if (!key) { list.innerHTML = ''; return; }
   try {
-    const res = await fetch(`${PARTNER_API}/api/customer/deck-upload`, {
+    const res = await fetch(`${CAPITAFLOW_API}/api/customer/deck-upload`, {
       headers: { 'X-Customer-Key': key },
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const rows = Array.isArray(data.uploads) ? data.uploads : [];
     list.innerHTML = rows.length === 0
-      ? '<p class="partner-q-empty">No files uploaded yet.</p>'
+      ? '<p class="capitaflow-q-empty">No files uploaded yet.</p>'
       : rows.map((u) => `
-          <div class="partner-q-upload-row" data-upload-id="${deckUpEscape(u.id)}">
-            <span class="partner-q-upload-pill">${deckUpEscape(deckUpExtPill(u.originalName))}</span>
-            <span class="partner-q-upload-name" title="${deckUpEscape(u.originalName)}">${deckUpEscape(u.originalName)}</span>
-            <span class="partner-q-upload-size">${deckUpEscape(deckUpFmtSize(u.sizeBytes))}</span>
-            <button type="button" class="partner-q-upload-remove" aria-label="Remove" title="Remove">&#x2715;</button>
+          <div class="capitaflow-q-upload-row" data-upload-id="${deckUpEscape(u.id)}">
+            <span class="capitaflow-q-upload-pill">${deckUpEscape(deckUpExtPill(u.originalName))}</span>
+            <span class="capitaflow-q-upload-name" title="${deckUpEscape(u.originalName)}">${deckUpEscape(u.originalName)}</span>
+            <span class="capitaflow-q-upload-size">${deckUpEscape(deckUpFmtSize(u.sizeBytes))}</span>
+            <button type="button" class="capitaflow-q-upload-remove" aria-label="Remove" title="Remove">&#x2715;</button>
           </div>
         `).join('');
-    list.querySelectorAll('.partner-q-upload-remove').forEach((btn) => {
+    list.querySelectorAll('.capitaflow-q-upload-remove').forEach((btn) => {
       btn.addEventListener('click', async () => {
         const row = btn.closest('[data-upload-id]');
         const id  = row?.getAttribute('data-upload-id');
         if (!id) return;
         btn.disabled = true;
         try {
-          await fetch(`${PARTNER_API}/api/customer/deck-upload/${encodeURIComponent(id)}`, {
+          await fetch(`${CAPITAFLOW_API}/api/customer/deck-upload/${encodeURIComponent(id)}`, {
             method: 'DELETE', headers: { 'X-Customer-Key': customerKey() },
           });
           await deckUploadsRefresh();
@@ -1223,7 +1223,7 @@ async function deckUploadsRefresh() {
       });
     });
   } catch {
-    list.innerHTML = '<p class="partner-q-empty">Could not load uploads.</p>';
+    list.innerHTML = '<p class="capitaflow-q-empty">Could not load uploads.</p>';
   }
 }
 
@@ -1239,7 +1239,7 @@ async function deckUploadOne(file, statusEl) {
   if (statusEl) statusEl.textContent = `Uploading ${file.name}…`;
   const buf = await file.arrayBuffer();
   const res = await fetch(
-    `${PARTNER_API}/api/customer/deck-upload?filename=${encodeURIComponent(file.name)}`,
+    `${CAPITAFLOW_API}/api/customer/deck-upload?filename=${encodeURIComponent(file.name)}`,
     {
       method:  'POST',
       headers: {
@@ -1264,7 +1264,7 @@ async function deckUploadOne(file, statusEl) {
   if (!zone || !input) return;
 
   const status = document.createElement('div');
-  status.className = 'partner-q-drop-status';
+  status.className = 'capitaflow-q-drop-status';
   zone.appendChild(status);
 
   zone.addEventListener('click', (e) => {

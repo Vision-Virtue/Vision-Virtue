@@ -40,7 +40,7 @@ import {
   rewriteAffectedParagraphs, SlideRewriteInput,
 } from './slide-rewriter.service';
 import { INVESTOR_DECK_FIELDS } from '../data/investor-deck-schema';
-import { listUploads, getOrExtractText } from './deck-upload.service';
+import { listUploads, getOrExtractText, resolveUpload } from './deck-upload.service';
 import { renderChartPng, asChartData, ChartData } from './chart-renderer.service';
 
 const EXTRACTOR_MODEL = 'claude-sonnet-4-20250514';
@@ -307,7 +307,7 @@ export async function extractPlaceholdersFromXlsx(
 // Replaces the rigid sheet-name + column-letter lookup with a single LLM call
 // that:
 //   1. Reads ALL sheets from the customer's xlsx (no schema assumption)
-//   2. Reads any text the customer dropped into the partner-portal dropzone
+//   2. Reads any text the customer dropped into the capitaflow-portal dropzone
 //   3. Reads the unique {{PLACEHOLDER}} list from the template pptx
 //   4. Asks Claude to produce a JSON map { "{{X}}": "formatted value", ... }
 //
@@ -1307,6 +1307,186 @@ async function injectCharts(
   return inserted;
 }
 
+// ─── Split-placeholder helpers ──────────────────────────────────────────────
+
+/** Concatenate every <a:t> chunk inside an XML fragment. PowerPoint sometimes
+ *  splits a placeholder like {{COMPANY_LOGO}} across two adjacent text runs:
+ *      <a:t>{{COMPANY</a:t>...<a:t>LOGO}}</a:t>
+ *  A literal `xml.includes('{{COMPANY_LOGO}}')` will miss it; running the
+ *  whole shape through this helper recovers the visible text. */
+function concatVisibleText(xml: string): string {
+  const matches = xml.match(/<a:t[^>]*>([\s\S]*?)<\/a:t>/g) || [];
+  return matches.map(m => m.replace(/<\/?a:t[^>]*>/g, '')).join('');
+}
+
+/** Like findShapeCoordsContaining but tolerant of split text runs. */
+function findShapeCoordsFuzzy(slideXml: string, placeholder: string): ShapeCoords | null {
+  const shapeRe = /<p:sp\b[^>]*>([\s\S]*?)<\/p:sp>/g;
+  let m: RegExpExecArray | null;
+  while ((m = shapeRe.exec(slideXml))) {
+    const inner = m[1];
+    if (!concatVisibleText(inner).includes(placeholder)) continue;
+    const xfrmMatch = /<a:xfrm\b[^>]*>([\s\S]*?)<\/a:xfrm>/.exec(inner);
+    if (!xfrmMatch) continue;
+    const off = /<a:off\b[^/>]*x="(-?\d+)"[^/>]*y="(-?\d+)"/.exec(xfrmMatch[1]);
+    const ext = /<a:ext\b[^/>]*cx="(\d+)"[^/>]*cy="(\d+)"/.exec(xfrmMatch[1]);
+    if (!off || !ext) continue;
+    return {
+      x:  parseInt(off[1], 10),
+      y:  parseInt(off[2], 10),
+      cx: parseInt(ext[1], 10),
+      cy: parseInt(ext[2], 10),
+    };
+  }
+  return null;
+}
+
+/**
+ * Worst-case finder for {{COMPANY_LOGO}}: PowerPoint sometimes splits the
+ * placeholder across two completely SEPARATE <p:sp> shapes (one carrying
+ * `{{COMPANY` and another carrying `LOGO}}`), each with its own xfrm. We
+ * walk every shape, collect the bounding boxes of any shape whose visible
+ * text contains either fragment, then return a 1.0" × 1.0" box anchored
+ * at the union top-left — a sensible default logo footprint.
+ */
+function findSplitCompanyLogoCoords(slideXml: string): ShapeCoords | null {
+  const shapeRe = /<p:sp\b[^>]*>([\s\S]*?)<\/p:sp>/g;
+  const fragments: ShapeCoords[] = [];
+  let m: RegExpExecArray | null;
+  while ((m = shapeRe.exec(slideXml))) {
+    const inner = m[1];
+    const text = concatVisibleText(inner);
+    // The negative lookahead avoids matching {{COMPANY_NAME, {{COMPANY_TAGLINE, etc.
+    const hasStart = /\{\{COMPANY(?:_LOGO)?(?!_[A-Z])/.test(text);
+    const hasEnd   = /LOGO\}\}/.test(text);
+    if (!hasStart && !hasEnd) continue;
+    const xfrmMatch = /<a:xfrm\b[^>]*>([\s\S]*?)<\/a:xfrm>/.exec(inner);
+    if (!xfrmMatch) continue;
+    const off = /<a:off\b[^/>]*x="(-?\d+)"[^/>]*y="(-?\d+)"/.exec(xfrmMatch[1]);
+    const ext = /<a:ext\b[^/>]*cx="(\d+)"[^/>]*cy="(\d+)"/.exec(xfrmMatch[1]);
+    if (!off || !ext) continue;
+    fragments.push({
+      x:  parseInt(off[1], 10),
+      y:  parseInt(off[2], 10),
+      cx: parseInt(ext[1], 10),
+      cy: parseInt(ext[2], 10),
+    });
+  }
+  if (fragments.length === 0) return null;
+  const minX = Math.min(...fragments.map(f => f.x));
+  const minY = Math.min(...fragments.map(f => f.y));
+  // 1.0" square — 914400 EMU per inch. Big enough to be visible without
+  // overlapping the adjacent {{COMPANY_NAME}} text shape to the right.
+  const EMU_PER_INCH = 914400;
+  return { x: minX, y: minY, cx: EMU_PER_INCH, cy: EMU_PER_INCH };
+}
+
+// ─── Company logo discovery + injection ─────────────────────────────────────
+
+interface CompanyLogoFile {
+  absPath: string;
+  extension: 'png' | 'jpg' | 'jpeg' | 'webp' | 'svg' | 'gif';
+  mime: string;
+}
+
+/** Find a logo image among the customer's drag&drop uploads. Picks the most
+ *  recent image upload (any image MIME). Returns null if none found. */
+function findCustomerLogo(customerKeyId: string | undefined): CompanyLogoFile | null {
+  if (!customerKeyId) return null;
+  try {
+    const uploads = listUploads(customerKeyId);
+    const img = uploads.find(u => u.mimeType && u.mimeType.startsWith('image/'));
+    if (!img) return null;
+    const abs = resolveUpload(customerKeyId, img.id);
+    if (!abs) return null;
+    const ext = img.ext.toLowerCase();
+    const allowed: CompanyLogoFile['extension'][] = ['png', 'jpg', 'jpeg', 'webp', 'svg', 'gif'];
+    if (!(allowed as string[]).includes(ext)) return null;
+    return { absPath: abs, extension: ext as CompanyLogoFile['extension'], mime: img.mimeType };
+  } catch { return null; }
+}
+
+const IMG_CT: Record<string, string> = {
+  png:  'image/png',
+  jpg:  'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  svg:  'image/svg+xml',
+  gif:  'image/gif',
+};
+
+/** Ensure [Content_Types].xml has a <Default Extension="<ext>" .../> entry
+ *  for the given image extension. Idempotent. */
+async function ensureImageDefault(zip: JSZip, ext: string): Promise<void> {
+  const ctFile = zip.file('[Content_Types].xml');
+  if (!ctFile) return;
+  let ct = await ctFile.async('string');
+  const escExt = ext.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  if (new RegExp('<Default\\b[^>]*Extension="' + escExt + '"', 'i').test(ct)) return;
+  const mime = IMG_CT[ext] || 'application/octet-stream';
+  ct = ct.replace(/(<Types\b[^>]*>)/,
+    '$1<Default Extension="' + ext + '" ContentType="' + mime + '"/>');
+  zip.file('[Content_Types].xml', ct);
+}
+
+/** Inject the customer's logo at the captured {{COMPANY_LOGO}} coords on its
+ *  host slide. Mirrors injectCharts but for a single static image file. */
+async function injectLogo(
+  zip: JSZip,
+  logo: CompanyLogoFile,
+  location: { slideKey: string; coords: ShapeCoords },
+  deletedSlides: string[],
+  picId: number,
+): Promise<boolean> {
+  if (deletedSlides.includes(location.slideKey)) return false;
+  const slideFile = zip.file(location.slideKey);
+  if (!slideFile) return false;
+  const ext = logo.extension === 'jpeg' ? 'jpg' : logo.extension;
+  await ensureImageDefault(zip, ext);
+  let imgBuf: Buffer;
+  try { imgBuf = fs.readFileSync(logo.absPath); }
+  catch { return false; }
+  const fileName = 'company-logo.' + ext;
+  zip.file('ppt/media/' + fileName, imgBuf);
+  const rId = await addImageRelToSlide(zip, location.slideKey, fileName);
+  const picXml = buildPictureShapeXml(picId, 'Company Logo', rId, location.coords);
+  let slideXml = await slideFile.async('string');
+
+  // Strip the placeholder text from any <p:sp> that carries it (whether the
+  // full {{COMPANY_LOGO}} sits in one shape, or the template split it into
+  // two — see findSplitCompanyLogoCoords). The shapes stay in the slide so
+  // their formatting/layout boxes are intact, but their visible text goes
+  // to empty so we don't see "{{COMPANY" / "LOGO}}" next to the new image.
+  slideXml = slideXml.replace(
+    /<p:sp\b[^>]*>([\s\S]*?)<\/p:sp>/g,
+    (whole, inner: string) => {
+      const visible = concatVisibleText(inner);
+      const isHost  = visible.includes('{{COMPANY_LOGO}}') ||
+                      /\{\{COMPANY(?:_LOGO)?(?!_[A-Z])/.test(visible) ||
+                      /LOGO\}\}/.test(visible);
+      if (!isHost) return whole;
+      const stripped = inner.replace(
+        /<a:t[^>]*>[\s\S]*?<\/a:t>/g,
+        (run: string) => {
+          const text = run.replace(/<\/?a:t[^>]*>/g, '');
+          if (/\{\{COMPANY|LOGO\}\}|\{\{COMPANY_LOGO\}\}/.test(text)) {
+            return run.replace(/>[\s\S]*?</, '><');
+          }
+          return run;
+        },
+      );
+      return whole.replace(inner, stripped);
+    },
+  );
+
+  slideXml = slideXml.replace('</p:spTree>', picXml + '</p:spTree>');
+  zip.file(location.slideKey, slideXml);
+  console.log('[pptx-gen] logo picture inserted on ' + location.slideKey +
+              ' at (' + location.coords.x + ',' + location.coords.y +
+              ') size ' + location.coords.cx + 'x' + location.coords.cy);
+  return true;
+}
+
 // ─── Slide deletion: remove a slide from the package atomically ──────────────
 
 /** Escape a string so it can be embedded literally inside a RegExp. */
@@ -1424,7 +1604,7 @@ export async function generatePopulatedPptx(opts: {
   outputPptxPath: string;
   /**
    * Customer key id -- used to gather extracted text from any files the
-   * customer dropped into the partner-portal dropzone so Claude can pull
+   * customer dropped into the capitaflow-portal dropzone so Claude can pull
    * qualitative content (founders, market thesis, etc.) from them.
    */
   customerKeyId?: string;
@@ -1521,6 +1701,10 @@ export async function generatePopulatedPptx(opts: {
   interface ChartLocation { slideKey: string; coords: { x: number; y: number; cx: number; cy: number } }
   const chartLocations = new Map<string, ChartLocation>();
 
+  // (Customer logo embedding moved to a completely isolated post-processing
+  //  step below — see injectCompanyLogoPostBuild — so a bug in the logo path
+  //  can never affect the main placeholder substitution pipeline.)
+
   for (const key of slideEntries) {
     const xml           = await zip.file(key)!.async('string');
     const originalCount = countOriginalPlaceholders(xml);
@@ -1535,6 +1719,8 @@ export async function generatePopulatedPptx(opts: {
       const coords = findChartHostFrame(xml, chartPlaceholder);
       if (coords) chartLocations.set(chartPlaceholder, { slideKey: key, coords });
     }
+
+    // (Logo capture removed from the slide loop — see post-build step.)
 
     const afterReplace  = applyReplacementsToSlideXml(xml, valueMap, mut);
     const unfilledHere  = countOriginalPlaceholders(afterReplace);
@@ -1715,6 +1901,8 @@ export async function generatePopulatedPptx(opts: {
     }
   }
 
+  // (Phase 3.6 logo injection removed — see post-build step below.)
+
   // ── PHASE 4: renumber slide-number footers ───────────────────────────────
   // Templates often hard-code page-number text like "03 / 20" in slide
   // footers. After deletion the original totals are wrong AND the indices
@@ -1742,10 +1930,82 @@ export async function generatePopulatedPptx(opts: {
   await fs.promises.mkdir(path.dirname(opts.outputPptxPath), { recursive: true });
   await fs.promises.writeFile(opts.outputPptxPath, outBuf);
 
+  // ── Post-build: customer logo embed (best-effort, isolated) ─────────────
+  // Walk the TEMPLATE separately to find the {{COMPANY_LOGO}} placeholder
+  // coords (the output has those placeholders already stripped, so we look
+  // at the source). Then open the just-written output, drop the customer's
+  // drag&drop image at the saved coords. If anything in here fails we log
+  // and return — the deck the caller gets is still the fully-substituted
+  // one from above.
+  try {
+    await injectCompanyLogoPostBuild(opts);
+  } catch (err) {
+    console.warn('[pptx-gen] post-build logo embed failed (deck unaffected):',
+                 err instanceof Error ? err.message : err);
+  }
+
   return stats;
 }
 
-// ─── Storage path helpers (mirrors partner-xlsx.service) ─────────────────────
+/** Standalone post-build step. Opens the freshly-written output pptx,
+ *  finds where {{COMPANY_LOGO}} sat in the TEMPLATE, and drops the customer
+ *  image there. Never throws. */
+async function injectCompanyLogoPostBuild(opts: {
+  templatePptxPath: string;
+  outputPptxPath:   string;
+  customerKeyId?:   string;
+}): Promise<void> {
+  const logo = findCustomerLogo(opts.customerKeyId);
+  if (!logo) {
+    if (opts.customerKeyId) console.log('[pptx-gen] post-build: no image upload found, skip logo embed');
+    return;
+  }
+  // 1. Find the placeholder coords from the template.
+  const tplBuf = await fs.promises.readFile(opts.templatePptxPath);
+  const tplZip = await JSZip.loadAsync(tplBuf);
+  const slideKeys = Object.keys(tplZip.files)
+    .filter(k => /^ppt\/slides\/slide\d+\.xml$/.test(k))
+    .sort((a, b) => {
+      const ai = parseInt((a.match(/slide(\d+)\.xml/) || ['', '0'])[1], 10);
+      const bi = parseInt((b.match(/slide(\d+)\.xml/) || ['', '0'])[1], 10);
+      return ai - bi;
+    });
+  let logoLocation: { slideKey: string; coords: ShapeCoords } | null = null;
+  const PLACEHOLDER = '{{COMPANY_LOGO}}';
+  for (const key of slideKeys) {
+    const xml = await tplZip.file(key)!.async('string');
+    const visible = concatVisibleText(xml);
+    if (visible.includes(PLACEHOLDER)) {
+      const coords = findShapeCoordsFuzzy(xml, PLACEHOLDER);
+      if (coords) { logoLocation = { slideKey: key, coords }; break; }
+    }
+    const split = findSplitCompanyLogoCoords(xml);
+    if (split) { logoLocation = { slideKey: key, coords: split }; break; }
+  }
+  if (!logoLocation) {
+    console.log('[pptx-gen] post-build: {{COMPANY_LOGO}} not found in template, skip');
+    return;
+  }
+  console.log('[pptx-gen] post-build: logo placeholder at ' + logoLocation.slideKey + ' coords', logoLocation.coords);
+
+  // 2. Open the freshly written output and inject the image there.
+  const outBuf = await fs.promises.readFile(opts.outputPptxPath);
+  const outZip = await JSZip.loadAsync(outBuf);
+  const ok = await injectLogo(outZip, logo, logoLocation, [], 9001);
+  if (!ok) {
+    console.warn('[pptx-gen] post-build: injectLogo returned false');
+    return;
+  }
+  const finalBuf = await outZip.generateAsync({
+    type: 'nodebuffer',
+    compression: 'DEFLATE',
+    compressionOptions: { level: 6 },
+  });
+  await fs.promises.writeFile(opts.outputPptxPath, finalBuf);
+  console.log('[pptx-gen] post-build: logo embedded successfully on ' + logoLocation.slideKey);
+}
+
+// ─── Storage path helpers (mirrors capitaflow-xlsx.service) ─────────────────────
 
 export function customerPptxDir(): string {
   const dbPath = process.env.DB_PATH || './data/marketing.db';

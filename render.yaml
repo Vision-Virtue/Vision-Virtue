@@ -5,6 +5,7 @@ services:
     rootDir: marketing-backend
     buildCommand: npm install && npm run build
     startCommand: npm start
+    healthCheckPath: /api/health
     disk:
       name: vv-marketing-data
       mountPath: /data

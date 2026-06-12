@@ -5,7 +5,7 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import Anthropic from '@anthropic-ai/sdk';
-import { customerKeyRepo, CustomerKeyRow } from '../db/partner.repository';
+import { customerKeyRepo, CustomerKeyRow } from '../db/capitaflow.repository';
 import { AIService } from '../services/ai.service';
 import {
   glAccountRepo,

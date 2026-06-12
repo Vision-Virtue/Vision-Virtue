@@ -350,7 +350,7 @@ note(s, "Lead with insight about WHY NOW — not just market size.\n"
 s = blank(); bg(s)
 hdr(s, 'Revenue Engine', 'Efficient · Repeatable · Accelerating')
 bullets(s, [
-    'GTM: Outbound sales + content-led inbound + partner channel.',
+    'GTM: Outbound sales + content-led inbound + capitaflow channel.',
     ('[Assumption] 40% of pipeline from inbound by Y3 — CAC compression driver', True),
     'Sales motion: SDR → AE model.',
     ('[Assumption] Avg. sales cycle: 45 days SMB / 90 days Enterprise', True),
@@ -875,7 +875,7 @@ for i, (num, title, body) in enumerate([
 # Bottom CTA bar
 box(s, 0.35, 6.8, 12.63, 0.5, GOLD)
 tx(s, 0.5, 6.83, 12.3, 0.42,
-   'The ask: $5M Series A  ·  $20M pre-money  ·  Next step: [Schedule partner meeting / data room access]',
+   'The ask: $5M Series A  ·  $20M pre-money  ·  Next step: [Schedule capitaflow meeting / data room access]',
    11, NAVY3, bold=True, align=PP_ALIGN.CENTER)
 
 ftr(s, 19)
@@ -894,7 +894,7 @@ hdr(s, 'VC Critique', 'The 5 objections every investor will raise — and how to
 
 box(s, 0.35, 0.97, 12.63, 0.28, RGBColor(0x3A, 0x1A, 0x1A))
 tx(s, 0.5, 0.97, 12.3, 0.26,
-   'MANDATORY PRE-PITCH PREPARATION — Know these cold before entering any partner meeting',
+   'MANDATORY PRE-PITCH PREPARATION — Know these cold before entering any capitaflow meeting',
    8.5, RED, bold=True)
 
 objections = [
@@ -909,7 +909,7 @@ objections = [
      'expansion revenue from the same customer arrives at month 12. '
      'Real blended payback including expansion is ~14 months. Show the cohort data.'),
     ('03  $1.5M ARR is thin. Why should we believe the model?',
-     'Early revenue is high-quality: 94% logo retention, 115% NRR, zero design-partner churn. '
+     'Early revenue is high-quality: 94% logo retention, 115% NRR, zero design-capitaflow churn. '
      'The 25 customers represent the ICP perfectly. '
      'We have a signed LOI pipeline of $800K ARR — that is not in the model. '
      'Weakness to acknowledge: sample size is small. Strengthen with 3 reference calls.'),

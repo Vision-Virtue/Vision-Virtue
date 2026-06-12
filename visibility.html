@@ -8,7 +8,7 @@
   <meta http-equiv="Expires" content="0" />
   <title>Vision &amp; Virtue | Visibility</title>
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="visibility.css?v=24" />
+  <link rel="stylesheet" href="visibility.css?v=19" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
@@ -44,23 +44,6 @@
   <!-- WORKSPACE -->
   <section class="vis-workspace">
     <div class="vis-workspace-inner">
-
-      <!-- ── CFO ADVISOR STRIP ─────────────────────────────────── -->
-      <div class="cfo-strip" id="cfoStrip">
-        <div class="cfo-strip-avatar-wrap">
-          <img src="agent_cfo.jpg" alt="Marcus Vale" class="cfo-strip-avatar" />
-          <span class="cfo-strip-online" title="CFO online"></span>
-        </div>
-        <div class="cfo-strip-info">
-          <div class="cfo-strip-name">Marcus Vale</div>
-          <div class="cfo-strip-title">Chief Financial Officer &middot; Vision &amp; Virtue Visibility Advisor</div>
-          <div class="cfo-strip-tagline">Your financial data is on my desk. I'm monitoring all 6 steps — structure, budget, P&amp;L, and cash flow.</div>
-        </div>
-        <button class="cfo-strip-btn" id="cfoEngageBtn" type="button">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-          Ask CFO
-        </button>
-      </div>
 
       <!-- Module tabs. Tabs 1–3 set up the budget; tabs 4–6 are the
            Cash Flow module, each operating on a finalized budget. -->
@@ -312,52 +295,12 @@
                   <button type="button" data-value="false">No</button>
                 </div>
               </div>
-              <div class="vis-budget-setup-field">
-                <label>6. Connect Revenues &amp; COGS module?</label>
-                <div class="vis-pillgroup" data-setup="rcEnabled">
-                  <button type="button" data-value="true">Yes</button>
-                  <button type="button" data-value="false">No</button>
-                </div>
-              </div>
             </div>
             <p class="vis-budget-setup-note">Changing granularity will auto-aggregate or evenly split your entered amounts (spec §6).</p>
           </section>
 
           <div class="vis-banner vis-banner-error" id="bgEditorErrorBanner" hidden></div>
           <div class="vis-banner vis-banner-info"  id="bgEditorInfoBanner"  hidden></div>
-
-          <!-- Revenues & COGS sub-panel (shown only when budget.rcEnabled) -->
-          <section class="vis-sb-section" id="rcSection" hidden>
-            <header class="vis-sb-header">
-              <div>
-                <h3 class="vis-sb-title">Revenues &amp; COGS</h3>
-                <p class="vis-sb-sub">Enter each product/service with its Revenue GL, Price, COGS GL, Cost, and monthly quantities sold. On Finalize, rows are pivot-aggregated into your Budget Structure (Price × Qty → Revenue lines, Cost × Qty → COGS lines).</p>
-              </div>
-              <span class="vis-status-pill" id="rcStatusPill" data-status="editing">Editing</span>
-            </header>
-
-            <div class="vis-sb-toolbar">
-              <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="rcAddRowBtn">+ Add row</button>
-              <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="rcDeleteRowBtn" disabled>Delete row</button>
-            </div>
-
-            <div class="vis-banner vis-banner-error" id="rcErrorBanner" hidden></div>
-            <div class="vis-banner vis-banner-info"  id="rcInfoBanner"  hidden></div>
-
-            <div class="vis-table-wrap vis-rc-table-wrap">
-              <table class="vis-table vis-rc-table" id="rcTable">
-                <thead id="rcTableHead"></thead>
-                <tbody id="rcTableBody"></tbody>
-              </table>
-            </div>
-            <div class="vis-empty" id="rcEmpty">No rows yet. Click <strong>+ Add row</strong> to begin.</div>
-
-            <footer class="vis-sb-actions">
-              <span class="vis-validation-summary" id="rcSummary"></span>
-              <button type="button" class="vis-btn vis-btn-ghost"   id="rcEditBtn"     hidden>Edit</button>
-              <button type="button" class="vis-btn vis-btn-primary" id="rcFinalizeBtn" disabled>Finalize Revenues &amp; COGS</button>
-            </footer>
-          </section>
 
           <!-- Salaries & Benefits sub-panel (shown only when budget.sbEnabled) -->
           <section class="vis-sb-section" id="sbSection" hidden>
@@ -419,9 +362,6 @@
                 <button type="button" class="vis-btn vis-btn-ghost vis-btn-sm" id="deleteBudgetLineBtn" disabled>Delete row</button>
               </div>
             </div>
-            <p class="vis-budget-structure-note">
-              <strong>Sign convention:</strong> Enter <em>Revenue</em> amounts as <strong>negative</strong> (credit movement) and <em>Cost / Expense</em> amounts as <strong>positive</strong> (debit). The Revenues &amp; COGS module applies this automatically when it populates lines from the R&amp;C table.
-            </p>
             <div class="vis-table-wrap vis-budget-table-wrap">
               <table class="vis-table vis-budget-table" id="budgetTable">
                 <thead id="budgetTableHead"></thead>
@@ -502,7 +442,7 @@
                   <div class="vis-cube-label">Revenue trend (Q1–Q4)</div>
                   <div class="vis-cube-chart-wrap"><canvas id="dashRevTrend"></canvas></div>
                 </div>
-                <div class="vis-dash-cube vis-cube-kpi vis-cube-kpi-green">
+                <div class="vis-dash-cube vis-cube-kpi vis-cube-kpi-accent">
                   <div class="vis-cube-label">Gross Margin %</div>
                   <div class="vis-cube-value" id="dashGmPct">—</div>
                   <div class="vis-cube-foot">FY</div>
@@ -1049,48 +989,6 @@
     </div>
   </div>
 
-  <!-- ── CFO CHAT PANEL ──────────────────────────────────────── -->
-  <aside class="cfo-panel" id="cfoPanel" aria-hidden="true" aria-label="CFO Advisor">
-
-    <div class="cfo-panel-header">
-      <div class="cfo-panel-identity">
-        <img src="agent_cfo.jpg" alt="Marcus Vale" class="cfo-panel-avatar" />
-        <div>
-          <div class="cfo-panel-name">Marcus Vale</div>
-          <div class="cfo-panel-role">CFO &middot; Visibility Advisor</div>
-        </div>
-      </div>
-      <button class="cfo-panel-close" id="cfoPanelClose" type="button" aria-label="Close CFO panel">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
-    </div>
-
-    <div class="cfo-context-badge">
-      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-      Monitoring your live financial data across all 6 steps
-    </div>
-
-    <div class="cfo-messages" id="cfoMessages" role="log" aria-live="polite"></div>
-
-    <div class="cfo-input-area">
-      <textarea
-        class="cfo-input"
-        id="cfoInput"
-        placeholder="Ask Marcus about your structure, P&amp;L, margins, cash flow…"
-        rows="2"
-        maxlength="2000"
-        aria-label="Message to CFO"
-      ></textarea>
-      <button class="cfo-send-btn" id="cfoSendBtn" type="button" aria-label="Send message">
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-      </button>
-    </div>
-
-  </aside>
-
-  <!-- Backdrop (click to close) -->
-  <div class="cfo-backdrop" id="cfoBackdrop" aria-hidden="true"></div>
-
-  <script src="visibility.js?v=47" defer></script>
+  <script src="visibility.js?v=35" defer></script>
 </body>
 </html>

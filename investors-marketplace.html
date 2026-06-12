@@ -6,12 +6,12 @@
   <title>Vision &amp; Virtue | Investors Marketplace</title>
   <link rel="icon" href="favicon.ico">
   <link rel="stylesheet" href="styles.css" />
-  <link rel="stylesheet" href="partner.css" />
+  <link rel="stylesheet" href="capitaflow.css" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Raleway:wght@300;400;600;700;800&display=swap" rel="stylesheet" />
   <style>
-    /* ─── Marketplace-specific overrides on top of partner.css ─────── */
+    /* ─── Marketplace-specific overrides on top of capitaflow.css ─────── */
     .mkt-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1.4rem; flex-wrap: wrap; }
     .mkt-count { color: var(--gray-600); font-size: 0.92rem; }
     .mkt-refresh { background: transparent; color: var(--accent); border: 1px solid rgba(58, 107, 196, 0.4); border-radius: 8px; padding: 0.45rem 0.95rem; font-size: 0.82rem; cursor: pointer; font-family: inherit; }
@@ -44,7 +44,7 @@
     .mkt-kpi-single { display: flex; justify-content: space-between; font-size: 0.78rem; margin-bottom: 0.35rem; }
     .mkt-kpi-divider { height: 1px; background: rgba(255,255,255,0.1); margin: 0.55rem 0; }
 
-    /* ─── NDA modal — restyled to match partner area ─────────────── */
+    /* ─── NDA modal — restyled to match capitaflow area ─────────────── */
     .nda-overlay { position: fixed; inset: 0; background: rgba(8, 15, 32, 0.78); display: none; align-items: stretch; justify-content: center; z-index: 100; backdrop-filter: blur(4px); }
     .nda-overlay.open { display: flex; }
     .nda-modal { background: var(--white); color: var(--navy-800); border-radius: 14px; box-shadow: 0 30px 80px -20px rgba(8, 15, 32, 0.4); width: min(1180px, 96vw); max-height: 95vh; display: grid; grid-template-rows: auto 1fr auto; margin: auto; overflow: hidden; font-family: var(--font-sans); }
@@ -83,10 +83,10 @@
     @media (max-width: 880px) { .nda-body { grid-template-columns: 1fr; } .nda-pdf-wrap { padding: 1rem 1.4rem 0; } .nda-pdf { min-height: 320px; } }
   </style>
 </head>
-<body class="partner-page">
+<body class="capitaflow-page">
 
   <!-- NAV -->
-  <nav class="navbar partner-nav" id="navbar">
+  <nav class="navbar capitaflow-nav" id="navbar">
     <div class="nav-inner">
       <a href="index.html" class="nav-logo">
         <span class="logo-v">V</span>
@@ -94,28 +94,28 @@
       </a>
       <ul class="nav-links">
         <li><a href="index.html">← Main Site</a></li>
-        <li><span class="nav-badge partner-nav-badge">Investors Marketplace</span></li>
+        <li><span class="nav-badge capitaflow-nav-badge">Investors Marketplace</span></li>
         <li><button class="nav-reset-btn" id="signOutBtn" title="Sign out">⟳ Sign Out</button></li>
       </ul>
     </div>
   </nav>
 
   <!-- HERO -->
-  <section class="partner-hero">
-    <div class="partner-hero-bg"></div>
-    <div class="partner-hero-content">
+  <section class="capitaflow-hero">
+    <div class="capitaflow-hero-bg"></div>
+    <div class="capitaflow-hero-content">
       <p class="hero-eyebrow" id="ivWelcome">Investor Portal</p>
-      <h1 class="partner-hero-title">Investors Marketplace</h1>
-      <p class="partner-hero-sub">Browse Vision &amp; Virtue Partner customers raising capital. Click a tile to sign the standard NDA and view the investor deck.</p>
+      <h1 class="capitaflow-hero-title">Investors Marketplace</h1>
+      <p class="capitaflow-hero-sub">Browse Vision &amp; Virtue CapitaFlow customers raising capital. Click a tile to sign the standard NDA and view the investor deck.</p>
     </div>
   </section>
 
   <!-- MARKETPLACE LISTINGS -->
-  <section class="partner-products-section">
-    <div class="partner-section-head">
+  <section class="capitaflow-products-section">
+    <div class="capitaflow-section-head">
       <div class="section-tag dark">Open Opportunities</div>
-      <h2 class="partner-section-title">Companies Raising Capital</h2>
-      <p class="partner-section-sub">Hover any tile to preview the company's headline KPIs. Click to start the NDA process and view the deck.</p>
+      <h2 class="capitaflow-section-title">Companies Raising Capital</h2>
+      <p class="capitaflow-section-sub">Hover any tile to preview the company's headline KPIs. Click to start the NDA process and view the deck.</p>
     </div>
 
     <div class="mkt-toolbar">
@@ -277,7 +277,7 @@
         '<div class="mkt-tile" data-listing-id="' + escHtml(listing.id) + '" tabindex="0" role="button">' +
           '<div class="mkt-tile-logo">' + logoHtml + '</div>' +
           '<h3 class="mkt-tile-name">' + escHtml(listing.customerName) + '</h3>' +
-          '<p class="mkt-tile-desc">' + escHtml(listing.description || 'Vision Partner customer — investor materials available after NDA.') + '</p>' +
+          '<p class="mkt-tile-desc">' + escHtml(listing.description || 'Vision CapitaFlow customer — investor materials available after NDA.') + '</p>' +
           '<div class="mkt-tile-meta">' +
             sectorHtml +
             '<span class="mkt-tile-ask">' + escHtml(listing.askAmountText || '') + '</span>' +
@@ -305,7 +305,7 @@
       const listings = await fetchListings();
       if (!listings.length) {
         countEl.textContent = '0 listings';
-        grid.innerHTML = '<div class="mkt-empty"><h3>No listings yet</h3><p>Partner customers haven\'t published their tiles yet. Check back soon.</p></div>';
+        grid.innerHTML = '<div class="mkt-empty"><h3>No listings yet</h3><p>CapitaFlow customers haven\'t published their tiles yet. Check back soon.</p></div>';
         return;
       }
       countEl.textContent = listings.length + ' listing' + (listings.length === 1 ? '' : 's');

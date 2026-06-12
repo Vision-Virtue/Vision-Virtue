@@ -27,7 +27,36 @@ export function getDb(): Database.Database {
   return db;
 }
 
+/**
+ * One-time rename of the old `partner_submissions` table (and its indices)
+ * to the CapitaFlow naming. Idempotent — checks for the new table first and
+ * is a no-op once the rename has run. SQLite ≥ 3.25 rewrites the FK
+ * constraint in `marketplace_listings` automatically.
+ */
+function migratePartnerToCapitaFlow(database: Database.Database): void {
+  const hasNew = database
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='capitaflow_submissions'")
+    .get();
+  if (hasNew) return;
+
+  const hasOld = database
+    .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='partner_submissions'")
+    .get();
+  if (!hasOld) return;
+
+  database.exec(`
+    ALTER TABLE partner_submissions RENAME TO capitaflow_submissions;
+    DROP INDEX IF EXISTS idx_partner_subs_status;
+    DROP INDEX IF EXISTS idx_partner_subs_key_id;
+    DROP INDEX IF EXISTS idx_partner_subs_submitted;
+  `);
+  // eslint-disable-next-line no-console
+  console.log('[db] migrated partner_submissions -> capitaflow_submissions');
+}
+
 function initializeSchema(database: Database.Database): void {
+  migratePartnerToCapitaFlow(database);
+
   database.exec(`
     CREATE TABLE IF NOT EXISTS content_items (
       id               TEXT PRIMARY KEY,
@@ -86,7 +115,74 @@ function initializeSchema(database: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_customer_keys_key ON customer_keys(key);
 
-    CREATE TABLE IF NOT EXISTS partner_submissions (
+    CREATE TABLE IF NOT EXISTS investor_keys (
+      id              TEXT PRIMARY KEY,
+      key             TEXT NOT NULL UNIQUE,
+      investor_name   TEXT NOT NULL DEFAULT '',
+      created_at      TEXT NOT NULL,
+      created_by      TEXT NOT NULL DEFAULT 'admin',
+      revoked         INTEGER NOT NULL DEFAULT 0
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_investor_keys_key ON investor_keys(key);
+
+    -- Investors Marketplace — one listing per capitaflow submission. Created when
+    -- the customer opts in via the 'To Investors Marketplace!' button on their
+    -- CapitaFlow area; can be retracted via 'Pull submission'.
+    CREATE TABLE IF NOT EXISTS marketplace_listings (
+      id                   TEXT PRIMARY KEY,
+      submission_id        TEXT NOT NULL UNIQUE,
+      customer_key_id      TEXT NOT NULL,
+      customer_name        TEXT NOT NULL DEFAULT '',
+      logo_path            TEXT,
+      description          TEXT NOT NULL DEFAULT '',
+      sector               TEXT NOT NULL DEFAULT 'Other',
+      ask_amount_text      TEXT NOT NULL DEFAULT '',
+      -- KPIs as JSON: { gmPctY1, gmPctY5, arrY1, arrY5, topLineY1, topLineY5, ebitdaY5, nrr }
+      kpis                 TEXT NOT NULL DEFAULT '{}',
+      -- Customer-uploaded PDF of the investor deck for view-only marketplace
+      -- access. Served only after an investor has signed the NDA.
+      deck_pdf_path        TEXT,
+      published_at         TEXT NOT NULL,
+      withdrawn_at         TEXT,
+      status               TEXT NOT NULL DEFAULT 'active',
+      FOREIGN KEY (submission_id)   REFERENCES capitaflow_submissions(id) ON DELETE CASCADE,
+      FOREIGN KEY (customer_key_id) REFERENCES customer_keys(id)       ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_marketplace_status   ON marketplace_listings(status);
+    CREATE INDEX IF NOT EXISTS idx_marketplace_customer ON marketplace_listings(customer_key_id);
+    CREATE INDEX IF NOT EXISTS idx_marketplace_submission ON marketplace_listings(submission_id);
+
+    -- NDA signatures — one row per (investor_key, listing) pair. Created when
+    -- the investor accepts the standard V&V NDA before viewing a customer's
+    -- investor deck. Drives the Agreements tile in Finance AI (Phase 4).
+    CREATE TABLE IF NOT EXISTS nda_signatures (
+      id                   TEXT PRIMARY KEY,
+      investor_key_id      TEXT NOT NULL,
+      investor_name        TEXT NOT NULL DEFAULT '',  -- snapshot of investor key name
+      listing_id           TEXT NOT NULL,
+      customer_name        TEXT NOT NULL DEFAULT '',  -- snapshot of listing customer name
+      full_name            TEXT NOT NULL,
+      fund_name            TEXT NOT NULL,
+      title                TEXT NOT NULL,
+      business_email       TEXT NOT NULL,
+      sign_date            TEXT NOT NULL,             -- date entered by investor (YYYY-MM-DD)
+      signature_type       TEXT NOT NULL DEFAULT 'typed',  -- 'typed' | 'drawn'
+      signature_value      TEXT NOT NULL DEFAULT '',  -- typed: name string; drawn: data-URL PNG
+      signed_at            TEXT NOT NULL,             -- server timestamp ISO
+      ip_address           TEXT,
+      user_agent           TEXT,
+      UNIQUE (investor_key_id, listing_id),
+      FOREIGN KEY (investor_key_id) REFERENCES investor_keys(id)         ON DELETE CASCADE,
+      FOREIGN KEY (listing_id)      REFERENCES marketplace_listings(id)  ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_nda_signatures_investor ON nda_signatures(investor_key_id);
+    CREATE INDEX IF NOT EXISTS idx_nda_signatures_listing  ON nda_signatures(listing_id);
+    CREATE INDEX IF NOT EXISTS idx_nda_signatures_signedat ON nda_signatures(signed_at);
+
+    CREATE TABLE IF NOT EXISTS capitaflow_submissions (
       id                   TEXT PRIMARY KEY,
       customer_key_id      TEXT,
       customer_name        TEXT NOT NULL,
@@ -99,9 +195,9 @@ function initializeSchema(database: Database.Database): void {
       FOREIGN KEY (customer_key_id) REFERENCES customer_keys(id) ON DELETE SET NULL
     );
 
-    CREATE INDEX IF NOT EXISTS idx_partner_subs_status     ON partner_submissions(status);
-    CREATE INDEX IF NOT EXISTS idx_partner_subs_key_id     ON partner_submissions(customer_key_id);
-    CREATE INDEX IF NOT EXISTS idx_partner_subs_submitted  ON partner_submissions(submitted_at);
+    CREATE INDEX IF NOT EXISTS idx_capitaflow_subs_status     ON capitaflow_submissions(status);
+    CREATE INDEX IF NOT EXISTS idx_capitaflow_subs_key_id     ON capitaflow_submissions(customer_key_id);
+    CREATE INDEX IF NOT EXISTS idx_capitaflow_subs_submitted  ON capitaflow_submissions(submitted_at);
 
     -- Visibility offering — Financial Structure (Phase 1).
     -- One row per GL line for a given customer key. budget_category may be
@@ -439,6 +535,10 @@ function initializeSchema(database: Database.Database): void {
   // Budgets: rc_enabled flag for the Revenues & COGS module (Phase 3c).
   try {
     database.exec(`ALTER TABLE budgets ADD COLUMN rc_enabled INTEGER NOT NULL DEFAULT 0`);
+  } catch { /* already exists */ }
+  // Marketplace listings: customer-uploaded investor deck PDF (Phase 3).
+  try {
+    database.exec(`ALTER TABLE marketplace_listings ADD COLUMN deck_pdf_path TEXT`);
   } catch { /* already exists */ }
 
   // Seed the VV-TEST123 customer key (idempotent)

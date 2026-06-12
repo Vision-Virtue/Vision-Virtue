@@ -139,7 +139,7 @@ async function tryAuth() {
 
     const target = apEnterBtn.dataset.target;
     sessionStorage.setItem('vv_auth', '1');
-    // Stash the verified PIN so admin-only API calls (e.g. partner submissions
+    // Stash the verified PIN so admin-only API calls (e.g. CapitaFlow submissions
     // panel) can include it in the X-Admin-Pin header without re-prompting.
     sessionStorage.setItem('vv_admin_pin', pin);
     closeGate();
