@@ -356,6 +356,47 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 })();
 
 /* ============================================================
+   CAPITAFLOW DEMO — Video modal
+   ============================================================ */
+(function () {
+  var playBtn  = document.getElementById('capitaflowPlayBtn');
+  var modal    = document.getElementById('cfloModal');
+  var closeBtn = document.getElementById('cfloClose');
+  var video    = document.getElementById('cfloVideo');
+
+  if (!playBtn || !modal || !video) return;
+
+  function openModal() {
+    modal.classList.add('is-open');
+    modal.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+    closeBtn.focus();
+    // Delay play until after modal CSS transition finishes (300ms scale anim)
+    setTimeout(function () { video.play(); }, 320);
+  }
+
+  function closeModal() {
+    modal.classList.remove('is-open');
+    modal.setAttribute('aria-hidden', 'true');
+    document.body.style.overflow = '';
+    video.pause();
+    video.currentTime = 0;
+    playBtn.focus();
+  }
+
+  playBtn.addEventListener('click', openModal);
+  closeBtn.addEventListener('click', closeModal);
+
+  modal.addEventListener('click', function (e) {
+    if (e.target === modal) closeModal();
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+  });
+})();
+
+/* ============================================================
    VISIBILITY DEMO — Video modal
    ============================================================ */
 (function () {
@@ -370,8 +411,9 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     modal.classList.add('is-open');
     modal.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
-    video.play();
     closeBtn.focus();
+    // Delay play until after modal CSS transition finishes (300ms scale anim)
+    setTimeout(function () { video.play(); }, 320);
   }
 
   function closeModal() {

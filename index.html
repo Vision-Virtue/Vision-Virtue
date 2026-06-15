@@ -984,7 +984,13 @@
         </button>
       </div>
       <div class="offering-card">
-        <div class="offering-img" style="background-image:url('tile_capitaflow.png')"></div>
+        <div class="offering-img" style="background-image:url('tile_capitaflow.png')">
+          <button class="offering-play-btn" id="capitaflowPlayBtn" aria-label="Watch CapitaFlow demo">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+              <polygon points="6,3 20,12 6,21" fill="white"/>
+            </svg>
+          </button>
+        </div>
         <div class="offering-body">
           <h3 class="offering-title">CapitaFlow</h3>
           <p class="offering-desc">End-To-End Investment enabler via Financial Modeling, Consulting and Representation.</p>
@@ -1191,6 +1197,20 @@
     </div>
   </footer>
 
+  <!-- CAPITAFLOW DEMO VIDEO MODAL -->
+  <div class="vdemo-overlay" id="cfloModal" aria-hidden="true" role="dialog" aria-modal="true" aria-label="CapitaFlow demo video">
+    <div class="vdemo-inner">
+      <button class="vdemo-close" id="cfloClose" aria-label="Close video">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+      <video id="cfloVideo" controls preload="auto" playsinline>
+        <source src="capitaflow-demo-web.mp4" type="video/mp4">
+      </video>
+    </div>
+  </div>
+
   <!-- VISIBILITY DEMO VIDEO MODAL -->
   <div class="vdemo-overlay" id="vdemoModal" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Visibility demo video">
     <div class="vdemo-inner">
@@ -1199,8 +1219,8 @@
           <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
         </svg>
       </button>
-      <video id="vdemoVideo" controls preload="metadata" playsinline>
-        <source src="visibility-demo-v2.mp4" type="video/mp4">
+      <video id="vdemoVideo" controls preload="auto" playsinline>
+        <source src="visibility-demo-v2-web.mp4" type="video/mp4">
       </video>
     </div>
   </div>
