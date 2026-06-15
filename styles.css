@@ -2792,16 +2792,16 @@ body {
 /* Play button — circular overlay on the card image */
 .offering-play-btn {
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  width: 54px;
-  height: 54px;
+  top: 14px;
+  right: 14px;
+  transform: none;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
-  background: rgba(10, 14, 30, 0.45);
+  background: rgba(10, 14, 30, 0.52);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
-  border: 2px solid rgba(255, 255, 255, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.55);
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -2813,8 +2813,8 @@ body {
 }
 
 .offering-play-btn svg {
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   margin-left: 3px; /* optical centering of play triangle */
   filter: drop-shadow(0 1px 3px rgba(0,0,0,0.4));
 }
@@ -2823,7 +2823,7 @@ body {
 .offering-play-btn:focus-visible {
   background: rgba(91, 141, 224, 0.72);
   border-color: rgba(255, 255, 255, 0.85);
-  transform: translate(-50%, -50%) scale(1.12);
+  transform: scale(1.12);
   box-shadow: 0 0 22px rgba(91, 141, 224, 0.55);
   animation: none;
   outline: none;
@@ -2838,9 +2838,7 @@ body {
 .vdemo-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(4, 7, 18, 0.92);
-  backdrop-filter: blur(5px);
-  -webkit-backdrop-filter: blur(5px);
+  background: rgba(4, 7, 18, 0.94);
   z-index: 10000;
   display: flex;
   align-items: center;
@@ -2902,7 +2900,8 @@ body {
 }
 
 /* ── Video element ── */
-#vdemoVideo {
+#vdemoVideo,
+#cfloVideo {
   display: block;
   width: 100%;
   aspect-ratio: 16 / 9;
