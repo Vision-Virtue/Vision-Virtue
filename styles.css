@@ -816,6 +816,73 @@ body {
   user-select: none;
 }
 
+/* ── Brand-film play button (big pulsing V in the "Our Vision" panel) ── */
+.what-v-play {
+  position: absolute;
+  top: 2.5rem;
+  left: 2.5rem;
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  border: 3px solid rgba(91, 141, 224, 0.65);
+  background: radial-gradient(circle at 35% 30%, rgba(91, 141, 224, 0.22), rgba(8, 18, 44, 0.92) 70%);
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 3;
+  transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+  animation: what-v-pulse 2.2s ease-in-out infinite;
+  box-shadow: 0 0 40px rgba(91, 141, 224, 0.25), inset 0 0 30px rgba(91, 141, 224, 0.18);
+}
+
+.what-v-play-letter {
+  font-family: var(--font-head);
+  font-size: 7.5rem;
+  font-weight: 800;
+  line-height: 1;
+  color: #ffffff;
+  text-shadow: 0 0 22px rgba(91, 141, 224, 0.7);
+  letter-spacing: -0.05em;
+  margin-top: -0.35rem;  /* optical centre of the V glyph */
+}
+
+.what-v-play-ring {
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  border: 1px solid rgba(91, 141, 224, 0.35);
+  pointer-events: none;
+}
+
+.what-v-play:hover,
+.what-v-play:focus-visible {
+  transform: scale(1.06);
+  border-color: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 60px rgba(91, 141, 224, 0.55), inset 0 0 30px rgba(91, 141, 224, 0.28);
+  animation: none;
+  outline: none;
+}
+
+@keyframes what-v-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(91, 141, 224, 0.50), inset 0 0 30px rgba(91, 141, 224, 0.18); }
+  55%      { box-shadow: 0 0 0 28px rgba(91, 141, 224, 0),    inset 0 0 30px rgba(91, 141, 224, 0.18); }
+}
+
+@media (max-width: 900px) {
+  .what-v-play {
+    width: 140px;
+    height: 140px;
+    top: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .what-v-play-letter { font-size: 5rem; }
+  .what-v-play:hover,
+  .what-v-play:focus-visible { transform: translateX(-50%) scale(1.06); }
+}
+
 .what-right {
   background: linear-gradient(160deg, var(--navy-800) 0%, var(--navy-700) 100%);
   padding: 5rem 4rem;
@@ -2919,7 +2986,8 @@ body {
 
 /* ── Video element ── */
 #vdemoVideo,
-#cfloVideo {
+#cfloVideo,
+#brandVideo {
   display: block;
   width: 100%;
   aspect-ratio: 16 / 9;

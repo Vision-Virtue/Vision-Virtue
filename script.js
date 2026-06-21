@@ -431,26 +431,24 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 })();
 
 /* ============================================================
-   VISIBILITY DEMO — Video modal
+   Shared helper: wire a play-button → video-modal pair.
+   Same open/close/Escape/backdrop logic, just parametrised.
    ============================================================ */
-(function () {
-  var playBtn  = document.getElementById('visibilityPlayBtn');
-  var modal    = document.getElementById('vdemoModal');
-  var closeBtn = document.getElementById('vdemoClose');
-  var video    = document.getElementById('vdemoVideo');
-
+function setupVideoModal(playBtnId, modalId, closeBtnId, videoId) {
+  var playBtn  = document.getElementById(playBtnId);
+  var modal    = document.getElementById(modalId);
+  var closeBtn = document.getElementById(closeBtnId);
+  var video    = document.getElementById(videoId);
   if (!playBtn || !modal || !video) return;
 
-  function openModal() {
+  function open() {
     modal.classList.add('is-open');
     modal.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
     closeBtn.focus();
-    // Delay play until after modal CSS transition finishes (300ms scale anim)
     setTimeout(function () { video.play(); }, 320);
   }
-
-  function closeModal() {
+  function close() {
     modal.classList.remove('is-open');
     modal.setAttribute('aria-hidden', 'true');
     document.body.style.overflow = '';
@@ -459,16 +457,15 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     playBtn.focus();
   }
 
-  playBtn.addEventListener('click', openModal);
-  closeBtn.addEventListener('click', closeModal);
-
-  // Close when clicking the dark backdrop (not the video box itself)
-  modal.addEventListener('click', function (e) {
-    if (e.target === modal) closeModal();
-  });
-
-  // Close on Escape key
+  playBtn.addEventListener('click', open);
+  closeBtn.addEventListener('click', close);
+  modal.addEventListener('click', function (e) { if (e.target === modal) close(); });
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && modal.classList.contains('is-open')) closeModal();
+    if (e.key === 'Escape' && modal.classList.contains('is-open')) close();
   });
-})();
+}
+
+// Visibility demo
+setupVideoModal('visibilityPlayBtn', 'vdemoModal', 'vdemoClose', 'vdemoVideo');
+// Vision & Virtue brand film (pulsing V on the "Our Vision" panel)
+setupVideoModal('brandPlayBtn',      'brandModal', 'brandClose', 'brandVideo');

@@ -202,6 +202,10 @@
   <!-- WHAT IS IT -->
   <section class="what-section" id="what">
     <div class="what-left">
+      <button type="button" class="what-v-play" id="brandPlayBtn" aria-label="Watch the Vision &amp; Virtue brand film">
+        <span class="what-v-play-letter" aria-hidden="true">V</span>
+        <span class="what-v-play-ring" aria-hidden="true"></span>
+      </button>
       <div class="section-tag">Our Vision</div>
       <h2 class="section-title light">What Is It?</h2>
       <div class="what-v-bg">V</div>
@@ -1274,6 +1278,20 @@
       </button>
       <video id="vdemoVideo" controls preload="auto" playsinline>
         <source src="visibility-demo-v2-web.mp4" type="video/mp4">
+      </video>
+    </div>
+  </div>
+
+  <!-- VISION & VIRTUE BRAND VIDEO MODAL -->
+  <div class="vdemo-overlay" id="brandModal" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Vision &amp; Virtue brand film">
+    <div class="vdemo-inner">
+      <button class="vdemo-close" id="brandClose" aria-label="Close video">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+      <video id="brandVideo" controls preload="auto" playsinline>
+        <source src="vision-virtue-brand-web.mp4" type="video/mp4">
       </video>
     </div>
   </div>
