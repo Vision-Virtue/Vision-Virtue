@@ -242,13 +242,13 @@
           </div>
           <form class="capitaflow-keys-form" id="capitaflowKeysForm" autocomplete="off">
             <input type="text" id="capitaflowKeysCustomerName" class="capitaflow-keys-input" placeholder="Customer name (e.g. Acme Corp)" required maxlength="200">
-            <div class="capitaflow-keys-offerings" id="capitaflowKeysOfferings" aria-label="Offerings granted by this key">
+            <div class="capitaflow-keys-offerings" id="capitaflowKeysOfferings" role="radiogroup" aria-label="Offering this key grants">
               <label class="capitaflow-keys-offering">
-                <input type="checkbox" value="visibility" checked>
+                <input type="radio" name="capitaflowKeysOffering" value="visibility" checked>
                 <span>Visibility</span>
               </label>
               <label class="capitaflow-keys-offering">
-                <input type="checkbox" value="capitaflow">
+                <input type="radio" name="capitaflowKeysOffering" value="capitaflow">
                 <span>CapitaFlow</span>
               </label>
             </div>

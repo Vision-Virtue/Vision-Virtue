@@ -1854,28 +1854,42 @@
   border-color: rgba(255, 255, 255, 0.30);
 }
 
-/* Customer Keys list — one row per key with offering checkboxes + trash. */
+/* Customer Keys list — groups by customer name. Each group header shows
+   the customer, and each row inside it represents one key + its single
+   offering. Multiple offerings = multiple rows under the same header. */
+.ckl-group {
+  margin-top: 0.95rem;
+  padding: 0.65rem 0.85rem 0.75rem;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
+}
+.ckl-group-head {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.01em;
+  padding: 0.15rem 0 0.55rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 0.55rem;
+}
 .ckl-row {
   display: flex;
   align-items: center;
-  gap: 0.8rem;
-  padding: 0.75rem 0.95rem;
-  margin-top: 0.55rem;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  background: rgba(255, 255, 255, 0.04);
+  gap: 0.7rem;
+  padding: 0.55rem 0.4rem;
+  border-radius: 6px;
   flex-wrap: wrap;
 }
+.ckl-row + .ckl-row { border-top: 1px solid rgba(255, 255, 255, 0.05); }
 .ckl-row.is-revoked { opacity: 0.55; }
 .ckl-row-name {
-  font-weight: 700;
-  color: #fff;
-  font-size: 0.95rem;
-  flex: 1 1 200px;
+  flex: 1 1 220px;
   min-width: 0;
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: 0.55rem;
+  flex-wrap: wrap;
 }
 .ckl-row-key {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -1890,33 +1904,39 @@
 }
 .ckl-row-key:hover { background: rgba(0, 0, 0, 0.40); }
 .ckl-row-key.is-copied { background: rgba(120, 200, 120, 0.25); color: #c4f5c4; }
-.ckl-row-offerings {
-  display: flex;
-  gap: 0.4rem;
-  flex-wrap: wrap;
+.ckl-row-revoked {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 150, 150, 0.85);
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  background: rgba(220, 70, 70, 0.18);
 }
-.ckl-row-offering {
+/* Static offering pill — color-coded by product. Replaces the previous
+   editable checkboxes; the single offering shown is what this key grants. */
+.ckl-row-offering-pill {
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
-  padding: 0.35rem 0.6rem;
-  border-radius: 5px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.05);
-  color: #d8e0ee;
-  font-size: 0.78rem;
-  font-weight: 600;
-  cursor: pointer;
-  user-select: none;
+  padding: 0.30rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid;
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
-.ckl-row-offering input[type="checkbox"] {
-  margin: 0;
-  cursor: pointer;
+.ckl-row-offering-pill-icon { font-size: 0.85rem; line-height: 1; }
+.ckl-row-offering-pill-visibility {
+  border-color: rgba(91, 141, 224, 0.55);
+  background: rgba(91, 141, 224, 0.14);
+  color: #cfe1ff;
 }
-.ckl-row-offering.is-active {
-  border-color: rgba(120, 200, 120, 0.55);
-  background: rgba(120, 200, 120, 0.14);
-  color: #c4f5c4;
+.ckl-row-offering-pill-capitaflow {
+  border-color: rgba(232, 168, 96, 0.55);
+  background: rgba(232, 168, 96, 0.14);
+  color: #ffd9a8;
 }
 .ckl-row-trash {
   background: none;
@@ -1931,7 +1951,6 @@
 }
 .ckl-row-trash:hover { background: rgba(220, 70, 70, 0.18); color: #ffb6b6; }
 .ckl-row-trash svg { width: 16px; height: 16px; }
-.ckl-row-saving { font-size: 0.75rem; color: rgba(255, 255, 255, 0.55); }
 
 /* Per-offering sub-sections inside a Customer Submissions folder body —
    one card per offering the key actually grants, each owning its own
