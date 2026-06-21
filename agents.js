@@ -3019,6 +3019,11 @@ async function generatePptxDeck(d) {
         '<code class="ckl-row-key" data-key="' + htmlEsc(k.key) + '" title="Click to copy">' + htmlEsc(k.key) + '</code>' +
         (k.revoked ? '<span class="ckl-row-revoked">revoked</span>' : '') +
       '</div>' +
+      '<button type="button" class="ckl-row-edit" title="Change which offering this key grants">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/>' +
+        '</svg>' +
+      '</button>' +
       '<button type="button" class="ckl-row-trash" title="Delete this key + all data attached to it">' +
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
           '<polyline points="3 6 5 6 21 6"/>' +
@@ -3037,6 +3042,40 @@ async function generatePptxDeck(d) {
         keyEl.textContent = 'Copied ✓';
         setTimeout(() => { keyEl.classList.remove('is-copied'); keyEl.textContent = t; }, 1200);
       } catch { /* clipboard blocked */ }
+    });
+
+    // Edit (pencil) — flip the single offering this key grants. Preserves
+    // the customer_key_id so every dependent row (submissions, listings,
+    // GLs, budgets, NDAs) stays attached. Useful when a key was minted for
+    // the wrong product, or when the offering needs to migrate.
+    const editBtn = row.querySelector('.ckl-row-edit');
+    editBtn.addEventListener('click', async () => {
+      const other = offering === 'capitaflow' ? 'visibility' : 'capitaflow';
+      const msg =
+        'Change "' + (k.customerName || k.key) + '" (' + k.key + ') from ' +
+        offeringLabel(offering) + ' → ' + offeringLabel(other) + '?\n\n' +
+        'The key value stays the same; only the offering it grants changes. ' +
+        'All data attached to this customer_key_id stays attached.';
+      if (!confirm(msg)) return;
+      editBtn.disabled = true;
+      try {
+        const res = await fetch(adminUrl('/api/admin/customer-keys/' + encodeURIComponent(k.id)), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ offerings: [other] }),
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error('HTTP ' + res.status + ' ' + text.slice(0, 160));
+        }
+        await load();
+        if (typeof window.__refreshCapitaflowSubsPanel === 'function') {
+          window.__refreshCapitaflowSubsPanel();
+        }
+      } catch (err) {
+        alert('Failed to change offering.\n\n' + (err && err.message ? err.message : ''));
+        editBtn.disabled = false;
+      }
     });
 
     const trashBtn = row.querySelector('.ckl-row-trash');

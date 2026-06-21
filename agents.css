@@ -1938,16 +1938,28 @@
   background: rgba(232, 168, 96, 0.14);
   color: #ffd9a8;
 }
+.ckl-row-edit,
 .ckl-row-trash {
   background: none;
-  border: 1px solid rgba(220, 70, 70, 0.3);
-  color: rgba(255, 150, 150, 0.85);
   border-radius: 6px;
   padding: 0.4rem 0.55rem;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+.ckl-row-edit {
+  border: 1px solid rgba(91, 141, 224, 0.35);
+  color: rgba(155, 189, 242, 0.85);
+}
+.ckl-row-edit:hover {
+  background: rgba(91, 141, 224, 0.18);
+  color: #ffffff;
+}
+.ckl-row-edit svg { width: 15px; height: 15px; }
+.ckl-row-trash {
+  border: 1px solid rgba(220, 70, 70, 0.3);
+  color: rgba(255, 150, 150, 0.85);
 }
 .ckl-row-trash:hover { background: rgba(220, 70, 70, 0.18); color: #ffb6b6; }
 .ckl-row-trash svg { width: 16px; height: 16px; }
