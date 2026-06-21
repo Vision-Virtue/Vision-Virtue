@@ -54,6 +54,10 @@ function getAIService(): AIService {
 
 const AuthBody = z.object({
   key: z.string().trim().min(1).max(64),
+  // Optional — when present, the key must be scoped to this offering. Used by
+  // the home-page gate so a Visibility key can't unlock the CapitaFlow area
+  // and vice-versa. Omitted means "either offering" (legacy clients).
+  offering: z.enum(['visibility', 'capitaflow']).optional(),
 });
 
 const SubmissionBody = z.object({
@@ -65,12 +69,13 @@ const SubmissionBody = z.object({
 
 /**
  * Resolve the customer key from the X-Customer-Key header. Returns the row
- * if valid, or null if missing/invalid/revoked.
+ * if valid, or null if missing/invalid/revoked. CapitaFlow endpoints only
+ * accept keys minted for the CapitaFlow offering.
  */
 function resolveCustomerKey(req: Request): CustomerKeyRow | null {
   const headerKey = req.header('x-customer-key');
   if (!headerKey) return null;
-  return customerKeyRepo.findByKey(headerKey.trim());
+  return customerKeyRepo.findByKey(headerKey.trim(), 'capitaflow');
 }
 
 /** Same shape as resolveCustomerKey, but for the investor key (X-Investor-Key). */
@@ -129,7 +134,7 @@ export const capitaflowController = {
       res.status(400).json({ valid: false, error: { code: 'BAD_REQUEST', message: 'Key is required.' } });
       return;
     }
-    const row = customerKeyRepo.findByKey(parsed.data.key.trim());
+    const row = customerKeyRepo.findByKey(parsed.data.key.trim(), parsed.data.offering);
     if (!row) {
       res.status(401).json({ valid: false });
       return;
@@ -138,6 +143,7 @@ export const capitaflowController = {
       valid: true,
       customerKeyId: row.id,
       customerName: row.customer_name,
+      offering: row.offering,
     });
   },
 
@@ -858,16 +864,24 @@ export const capitaflowController = {
    * Body: { customerName }   →  generates a new VV-XXXXXX key.
    */
   adminCreateKey(req: Request, res: Response): void {
-    const parsed = z.object({ customerName: z.string().trim().min(1).max(200) }).safeParse(req.body);
+    const parsed = z.object({
+      customerName: z.string().trim().min(1).max(200),
+      // Required — every key is scoped to one offering. Admin UI picks one.
+      offering:     z.enum(['visibility', 'capitaflow']),
+    }).safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'customerName is required.' } });
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'customerName and offering are required.' } });
       return;
     }
-    const row = customerKeyRepo.create({ customerName: parsed.data.customerName });
+    const row = customerKeyRepo.create({
+      customerName: parsed.data.customerName,
+      offering:     parsed.data.offering,
+    });
     res.status(201).json({
       id:           row.id,
       key:          row.key,
       customerName: row.customer_name,
+      offering:     row.offering,
       createdAt:    row.created_at,
     });
   },
@@ -882,6 +896,7 @@ export const capitaflowController = {
         id:           r.id,
         key:          r.key,
         customerName: r.customer_name,
+        offering:     r.offering,
         createdAt:    r.created_at,
         revoked:      r.revoked === 1,
       })),

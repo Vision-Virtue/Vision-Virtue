@@ -100,7 +100,8 @@ function resolveCustomerKey(req: Request): CustomerKeyRow | null {
   const fromQuery  = typeof req.query.key === 'string' ? req.query.key : '';
   const key        = (fromHeader || fromQuery).trim();
   if (!key) return null;
-  return customerKeyRepo.findByKey(key);
+  // Visibility endpoints only accept keys minted for the Visibility offering.
+  return customerKeyRepo.findByKey(key, 'visibility');
 }
 
 function send401(res: Response, message: string): void {

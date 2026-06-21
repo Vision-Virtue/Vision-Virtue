@@ -4,7 +4,7 @@
    Tables: gl_accounts, financial_structure_state.
    ============================================================ */
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.cfManualRowRepo = exports.CF_MANUAL_KINDS = exports.cfSalariesSectionRepo = exports.cfInventoryPurchasesRepo = exports.cfInventorySectionRepo = exports.cfReceivablesPriorCarryRepo = exports.cfReceivablesRowRepo = exports.cfReceivablesSectionRepo = exports.cfPayablesPriorCarryRepo = exports.cfPayablesRowRepo = exports.cfPayablesSectionRepo = exports.PAYMENT_TERMS = exports.cashFlowRepo = exports.salariesStateRepo = exports.salariesRowRepo = exports.budgetCellRepo = exports.budgetLineRepo = exports.budgetRepo = exports.BUDGET_CAP_PER_CUSTOMER = exports.SCALES = exports.CURRENCIES = exports.GRANULARITIES = exports.orgStructureRepo = exports.orgEntityRepo = exports.ORG_DIMENSIONS = exports.financialStructureRepo = exports.glAccountRepo = void 0;
+exports.cfManualRowRepo = exports.CF_MANUAL_KINDS = exports.cfSalariesSectionRepo = exports.cfInventoryPurchasesRepo = exports.cfInventorySectionRepo = exports.cfReceivablesPriorCarryRepo = exports.cfReceivablesRowRepo = exports.cfReceivablesSectionRepo = exports.cfPayablesPriorCarryRepo = exports.cfPayablesRowRepo = exports.cfPayablesSectionRepo = exports.PAYMENT_TERMS = exports.cashFlowRepo = exports.rcStateRepo = exports.rcRowRepo = exports.salariesStateRepo = exports.salariesRowRepo = exports.budgetCellRepo = exports.budgetLineRepo = exports.budgetRepo = exports.BUDGET_CAP_PER_CUSTOMER = exports.SCALES = exports.CURRENCIES = exports.GRANULARITIES = exports.orgStructureRepo = exports.orgEntityRepo = exports.ORG_DIMENSIONS = exports.financialStructureRepo = exports.glAccountRepo = void 0;
 exports.periodKeysFor = periodKeysFor;
 const uuid_1 = require("uuid");
 const database_1 = require("./database");
@@ -660,10 +660,12 @@ exports.salariesStateRepo = {
             .run(budgetId, status, now);
     },
 };
-// ─── Revenues & COGS (Phase 3c) ─────────────────────────────────────────────
 function toRcDomain(r) {
     let cells = {};
-    try { cells = JSON.parse(r.cells || '{}'); } catch (e) { /* */ }
+    try {
+        cells = JSON.parse(r.cells || '{}');
+    }
+    catch { /* */ }
     return {
         id: r.id,
         budgetId: r.budget_id,
@@ -692,14 +694,17 @@ exports.rcRowRepo = {
         return row ? toRcDomain(row) : null;
     },
     create(budgetId) {
-        const { v4: uuidv4 } = require('uuid');
-        const id = uuidv4();
+        const id = (0, uuid_1.v4)();
         const now = new Date().toISOString();
         const insertAt = ((0, database_1.getDb)()
             .prepare(`SELECT COALESCE(MAX(order_index), -1) AS m FROM rc_rows WHERE budget_id = ?`)
-            .get(budgetId)).m + 1;
+            .get(budgetId).m) + 1;
         (0, database_1.getDb)()
-            .prepare(`INSERT INTO rc_rows (id, budget_id, company_id, division_id, department_id, product_id, activity_id, rev_gl_id, price, cogs_gl_id, cost, cells, order_index, created_at, updated_at) VALUES (?, ?, null, null, null, null, null, null, 0, null, 0, '{}', ?, ?, ?)`)
+            .prepare(`INSERT INTO rc_rows
+           (id, budget_id, company_id, division_id, department_id, product_id,
+            activity_id, rev_gl_id, price, cogs_gl_id, cost, cells,
+            order_index, created_at, updated_at)
+         VALUES (?, ?, null, null, null, null, null, null, 0, null, 0, '{}', ?, ?, ?)`)
             .run(id, budgetId, insertAt, now, now);
         return this.getById(id);
     },
@@ -707,17 +712,48 @@ exports.rcRowRepo = {
         const norm = (v) => (v === '' || v == null ? null : v);
         const sets = [];
         const vals = [];
-        if (fields.companyId    !== undefined) { sets.push('company_id = ?');    vals.push(norm(fields.companyId)); }
-        if (fields.divisionId   !== undefined) { sets.push('division_id = ?');   vals.push(norm(fields.divisionId)); }
-        if (fields.departmentId !== undefined) { sets.push('department_id = ?'); vals.push(norm(fields.departmentId)); }
-        if (fields.productId    !== undefined) { sets.push('product_id = ?');    vals.push(norm(fields.productId)); }
-        if (fields.activityId   !== undefined) { sets.push('activity_id = ?');   vals.push(norm(fields.activityId)); }
-        if (fields.revGlId      !== undefined) { sets.push('rev_gl_id = ?');     vals.push(norm(fields.revGlId)); }
-        if (fields.price        !== undefined) { sets.push('price = ?');         vals.push(fields.price); }
-        if (fields.cogsGlId     !== undefined) { sets.push('cogs_gl_id = ?');    vals.push(norm(fields.cogsGlId)); }
-        if (fields.cost         !== undefined) { sets.push('cost = ?');          vals.push(fields.cost); }
-        if (fields.cells        !== undefined) { sets.push('cells = ?');         vals.push(JSON.stringify(fields.cells)); }
-        if (sets.length === 0) return this.getById(id);
+        if (fields.companyId !== undefined) {
+            sets.push('company_id = ?');
+            vals.push(norm(fields.companyId));
+        }
+        if (fields.divisionId !== undefined) {
+            sets.push('division_id = ?');
+            vals.push(norm(fields.divisionId));
+        }
+        if (fields.departmentId !== undefined) {
+            sets.push('department_id = ?');
+            vals.push(norm(fields.departmentId));
+        }
+        if (fields.productId !== undefined) {
+            sets.push('product_id = ?');
+            vals.push(norm(fields.productId));
+        }
+        if (fields.activityId !== undefined) {
+            sets.push('activity_id = ?');
+            vals.push(norm(fields.activityId));
+        }
+        if (fields.revGlId !== undefined) {
+            sets.push('rev_gl_id = ?');
+            vals.push(norm(fields.revGlId));
+        }
+        if (fields.price !== undefined) {
+            sets.push('price = ?');
+            vals.push(fields.price);
+        }
+        if (fields.cogsGlId !== undefined) {
+            sets.push('cogs_gl_id = ?');
+            vals.push(norm(fields.cogsGlId));
+        }
+        if (fields.cost !== undefined) {
+            sets.push('cost = ?');
+            vals.push(fields.cost);
+        }
+        if (fields.cells !== undefined) {
+            sets.push('cells = ?');
+            vals.push(JSON.stringify(fields.cells));
+        }
+        if (sets.length === 0)
+            return this.getById(id);
         sets.push('updated_at = ?');
         vals.push(new Date().toISOString());
         vals.push(id);
@@ -738,7 +774,9 @@ exports.rcStateRepo = {
     setStatus(budgetId, status) {
         const now = new Date().toISOString();
         (0, database_1.getDb)()
-            .prepare(`INSERT INTO rc_state (budget_id, status, updated_at) VALUES (?, ?, ?) ON CONFLICT(budget_id) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at`)
+            .prepare(`INSERT INTO rc_state (budget_id, status, updated_at)
+         VALUES (?, ?, ?)
+         ON CONFLICT(budget_id) DO UPDATE SET status = excluded.status, updated_at = excluded.updated_at`)
             .run(budgetId, status, now);
     },
 };

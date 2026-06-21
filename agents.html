@@ -242,6 +242,10 @@
           </div>
           <form class="capitaflow-keys-form" id="capitaflowKeysForm" autocomplete="off">
             <input type="text" id="capitaflowKeysCustomerName" class="capitaflow-keys-input" placeholder="Customer name (e.g. Acme Corp)" required maxlength="200">
+            <select id="capitaflowKeysOffering" class="capitaflow-keys-input" style="max-width:170px;">
+              <option value="visibility">Visibility</option>
+              <option value="capitaflow">CapitaFlow</option>
+            </select>
             <button type="submit" class="capitaflow-keys-submit" id="capitaflowKeysSubmit">Generate Key</button>
           </form>
           <div class="capitaflow-keys-result" id="capitaflowKeysResult" hidden></div>

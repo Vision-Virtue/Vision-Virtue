@@ -5,7 +5,7 @@ const content_controller_1 = require("../controllers/content.controller");
 const linkedin_controller_1 = require("../controllers/linkedin.controller");
 const auth_controller_1 = require("../controllers/auth.controller");
 const chat_controller_1 = require("../controllers/chat.controller");
-const partner_controller_1 = require("../controllers/partner.controller");
+const capitaflow_controller_1 = require("../controllers/capitaflow.controller");
 const visibility_controller_1 = require("../controllers/visibility.controller");
 const auth_middleware_1 = require("../middleware/auth.middleware");
 const router = (0, express_1.Router)();
@@ -63,19 +63,99 @@ router.post('/content/:id/publish', asyncHandler((req, res) => content_controlle
 router.post('/content/:id/reset-for-publish', asyncHandler((req, res) => content_controller_1.contentController.resetForPublish(req, res)));
 // ─── Direct Agent Chat ────────────────────────────────────────────────────────
 router.post('/chat/:agent', asyncHandler((req, res) => chat_controller_1.chatController.directChat(req, res)));
-// ─── Partner Customer Area (Phase 2A) ────────────────────────────────────────
+// ─── CapitaFlow Customer Area (Phase 2A) ────────────────────────────────────────
 // Validate a customer key and return basic info
-router.post('/customer/auth', (req, res) => partner_controller_1.partnerController.auth(req, res));
+router.post('/customer/auth', (req, res) => capitaflow_controller_1.capitaflowController.auth(req, res));
+// Validate an investor key (Investors Marketplace gate). Same shape as
+// /customer/auth but checked against the investor_keys table.
+router.post('/investor/auth', (req, res) => capitaflow_controller_1.capitaflowController.investorAuth(req, res));
+// Investors Marketplace — listings (investor-facing, gated by X-Investor-Key)
+router.get('/investor/marketplace/listings', (req, res) => capitaflow_controller_1.capitaflowController.investorListListings(req, res));
+router.get('/investor/marketplace/listings/:id', (req, res) => capitaflow_controller_1.capitaflowController.investorGetListing(req, res));
+// Investors Marketplace — customer publish / withdraw (gated by X-Customer-Key)
+router.post('/customer/me/marketplace-listings', asyncHandler(async (req, res) => { await capitaflow_controller_1.capitaflowController.customerPublishListing(req, res); }));
+router.get('/customer/me/marketplace-listings', (req, res) => capitaflow_controller_1.capitaflowController.customerListMyListings(req, res));
+router.post('/customer/me/marketplace-listings/:id/withdraw', (req, res) => capitaflow_controller_1.capitaflowController.customerWithdrawListing(req, res));
+// Investors Marketplace — preview the auto-extracted tile fields without
+// publishing. Drives the CapitaFlow-area preview before the customer clicks Publish.
+router.get('/customer/me/marketplace-preview', asyncHandler(async (req, res) => { await capitaflow_controller_1.capitaflowController.customerPreviewListing(req, res); }));
+// Investors Marketplace — Customer uploads the view-only investor deck PDF
+// (raw body, application/pdf only). Gated by X-Customer-Key.
+router.post('/customer/me/marketplace-listings/:id/deck-pdf', (0, express_1.raw)({ type: 'application/pdf', limit: '30mb' }), (req, res) => capitaflow_controller_1.capitaflowController.customerUploadDeckPdf(req, res));
+// Investors Marketplace — NDA flow (gated by X-Investor-Key)
+router.post('/investor/nda/sign', (req, res) => capitaflow_controller_1.capitaflowController.investorSignNda(req, res));
+router.get('/investor/nda/status', (req, res) => capitaflow_controller_1.capitaflowController.investorNdaStatus(req, res));
+// Returns the Office Online Viewer iframe URL for the customer's PPTX.
+router.get('/investor/marketplace/listings/:id/deck-info', (req, res) => capitaflow_controller_1.capitaflowController.investorGetDeckInfo(req, res));
+// Public PPTX serving endpoint — gated by an HMAC-signed token, NOT a
+// header. Microsoft Office Online fetches this URL once when loading the
+// iframe; outside the token's TTL (10 min) the URL is dead.
+router.get('/marketplace/deck-pptx/:token', (req, res) => capitaflow_controller_1.capitaflowController.marketplaceServeDeckPptx(req, res));
+// Public logo for a marketplace tile. Listing must be active. The image
+// itself was uploaded by the customer via the deck-upload (drag&drop) flow
+// and selected by the publish handler. No auth header required — logos are
+// the public-facing identifier of the listing.
+router.get('/marketplace/listings/:id/logo', (req, res) => capitaflow_controller_1.capitaflowController.marketplaceServeLogo(req, res));
+// Investor-deck placeholder schema — used by the customer questionnaire UI
+// to render the deck-specific sections. Single source of truth shared with
+// the xlsx writer.
+router.get('/customer/deck-schema', (req, res) => capitaflow_controller_1.capitaflowController.deckSchema(req, res));
+// Investor-deck asset upload — raw image bytes. Each image MIME we accept
+// is registered with the raw-body parser; multipart isn't used here.
+const DECK_ASSET_MIMES = [
+    'image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/svg+xml', 'image/gif',
+];
+router.post('/customer/deck-asset', (0, express_1.raw)({ type: DECK_ASSET_MIMES, limit: '10mb' }), (req, res) => capitaflow_controller_1.capitaflowController.deckAssetUpload(req, res));
+router.get('/customer/deck-asset/:fileName', (req, res) => capitaflow_controller_1.capitaflowController.deckAssetServe(req, res));
+// Investor-deck validation — checks the customer's questionnaire side
+// (required fields, image uploads). Calculations side validated separately.
+router.get('/customer/me/submissions/:id/deck-validation', (req, res) => capitaflow_controller_1.capitaflowController.deckValidation(req, res));
+// ─── Customer drag-and-drop uploads (PDF/DOCX/PPTX/XLSX) ──────────────────
+// Raw-body uploads — same pattern as deck-asset, no multer needed.
+const DECK_UPLOAD_MIMES = [
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/octet-stream', // browsers sometimes send this for less-common MIMEs
+    // Images — used as logos on the marketplace tile (and, where the customer
+    // has not otherwise set companyLogo, on the investor-deck cover).
+    'image/png',
+    'image/jpeg',
+    'image/jpg',
+    'image/webp',
+    'image/svg+xml',
+    'image/gif',
+];
+router.post('/customer/deck-upload', (0, express_1.raw)({ type: DECK_UPLOAD_MIMES, limit: '30mb' }), (req, res) => capitaflow_controller_1.capitaflowController.deckUploadCreate(req, res));
+router.get('/customer/deck-upload', (req, res) => capitaflow_controller_1.capitaflowController.deckUploadList(req, res));
+router.get('/customer/deck-upload/:fileId', (req, res) => capitaflow_controller_1.capitaflowController.deckUploadDownload(req, res));
+router.delete('/customer/deck-upload/:fileId', (req, res) => capitaflow_controller_1.capitaflowController.deckUploadDelete(req, res));
+// Admin views of a submission's uploads
+router.get('/admin/submissions/:id/uploads', auth_middleware_1.requireAdminPin, (req, res) => capitaflow_controller_1.capitaflowController.adminListUploads(req, res));
+router.get('/admin/submissions/:id/uploads/:fileId', auth_middleware_1.requireAdminPin, (req, res) => capitaflow_controller_1.capitaflowController.adminDownloadUpload(req, res));
+router.post('/admin/submissions/:id/uploads/:fileId/extract', auth_middleware_1.requireAdminPin, asyncHandler(async (req, res) => { await capitaflow_controller_1.capitaflowController.adminExtractUpload(req, res); }));
 // Submit a Customer's Questionnaire (header X-Customer-Key required)
-router.post('/submissions', asyncHandler(async (req, res) => { await partner_controller_1.partnerController.createSubmission(req, res); }));
+router.post('/submissions', asyncHandler(async (req, res) => { await capitaflow_controller_1.capitaflowController.createSubmission(req, res); }));
 // List the authenticated customer's submissions
-router.get('/customer/me/submissions', (req, res) => partner_controller_1.partnerController.listMySubmissions(req, res));
+router.get('/customer/me/submissions', (req, res) => capitaflow_controller_1.capitaflowController.listMySubmissions(req, res));
+// Customer fetches one of their own submissions in full (incl. formData).
+router.get('/customer/me/submissions/:id', (req, res) => capitaflow_controller_1.capitaflowController.getMySubmission(req, res));
 // Customer downloads their own finalized xlsx
-router.get('/customer/me/submissions/:id/xlsx', (req, res) => partner_controller_1.partnerController.downloadMyXlsx(req, res));
+router.get('/customer/me/submissions/:id/xlsx', (req, res) => capitaflow_controller_1.capitaflowController.downloadMyXlsx(req, res));
+// Customer downloads their own populated investor-deck pptx
+router.get('/customer/me/submissions/:id/pptx', (req, res) => capitaflow_controller_1.capitaflowController.downloadMyPptx(req, res));
+// Customer-side edit of their own submission (resets status to 'review').
+router.patch('/customer/me/submissions/:id', (req, res) => capitaflow_controller_1.capitaflowController.updateMySubmission(req, res));
+// Customer-facing consultation with Ethan Caldwell (live to finalized data).
+router.post('/customer/me/consult', asyncHandler(async (req, res) => { await capitaflow_controller_1.capitaflowController.consultEthan(req, res); }));
 // Public count of pending submissions — used by the homepage notification
 // badge on the Authorized Personnel button. Returns just `{ pending: N }`,
 // no PII, so it doesn't need auth.
-router.get('/notifications/pending-count', (req, res) => partner_controller_1.partnerController.adminPendingCount(req, res));
+router.get('/notifications/pending-count', (req, res) => capitaflow_controller_1.capitaflowController.adminPendingCount(req, res));
 // ─── Visibility offering — Phase 1: Financial Structure ────────────────────
 router.get('/visibility/dropdowns', (req, res) => visibility_controller_1.visibilityController.dropdowns(req, res));
 router.get('/visibility/financial-structure', (req, res) => visibility_controller_1.visibilityController.getFinancialStructure(req, res));
@@ -150,26 +230,48 @@ router.delete('/visibility/budgets/:id/cf/manual/:kind/rows/:rowId', (req, res) 
 router.get('/visibility/budgets/:id/cf/forecast', (req, res) => visibility_controller_1.cfForecastController.get(req, res));
 // CFO Visibility Chat
 router.post('/visibility/cfo/chat', asyncHandler(async (req, res) => { await visibility_controller_1.cfoChatController.chat(req, res); }));
-// ─── Admin (Raphael) — Partner Submissions ──────────────────────────────────
+// ─── Admin (Raphael) — CapitaFlow Submissions ──────────────────────────────────
 // All admin endpoints require X-Admin-Pin header OR ?pin= query (matching
 // ACCESS_CODE). Query-param form lets the frontend send simple CORS
 // requests with no preflight.
 // Self-test: a tiny endpoint that just confirms the admin PIN is good.
 // Used by the frontend / for manual diagnosis.
 router.get('/admin/me', auth_middleware_1.requireAdminPin, (_req, res) => res.json({ ok: true, role: 'admin' }));
-router.get('/admin/submissions', auth_middleware_1.requireAdminPin, (req, res) => partner_controller_1.partnerController.adminListSubmissions(req, res));
-router.get('/admin/submissions/:id', auth_middleware_1.requireAdminPin, (req, res) => partner_controller_1.partnerController.adminGetSubmission(req, res));
-router.post('/admin/submissions/:id/finalize', auth_middleware_1.requireAdminPin, asyncHandler(async (req, res) => { await partner_controller_1.partnerController.adminFinalize(req, res); }));
-router.post('/admin/submissions/:id/generate-xlsx', auth_middleware_1.requireAdminPin, asyncHandler(async (req, res) => { await partner_controller_1.partnerController.adminGenerateXlsx(req, res); }));
+router.get('/admin/submissions', auth_middleware_1.requireAdminPin, (req, res) => capitaflow_controller_1.capitaflowController.adminListSubmissions(req, res));
+router.get('/admin/submissions/:id', auth_middleware_1.requireAdminPin, (req, res) => capitaflow_controller_1.capitaflowController.adminGetSubmission(req, res));
+router.post('/admin/submissions/:id/finalize', auth_middleware_1.requireAdminPin, asyncHandler(async (req, res) => { await capitaflow_controller_1.capitaflowController.adminFinalize(req, res); }));
+router.post('/admin/submissions/:id/generate-xlsx', auth_middleware_1.requireAdminPin, asyncHandler(async (req, res) => { await capitaflow_controller_1.capitaflowController.adminGenerateXlsx(req, res); }));
+// (Re)generate the populated investor-deck pptx from the current xlsx.
+router.post('/admin/submissions/:id/generate-pptx', auth_middleware_1.requireAdminPin, asyncHandler(async (req, res) => { await capitaflow_controller_1.capitaflowController.adminGeneratePptx(req, res); }));
+router.get('/admin/submissions/:id/pptx', auth_middleware_1.requireAdminPin, (req, res) => capitaflow_controller_1.capitaflowController.adminDownloadPptx(req, res));
 // Reupload — admin overwrites the stored xlsx with a manually-edited file.
 // raw() takes the place of express.json() for this one route so we can
 // receive the binary body. Cap at 15 MB to leave headroom over the ~3 MB
 // template size while still rejecting absurdly large uploads.
-router.post('/admin/submissions/:id/upload-xlsx', auth_middleware_1.requireAdminPin, (0, express_1.raw)({ type: '*/*', limit: '15mb' }), (req, res) => partner_controller_1.partnerController.adminUploadXlsx(req, res));
-router.get('/admin/submissions/:id/xlsx', auth_middleware_1.requireAdminPin, (req, res) => partner_controller_1.partnerController.adminDownloadXlsx(req, res));
-router.get('/admin/notifications/count', auth_middleware_1.requireAdminPin, (req, res) => partner_controller_1.partnerController.adminPendingCount(req, res));
-router.post('/admin/customer-keys', auth_middleware_1.requireAdminPin, (req, res) => partner_controller_1.partnerController.adminCreateKey(req, res));
-router.get('/admin/customer-keys', auth_middleware_1.requireAdminPin, (req, res) => partner_controller_1.partnerController.adminListKeys(req, res));
+router.post('/admin/submissions/:id/upload-xlsx', auth_middleware_1.requireAdminPin, (0, express_1.raw)({ type: '*/*', limit: '15mb' }), (req, res) => capitaflow_controller_1.capitaflowController.adminUploadXlsx(req, res));
+// Reupload — admin overwrites the stored pptx with a manually-edited deck.
+router.post('/admin/submissions/:id/upload-pptx', auth_middleware_1.requireAdminPin, (0, express_1.raw)({ type: '*/*', limit: '25mb' }), (req, res) => capitaflow_controller_1.capitaflowController.adminUploadPptx(req, res));
+// Edit — flip a finalized submission back to 'review' for corrections.
+router.post('/admin/submissions/:id/unfinalize', auth_middleware_1.requireAdminPin, (req, res) => capitaflow_controller_1.capitaflowController.adminUnfinalize(req, res));
+// Admin chat — finance agents wired to all submitted customer data.
+router.post('/admin/chat/:agent', auth_middleware_1.requireAdminPin, asyncHandler(async (req, res) => { await capitaflow_controller_1.capitaflowController.adminChat(req, res); }));
+router.get('/admin/submissions/:id/xlsx', auth_middleware_1.requireAdminPin, (req, res) => capitaflow_controller_1.capitaflowController.adminDownloadXlsx(req, res));
+router.get('/admin/notifications/count', auth_middleware_1.requireAdminPin, (req, res) => capitaflow_controller_1.capitaflowController.adminPendingCount(req, res));
+router.post('/admin/customer-keys', auth_middleware_1.requireAdminPin, (req, res) => capitaflow_controller_1.capitaflowController.adminCreateKey(req, res));
+router.get('/admin/customer-keys', auth_middleware_1.requireAdminPin, (req, res) => capitaflow_controller_1.capitaflowController.adminListKeys(req, res));
+router.delete('/admin/customer-keys/:id', auth_middleware_1.requireAdminPin, (req, res) => capitaflow_controller_1.capitaflowController.adminDeleteCustomerKey(req, res));
+// Admin diagnostic: confirms libreoffice (and other optional system deps)
+// are actually available in the Render image.
+router.get('/admin/system-check', auth_middleware_1.requireAdminPin, (req, res) => capitaflow_controller_1.capitaflowController.adminSystemCheck(req, res));
+// ─── Admin: Investor Keys (Investors Marketplace) ────────────────────────────
+router.post('/admin/investor-keys', auth_middleware_1.requireAdminPin, (req, res) => capitaflow_controller_1.capitaflowController.adminCreateInvestorKey(req, res));
+router.get('/admin/investor-keys', auth_middleware_1.requireAdminPin, (req, res) => capitaflow_controller_1.capitaflowController.adminListInvestorKeys(req, res));
+router.post('/admin/investor-keys/:id/revoke', auth_middleware_1.requireAdminPin, (req, res) => capitaflow_controller_1.capitaflowController.adminRevokeInvestorKey(req, res));
+router.delete('/admin/investor-keys/:id', auth_middleware_1.requireAdminPin, (req, res) => capitaflow_controller_1.capitaflowController.adminDeleteInvestorKey(req, res));
+// ─── Admin: Agreements (signed NDAs from the Investors Marketplace) ──────────
+router.get('/admin/nda-signatures', auth_middleware_1.requireAdminPin, (req, res) => capitaflow_controller_1.capitaflowController.adminListNdaSignatures(req, res));
+router.get('/admin/nda-signatures/:id/pdf', auth_middleware_1.requireAdminPin, asyncHandler(async (req, res) => { await capitaflow_controller_1.capitaflowController.adminDownloadNdaPdf(req, res); }));
+router.delete('/admin/nda-signatures/:id', auth_middleware_1.requireAdminPin, (req, res) => capitaflow_controller_1.capitaflowController.adminDeleteNda(req, res));
 // ─── LinkedIn Routes ──────────────────────────────────────────────────────────
 // Get organization profile (cached or live)
 router.get('/linkedin/profile', auth_middleware_1.requireLinkedIn, asyncHandler((req, res) => linkedin_controller_1.linkedInController.getProfile(req, res)));

@@ -9,10 +9,13 @@ import { getDb } from './database';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+export type Offering = 'visibility' | 'capitaflow';
+
 export interface CustomerKeyRow {
   id: string;
   key: string;
   customer_name: string;
+  offering: Offering;
   created_at: string;
   created_by: string;
   revoked: number; // 0 | 1
@@ -45,12 +48,15 @@ export interface CapitaFlowSubmission {
 // ─── Customer Keys ────────────────────────────────────────────────────────────
 
 export const customerKeyRepo = {
-  /** Look up an active (non-revoked) key. Returns null if missing or revoked. */
-  findByKey(key: string): CustomerKeyRow | null {
+  /** Look up an active (non-revoked) key. Returns null if missing or revoked.
+   *  Pass `offering` to require the key was minted for that specific offering;
+   *  omit it for endpoints that need to accept either (legacy / admin paths). */
+  findByKey(key: string, offering?: Offering): CustomerKeyRow | null {
     const row = getDb()
       .prepare('SELECT * FROM customer_keys WHERE key = ?')
       .get(key) as CustomerKeyRow | undefined;
     if (!row || row.revoked === 1) return null;
+    if (offering && row.offering !== offering) return null;
     return row;
   },
 
@@ -61,18 +67,18 @@ export const customerKeyRepo = {
     return row ?? null;
   },
 
-  /** Create a new key with a generated VV-XXXX value. */
-  create(input: { customerName: string; createdBy?: string; key?: string }): CustomerKeyRow {
+  /** Create a new key with a generated VV-XXXX value, scoped to one offering. */
+  create(input: { customerName: string; offering: Offering; createdBy?: string; key?: string }): CustomerKeyRow {
     const id = uuidv4();
     const key = input.key || generateKey();
     const createdAt = new Date().toISOString();
     const createdBy = input.createdBy || 'admin';
     getDb()
       .prepare(
-        `INSERT INTO customer_keys (id, key, customer_name, created_at, created_by, revoked)
-         VALUES (?, ?, ?, ?, ?, 0)`,
+        `INSERT INTO customer_keys (id, key, customer_name, offering, created_at, created_by, revoked)
+         VALUES (?, ?, ?, ?, ?, ?, 0)`,
       )
-      .run(id, key, input.customerName, createdAt, createdBy);
+      .run(id, key, input.customerName, input.offering, createdAt, createdBy);
     return this.findById(id) as CustomerKeyRow;
   },
 

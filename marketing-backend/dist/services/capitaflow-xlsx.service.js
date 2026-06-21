@@ -1,6 +1,6 @@
 "use strict";
 /* ============================================================
-   Partner Customer Area — xlsx generator (parent side)
+   CapitaFlow Customer Area — xlsx generator (parent side)
 
    The actual ExcelJS work runs in a forked child process
    (src/workers/xlsx-worker.ts) so a heap blow-up while loading
@@ -21,6 +21,7 @@ exports.storeUploadedXlsx = storeUploadedXlsx;
 const child_process_1 = require("child_process");
 const path_1 = __importDefault(require("path"));
 const fs_1 = __importDefault(require("fs"));
+const business_calcs_service_1 = require("./business-calcs.service");
 // ─── Storage location for generated xlsx ─────────────────────────────────────
 function customerXlsxDir() {
     // Same parent as DB_PATH (the persistent disk on Render).
@@ -32,10 +33,18 @@ function ensureDir(p) {
         fs_1.default.mkdirSync(p, { recursive: true });
 }
 function templatePath() {
-    return path_1.default.resolve(process.cwd(), 'templates', 'Financial Model v7.xlsx');
+    // Bumped v8 → v9 (2026-06-08). v9 changes:
+    //  * Section 8 (Unit Costs) removed; cost is now a per-row column in
+    //    Section 7 (Let's Scale).
+    //  * Section 7 collapsed from three revenue-type blocks (HW/SW/Other)
+    //    into one continuous block at rows 44-63 with Revenue Type as the
+    //    leading column.
+    //  * Old Section 9 (FTE) renumbered to Section 8 and moved to rows 68-71.
+    //  * Definitions sheet ships a much richer revenue-type list.
+    return path_1.default.resolve(process.cwd(), 'templates', 'Financial Model v9.xlsx');
 }
 function workerPath() {
-    // After tsc, this file lives at dist/services/partner-xlsx.service.js
+    // After tsc, this file lives at dist/services/capitaflow-xlsx.service.js
     // and the worker at dist/workers/xlsx-worker.js. In dev (ts-node) it's
     // src/services/...; ts-node-dev compiles the worker too so the .js path
     // would not exist — fall back to .ts for that case.
@@ -50,10 +59,31 @@ function workerPath() {
 // load already peaks ~400 MB; running two children in parallel would
 // approach the container's 512 MB ceiling and risk an OS-level OOM kill.
 let xlsxQueue = Promise.resolve();
-function generateFinalizedXlsx(submissionId, customerName, formData) {
-    const next = xlsxQueue.then(() => generateInChild(submissionId, customerName, formData), () => generateInChild(submissionId, customerName, formData));
+function generateFinalizedXlsx(submissionId, customerName, formData, customerKeyId) {
+    const next = xlsxQueue.then(() => generateAndPostProcess(submissionId, customerName, formData, customerKeyId), () => generateAndPostProcess(submissionId, customerName, formData, customerKeyId));
     xlsxQueue = next.catch(() => undefined);
     return next;
+}
+// After the worker produces the base xlsx, append the supplemental
+// "Business Presentation Calcs" sheet if the customer has uploaded
+// supporting docs. Best-effort — a failure here never blocks the
+// xlsx itself; the customer/admin still gets the standard workbook.
+async function generateAndPostProcess(submissionId, customerName, formData, customerKeyId) {
+    const result = await generateInChild(submissionId, customerName, formData);
+    if (!customerKeyId)
+        return result;
+    try {
+        const sheetNames = await (0, business_calcs_service_1.listWorkbookSheetNames)(result.filePath);
+        const calcs = await (0, business_calcs_service_1.extractBusinessCalcs)({ customerKeyId, workbookSheetNames: sheetNames, customerName });
+        if (calcs.length) {
+            await (0, business_calcs_service_1.appendBusinessCalcsSheet)(result.filePath, calcs);
+            console.log(`[capitaflow-xlsx] appended Business Presentation Calcs (${calcs.length} rows) for ${customerName}`);
+        }
+    }
+    catch (err) {
+        console.warn('[capitaflow-xlsx] business-calcs post-process failed:', err);
+    }
+    return result;
 }
 // ─── Worker supervision ──────────────────────────────────────────────────────
 function generateInChild(submissionId, customerName, formData) {

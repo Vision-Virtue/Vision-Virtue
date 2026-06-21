@@ -75,6 +75,11 @@ const navObserver = new IntersectionObserver((entries) => {
 sections.forEach(s => navObserver.observe(s));
 
 // ---------- Contact form ----------
+// Compose a mailto: to the V&V partner inbox with the form payload as the body,
+// then show the success state. We don't post anywhere — the user's mail client
+// opens and they hit Send. This is the cheapest reliable path until SMTP is wired.
+const VV_INBOX = 'raphael.h@visionvirtuepartnership.com';
+
 const form = document.getElementById('contactForm');
 if (form) {
   form.addEventListener('submit', (e) => {
@@ -84,7 +89,28 @@ if (form) {
     btn.textContent = 'Sending...';
     btn.disabled = true;
 
-    // Simulate async submission
+    const fd = new FormData(form);
+    const name    = (fd.get('name') || '').toString().trim();
+    const company = (fd.get('company') || '').toString().trim();
+    const email   = (fd.get('email') || '').toString().trim();
+    const message = (fd.get('message') || '').toString().trim();
+
+    const subject = `Website inquiry — ${name || 'New contact'}${company ? ' / ' + company : ''}`;
+    const body = [
+      `Name:    ${name}`,
+      `Company: ${company}`,
+      `Email:   ${email}`,
+      '',
+      'Message:',
+      message,
+      '',
+      '— sent from visionvirtuepartnership.com contact form',
+    ].join('\r\n');
+
+    const mailto = `mailto:${VV_INBOX}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    // Open in the same tab — most desktop OSes hand this to the user's default mail client.
+    window.location.href = mailto;
+
     setTimeout(() => {
       form.innerHTML = `
         <div class="form-success">
@@ -93,11 +119,11 @@ if (form) {
               <polyline points="20 6 9 17 4 12"/>
             </svg>
           </div>
-          <h3>Message Received</h3>
-          <p>Thank you for reaching out. A member of the Vision &amp; Virtue team will be in touch shortly.</p>
+          <h3>Message Ready</h3>
+          <p>Your email client should have opened with the message addressed to <strong>${VV_INBOX}</strong>. If nothing happened, please email us directly at that address.</p>
         </div>
       `;
-    }, 1200);
+    }, 800);
   });
 }
 
@@ -117,7 +143,12 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 // ---------- Customer Key gate (CapitaFlow offering CTA) ----------
 (function setupCustomerKeyGate() {
   const CK_BACKEND   = 'https://vv-marketing-api.onrender.com';
-  const CK_TEST_KEY  = 'VV-TEST123';
+  // Seeded demo keys (one per offering) — used by the master PIN fallback so
+  // admin previews still resolve to a working customer key for that area.
+  const CK_TEST_KEYS = {
+    visibility: 'VV-TEST123',
+    capitaflow: 'VV-CFTEST1',
+  };
 
   const ckOverlay  = document.getElementById('ckOverlay');
   const ckClose    = document.getElementById('ckClose');
@@ -163,11 +194,13 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
     ckError.textContent = '';
 
     try {
-      // (1) Try as a customer key
+      // (1) Try as a customer key — scoped to the offering the user clicked.
+      // The backend rejects keys minted for the other offering, so a
+      // Visibility key can't unlock CapitaFlow and vice-versa.
       const cRes = await fetch(`${CK_BACKEND}/api/customer/auth`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ key }),
+        body: JSON.stringify({ key, offering: pendingTarget }),
       });
       if (cRes.ok) {
         const cData = await cRes.json();
@@ -190,7 +223,8 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
         if (pData && pData.valid) {
           sessionStorage.setItem('vv_auth', '1');
           sessionStorage.setItem('vv_customer_name', 'Test Customer (admin preview)');
-          grantAccess(CK_TEST_KEY);
+          const seedKey = CK_TEST_KEYS[pendingTarget] || CK_TEST_KEYS.visibility;
+          grantAccess(seedKey);
           return;
         }
       }

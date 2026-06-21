@@ -2839,6 +2839,7 @@ async function generatePptxDeck(d) {
 (function capitaflowKeysPanel() {
   const form    = document.getElementById('capitaflowKeysForm');
   const nameInp = document.getElementById('capitaflowKeysCustomerName');
+  const offerSel= document.getElementById('capitaflowKeysOffering');
   const submit  = document.getElementById('capitaflowKeysSubmit');
   const result  = document.getElementById('capitaflowKeysResult');
   if (!form || !nameInp || !submit || !result) return;
@@ -2858,6 +2859,7 @@ async function generatePptxDeck(d) {
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const customerName = nameInp.value.trim();
+    const offering     = (offerSel && offerSel.value) || 'visibility';
     if (!customerName) return;
     submit.disabled = true;
     const original = submit.textContent;
@@ -2867,21 +2869,22 @@ async function generatePptxDeck(d) {
       const res = await fetch(adminUrl('/api/admin/customer-keys'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerName }),
+        body: JSON.stringify({ customerName, offering }),
       });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         throw new Error(`HTTP ${res.status} ${text.slice(0, 160)}`);
       }
       const data = await res.json();
+      const offeringLabel = data.offering === 'capitaflow' ? 'CapitaFlow' : 'Visibility';
       result.innerHTML = `
         <div class="capitaflow-keys-card">
-          <div class="capitaflow-keys-card-label">New key for <strong>${htmlEsc(data.customerName)}</strong></div>
+          <div class="capitaflow-keys-card-label">New <strong>${offeringLabel}</strong> key for <strong>${htmlEsc(data.customerName)}</strong></div>
           <div class="capitaflow-keys-card-row">
             <code class="capitaflow-keys-code" id="capitaflowKeysCode">${htmlEsc(data.key)}</code>
             <button type="button" class="capitaflow-keys-copy" id="capitaflowKeysCopy">Copy</button>
           </div>
-          <div class="capitaflow-keys-card-hint">Share this key with the customer. They paste it on the capitaflow page to open their portal.</div>
+          <div class="capitaflow-keys-card-hint">Share this key with the customer. It opens the ${offeringLabel} area only — generate a separate key for the other offering if needed.</div>
         </div>
       `;
       result.hidden = false;

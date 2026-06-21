@@ -1570,6 +1570,24 @@ body {
   margin-top: -0.25rem;
 }
 
+/* "AI Agent" tag rendered beneath the title for AI agent team cards.
+   Smaller than the role label, soft navy chip — signals these collaborators
+   are AI, not human partners. */
+.team-agent-tag {
+  display: inline-block;
+  margin-top: 0.45rem;
+  font-family: var(--font-body);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--navy-700);
+  background: rgba(37, 99, 235, 0.10);
+  border: 1px solid rgba(37, 99, 235, 0.22);
+  padding: 3px 9px;
+  border-radius: 999px;
+}
+
 .team-info p {
   font-size: 0.82rem;
   color: var(--gray-600);
@@ -3103,7 +3121,9 @@ body {
 
 /* One Source tile */
 .offering-img--onesource {
-  background: #060c1e;
+  background-color: #060c1e;
+  background-size: cover;
+  background-position: center;
   position: relative;
   overflow: hidden;
 }

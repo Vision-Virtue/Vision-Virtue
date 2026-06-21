@@ -35,7 +35,7 @@
 
   <div class="legal-header">
     <h1>Privacy Policy</h1>
-    <p>Last updated: April 2026</p>
+    <p>Last updated: May 2026</p>
   </div>
 
   <div class="legal-body">
@@ -48,18 +48,30 @@
     <p>We collect only the data necessary to provide our services:</p>
     <ul>
       <li><strong>Contact form submissions:</strong> Your name, company name, email address, and message when you submit the "Get in Touch" form.</li>
-      <li><strong>Session data:</strong> A temporary, encrypted session cookie is set when you access restricted areas of the site. This cookie expires after 10 minutes of inactivity and contains no personal information.</li>
+      <li><strong>Session data:</strong> A temporary session token is stored in your browser's sessionStorage when you access restricted areas of the site. This token expires when you close your browser tab and contains no personal information beyond an access indicator.</li>
       <li><strong>LinkedIn OAuth tokens:</strong> If our internal Marketing AI tool is connected to a LinkedIn account, we store an encrypted OAuth access token. This token is used solely to publish content on behalf of Vision &amp; Virtue's own LinkedIn page.</li>
       <li><strong>Financial files (Finance AI):</strong> Client documents uploaded to the Finance AI tool are processed locally in your browser. Extracted text content is transmitted to Anthropic's Claude API for analysis. No uploaded files are stored on our servers.</li>
+      <li><strong>Visibility Portal data (server-stored):</strong> When you use the Visibility Portal with a customer access key, the following data is stored on our servers:
+        <ul style="margin-top:0.5rem">
+          <li>General Ledger (GL) account data you upload or enter (account numbers, names, P&amp;L mappings)</li>
+          <li>Organisational structure entries (company names, divisions, departments, products, activities)</li>
+          <li>Budget structure, budget lines, and period amounts</li>
+          <li>Salary allocation data (employee names, department assignments, amounts)</li>
+          <li>Revenue and COGS entries</li>
+          <li>Cash Flow configuration (payment terms, working capital parameters, financing, Capex)</li>
+        </ul>
+        This data is associated with your unique customer access key and stored in an encrypted database on Render, Inc.'s infrastructure in the United States. It is accessible only by you (via your key) and by Vision &amp; Virtue administrators.
+      </li>
     </ul>
     <p>We do <strong>not</strong> use tracking pixels, advertising cookies, or third-party analytics services (e.g. Google Analytics).</p>
 
     <h2>3. How We Use Your Data</h2>
     <ul>
       <li><strong>Contact inquiries:</strong> To respond to your message and discuss potential engagement. We do not add you to any mailing list without explicit consent.</li>
-      <li><strong>Session cookies:</strong> To maintain secure access to restricted internal tools during your session.</li>
+      <li><strong>Session tokens:</strong> To maintain secure access to restricted tools during your browser session.</li>
       <li><strong>LinkedIn tokens:</strong> Solely to publish marketing content to our company LinkedIn page through the Marketing AI workflow.</li>
-      <li><strong>Financial file content:</strong> Sent to Anthropic's Claude API to generate financial analysis, models, and presentations. Anthropic processes this data in accordance with their <a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</li>
+      <li><strong>Financial file content (Finance AI):</strong> Sent to Anthropic's Claude API to generate financial analysis, models, and presentations. Anthropic processes this data in accordance with their <a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noopener">Privacy Policy</a>.</li>
+      <li><strong>Visibility Portal data:</strong> Stored server-side solely to power the Visibility Portal's budget, cash flow, and financial planning features. This data is not shared with third parties (other than infrastructure hosting on Render, Inc.) and is not used for any purpose other than delivering the service to you.</li>
     </ul>
 
     <h2>4. Third-Party Processors</h2>
@@ -73,9 +85,10 @@
     <h2>5. Data Retention</h2>
     <ul>
       <li><strong>Contact form data:</strong> Retained in our email inbox until no longer needed for the business purpose of the inquiry, or until you request deletion.</li>
-      <li><strong>Session cookies:</strong> Expire automatically after 10 minutes. No session data is retained after expiry.</li>
+      <li><strong>Session tokens:</strong> Stored only in your browser's sessionStorage. Automatically deleted when you close your browser tab. No session data is retained server-side.</li>
       <li><strong>LinkedIn tokens:</strong> Retained until you disconnect LinkedIn via the Settings panel, or until the token expires (typically 60 days).</li>
-      <li><strong>Financial file content:</strong> Not stored. Text is transmitted to Anthropic and the response returned in real time.</li>
+      <li><strong>Financial file content (Finance AI):</strong> Not stored. Text is transmitted to Anthropic and the response returned in real time.</li>
+      <li><strong>Visibility Portal data:</strong> Retained on our servers for as long as your customer access key is active, to enable continued use of the service. If you request deletion of your data or your access key is revoked, all associated data (GL accounts, org structure, budgets, salary data, cash flow data) is permanently deleted from our database via cascading deletion.</li>
     </ul>
 
     <h2>6. Your Rights</h2>

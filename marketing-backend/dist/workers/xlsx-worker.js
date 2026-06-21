@@ -27,7 +27,9 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const jszip_1 = __importDefault(require("jszip"));
 const promises_1 = __importDefault(require("fs/promises"));
 const fast_xml_parser_1 = require("fast-xml-parser");
+const investor_deck_schema_1 = require("../data/investor-deck-schema");
 const SHEET_NAME = "Customer's Questionnaire";
+const DECK_SHEET_NAME = 'Investor_Deck_Questionnaire_Inputs';
 // Cell layout — matches the v7 template.
 //
 // Section 1–5 sit in column I, sections 6.a / 6.b in columns H–J,
@@ -41,43 +43,41 @@ const CELLS = {
     yearsSince: 'I11', // Section 4
     firstYear: 'I12', // Section 5
 };
-// Section 6.a Customers — rows 17–26 (max 10).
+// Section 6.a Customers — v9 rows 17–28 (max 12).
 const CUSTOMERS = {
-    startRow: 17, maxRows: 10,
+    startRow: 17, maxRows: 12,
     cols: { name: 'H', type: 'I', territory: 'J' },
 };
-// Section 6.b Products — rows 30–39 (max 10).
+// Section 6.b Products — v9 rows 30–40 (max 11). Col K holds a per-product
+// cost column the template ships with example data; we explicitly clear it
+// per customer since cost is now collected per scaling row in Section 7.
 const PRODUCTS = {
-    startRow: 30, maxRows: 10,
-    cols: { name: 'H', revenueType: 'I', price: 'J' },
+    startRow: 30, maxRows: 11,
+    cols: { name: 'H', revenueType: 'I', price: 'J', cost: 'K' },
 };
-// Section 7 Let's Scale — split by revenueType.
-// Each block fills customerName in col I, productName in col L,
-// price in col M, and quarterly + 2027 numbers in cols N/O/P/Q/R.
-const LETSSCALE_HW = {
-    startRow: 44, maxRows: 6,
-    cols: { customerName: 'I', productName: 'L', price: 'M',
-        q1: 'N', q2: 'O', q3: 'P', q4: 'Q', y2: 'R' },
+// Section 7 Let's Scale — v9 collapses the three v8 blocks (HW/SW/Other)
+// into one continuous table at rows 44–63 (20 rows). New layout:
+//   H = revenueType
+//   I = customerName
+//   J = type
+//   K = territory
+//   L = productName
+//   M = price
+//   N = cost           (NEW — was section 8 in v8)
+//   O/P/Q/R = Q1/Q2/Q3/Q4
+//   S       = Y2 (2027)
+const LETSSCALE = {
+    startRow: 44, maxRows: 20,
+    cols: {
+        revenueType: 'H', customerName: 'I', type: 'J', territory: 'K',
+        productName: 'L', price: 'M', cost: 'N',
+        q1: 'O', q2: 'P', q3: 'Q', q4: 'R', y2: 'S',
+    },
 };
-const LETSSCALE_SW = {
-    startRow: 52, maxRows: 6,
-    cols: { customerName: 'I', productName: 'L', price: 'M',
-        q1: 'N', q2: 'O', q3: 'P', q4: 'Q', y2: 'R' },
-};
-const LETSSCALE_OTHER = {
-    startRow: 60, maxRows: 5,
-    cols: { customerName: 'I', productName: 'L', price: 'M',
-        q1: 'N', q2: 'O', q3: 'P', q4: 'Q', y2: 'R' },
-};
-// Section 8 Unit Costs — rows 69–78 (10 rows).
-const UNITCOSTS = {
-    startRow: 69, maxRows: 10,
-    cols: { name: 'H', cost: 'I' },
-};
-// Section 9 FTE — fixed 4 rows starting at 82: COGS, R&D, S&M, G&A.
+// Section 8 (was Section 9 in v8) FTE — v9 rows 68–71.
 // Col I = 2026 quantity (y1), col J = 2027 quantity (y2).
 const FTE = {
-    startRow: 82,
+    startRow: 68,
     cols: { y1: 'I', y2: 'J' },
 };
 // ─── Value coercion ─────────────────────────────────────────────────────────
@@ -164,6 +164,205 @@ function setCellValue(rows, rowMap, addr, value) {
     }
     // Keep cells in column order for Excel-compatibility.
     cells.sort((a, b) => parseAddr(a['@_r']).colNum - parseAddr(b['@_r']).colNum);
+}
+// ─── Investor-Deck Questionnaire_Inputs sheet builder ────────────────────────
+//
+// We add a new worksheet to the existing template. This requires four
+// coordinated edits to the package:
+//
+//   1.  xl/worksheets/sheetN.xml   — the new sheet's body
+//   2.  xl/_rels/workbook.xml.rels — relationship from workbook → new sheet
+//   3.  xl/workbook.xml            — <sheet name=... sheetId=... r:id=.../>
+//   4.  [Content_Types].xml        — Override registering the new sheet part
+//
+// We re-use sharedStrings via inline strings (`<c t="inlineStr">`), so no
+// sharedStrings.xml mutation is required.
+const DECK_COLUMNS = [
+    'Slide_Number',
+    'Slide_Title',
+    'Placeholder_Name',
+    'Questionnaire_Question',
+    'Answer_Value',
+    'Input_Type',
+    'Required_or_Optional',
+    'Guidance_for_Customer',
+    'Purpose_in_Investor_Deck',
+    'Notes',
+];
+function xmlEscape(s) {
+    return s
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+}
+function colLetter(n) {
+    // 1 → A, 26 → Z, 27 → AA …
+    let s = '';
+    while (n > 0) {
+        const r = (n - 1) % 26;
+        s = String.fromCharCode(65 + r) + s;
+        n = Math.floor((n - 1) / 26);
+    }
+    return s;
+}
+function inlineStrCell(addr, value) {
+    // <c r="A1" t="inlineStr"><is><t xml:space="preserve">…</t></is></c>
+    return `<c r="${addr}" t="inlineStr"><is><t xml:space="preserve">${xmlEscape(value)}</t></is></c>`;
+}
+function numericCell(addr, value) {
+    return `<c r="${addr}"><v>${value}</v></c>`;
+}
+function buildDeckSheetRow(rowNum, values) {
+    const cells = values
+        .map((v, i) => {
+        if (v === null || v === undefined || v === '')
+            return '';
+        const addr = `${colLetter(i + 1)}${rowNum}`;
+        if (typeof v === 'number' && Number.isFinite(v))
+            return numericCell(addr, v);
+        return inlineStrCell(addr, String(v));
+    })
+        .join('');
+    return `<row r="${rowNum}">${cells}</row>`;
+}
+function buildDeckSheetXml(fields, answers) {
+    const rows = [];
+    // Header row.
+    rows.push(buildDeckSheetRow(1, DECK_COLUMNS));
+    // One row per placeholder.
+    fields.forEach((f, idx) => {
+        const slideNum = f.slideNumbers.length === 1 ? f.slideNumbers[0] : f.slideNumbers.join(', ');
+        const rowNum = idx + 2; // header is row 1
+        const rawAns = answers?.[f.fieldKey];
+        const ans = (rawAns === undefined || rawAns === null) ? '' : String(rawAns);
+        rows.push(buildDeckSheetRow(rowNum, [
+            slideNum, // 1 Slide_Number
+            f.slideTitle, // 2 Slide_Title
+            f.placeholder, // 3 Placeholder_Name
+            f.question, // 4 Questionnaire_Question
+            ans, // 5 Answer_Value
+            f.inputType, // 6 Input_Type
+            f.required ? 'Required' : 'Optional', // 7 Required_or_Optional
+            f.guidance, // 8 Guidance_for_Customer
+            f.purpose, // 9 Purpose_in_Investor_Deck
+            f.notes || '', // 10 Notes
+        ]));
+    });
+    const lastCol = colLetter(DECK_COLUMNS.length);
+    const lastRow = rows.length;
+    const dimensionRef = `A1:${lastCol}${lastRow}`;
+    return [
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" ',
+        'xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">',
+        `<dimension ref="${dimensionRef}"/>`,
+        '<sheetViews><sheetView workbookViewId="0"><pane xSplit="3" ySplit="1" topLeftCell="D2" state="frozen"/></sheetView></sheetViews>',
+        '<sheetFormatPr defaultRowHeight="15"/>',
+        '<cols>',
+        '<col min="1" max="1" width="10" customWidth="1"/>', // Slide_Number
+        '<col min="2" max="2" width="28" customWidth="1"/>', // Slide_Title
+        '<col min="3" max="3" width="36" customWidth="1"/>', // Placeholder_Name
+        '<col min="4" max="4" width="48" customWidth="1"/>', // Question
+        '<col min="5" max="5" width="60" customWidth="1"/>', // Answer_Value
+        '<col min="6" max="6" width="14" customWidth="1"/>', // Input_Type
+        '<col min="7" max="7" width="14" customWidth="1"/>', // Required
+        '<col min="8" max="8" width="48" customWidth="1"/>', // Guidance
+        '<col min="9" max="9" width="48" customWidth="1"/>', // Purpose
+        '<col min="10" max="10" width="32" customWidth="1"/>', // Notes
+        '</cols>',
+        '<sheetData>',
+        rows.join(''),
+        '</sheetData>',
+        '<pageMargins left="0.7" right="0.7" top="0.75" bottom="0.75" header="0.3" footer="0.3"/>',
+        '</worksheet>',
+    ].join('');
+}
+/**
+ * Register a brand-new worksheet inside the xlsx zip. Idempotent — if a sheet
+ * with the same name already exists we overwrite its body and leave the
+ * workbook/rels/content-types entries alone.
+ */
+async function upsertDeckSheet(zip, fields, answers) {
+    // ── Read package descriptors we may need to mutate ─────────────────────────
+    const wbFile = zip.file('xl/workbook.xml');
+    const wbRelsFile = zip.file('xl/_rels/workbook.xml.rels');
+    const ctFile = zip.file('[Content_Types].xml');
+    if (!wbFile || !wbRelsFile || !ctFile) {
+        throw new Error('xlsx package missing required parts');
+    }
+    let wbXml = await wbFile.async('string');
+    let relsXml = await wbRelsFile.async('string');
+    let ctXml = await ctFile.async('string');
+    // ── Does the sheet already exist? ──────────────────────────────────────────
+    const nameRe = new RegExp(`<sheet\\b[^/>]*\\bname="${DECK_SHEET_NAME}"[^/>]*/>`);
+    const existing = wbXml.match(nameRe);
+    if (existing) {
+        // Pull r:id from the matched <sheet/> tag and resolve its target.
+        const ridMatch = /\br:id="([^"]+)"/.exec(existing[0]);
+        if (ridMatch) {
+            const rid = ridMatch[1];
+            const targetRe = new RegExp(`<Relationship[^/>]*\\bId="${rid}"[^/>]*\\bTarget="([^"]+)"`);
+            const tMatch = relsXml.match(targetRe);
+            if (tMatch) {
+                const target = tMatch[1].startsWith('/')
+                    ? tMatch[1].slice(1)
+                    : `xl/${tMatch[1].replace(/^\.\//, '')}`;
+                zip.file(target, buildDeckSheetXml(fields, answers));
+                return;
+            }
+        }
+        // Fall through to fresh registration if we couldn't resolve the existing target.
+    }
+    // ── Allocate a fresh sheetN.xml filename ──────────────────────────────────
+    const allSheets = Object.keys(zip.files).filter((k) => /^xl\/worksheets\/sheet\d+\.xml$/.test(k));
+    let n = allSheets.length + 1;
+    while (zip.file(`xl/worksheets/sheet${n}.xml`))
+        n++;
+    const sheetPath = `xl/worksheets/sheet${n}.xml`;
+    const sheetTargetRel = `worksheets/sheet${n}.xml`;
+    // ── Allocate a fresh rId and sheetId ──────────────────────────────────────
+    let maxRid = 0;
+    for (const m of relsXml.matchAll(/\bId="rId(\d+)"/g)) {
+        const v = parseInt(m[1], 10);
+        if (v > maxRid)
+            maxRid = v;
+    }
+    const newRid = `rId${maxRid + 1}`;
+    let maxSheetId = 0;
+    for (const m of wbXml.matchAll(/\bsheetId="(\d+)"/g)) {
+        const v = parseInt(m[1], 10);
+        if (v > maxSheetId)
+            maxSheetId = v;
+    }
+    const newSheetId = maxSheetId + 1;
+    // ── Write the four pieces ──────────────────────────────────────────────────
+    // 1. New sheet body
+    zip.file(sheetPath, buildDeckSheetXml(fields, answers));
+    // 2. Workbook rels — append new Relationship inside <Relationships>
+    const newRel = `<Relationship Id="${newRid}" ` +
+        `Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" ` +
+        `Target="${sheetTargetRel}"/>`;
+    relsXml = relsXml.replace(/<\/Relationships>/i, `${newRel}</Relationships>`);
+    zip.file('xl/_rels/workbook.xml.rels', relsXml);
+    // 3. Workbook — append new <sheet/> inside <sheets>
+    const newSheet = `<sheet name="${DECK_SHEET_NAME}" sheetId="${newSheetId}" r:id="${newRid}"/>`;
+    if (/<sheets\s*\/>/i.test(wbXml)) {
+        wbXml = wbXml.replace(/<sheets\s*\/>/i, `<sheets>${newSheet}</sheets>`);
+    }
+    else {
+        wbXml = wbXml.replace(/<\/sheets>/i, `${newSheet}</sheets>`);
+    }
+    zip.file('xl/workbook.xml', wbXml);
+    // 4. [Content_Types].xml — add Override for the new sheet part
+    const ctOverride = `<Override PartName="/${sheetPath}" ` +
+        `ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`;
+    // Avoid double-insert if somehow already present.
+    if (!ctXml.includes(`PartName="/${sheetPath}"`)) {
+        ctXml = ctXml.replace(/<\/Types>/i, `${ctOverride}</Types>`);
+        zip.file('[Content_Types].xml', ctXml);
+    }
 }
 // ─── Workbook recalc hint ───────────────────────────────────────────────────
 //
@@ -257,44 +456,35 @@ async function run(input) {
         set(`${CUSTOMERS.cols.type}${r}`, c.type);
         set(`${CUSTOMERS.cols.territory}${r}`, c.territory);
     }
-    // 6.b Products — rows 30–39
+    // 6.b Products — rows 30–40. v9 has a per-product cost column at K;
+    // we explicitly write null when the customer hasn't entered one so the
+    // template's example values don't leak into the customer's file.
     for (let i = 0; i < PRODUCTS.maxRows; i++) {
         const r = PRODUCTS.startRow + i;
         const p = (input.formData.products || [])[i] || {};
         set(`${PRODUCTS.cols.name}${r}`, p.name);
         set(`${PRODUCTS.cols.revenueType}${r}`, p.revenueType);
         set(`${PRODUCTS.cols.price}${r}`, p.price);
+        set(`${PRODUCTS.cols.cost}${r}`, p.cost);
     }
-    // 7 Let's Scale — split rows by revenueType.
-    const all = input.formData.letsScale || [];
-    const hwRows = all.filter((l) => l.revenueType === 'HW');
-    const swRows = all.filter((l) => l.revenueType === 'SW');
-    const otherRows = all.filter((l) => l.revenueType === 'Other');
-    const writeBlock = (block, items) => {
-        for (let i = 0; i < block.maxRows; i++) {
-            const r = block.startRow + i;
-            const l = items[i] || {};
-            set(`${block.cols.customerName}${r}`, l.customerName);
-            set(`${block.cols.productName}${r}`, l.productName);
-            set(`${block.cols.price}${r}`, l.price);
-            set(`${block.cols.q1}${r}`, l.q1);
-            set(`${block.cols.q2}${r}`, l.q2);
-            set(`${block.cols.q3}${r}`, l.q3);
-            set(`${block.cols.q4}${r}`, l.q4);
-            set(`${block.cols.y2}${r}`, l.y2);
-        }
-    };
-    writeBlock(LETSSCALE_HW, hwRows); // 7.a — rows 44–49
-    writeBlock(LETSSCALE_SW, swRows); // 7.b — rows 52–57
-    writeBlock(LETSSCALE_OTHER, otherRows); // 7.c — rows 60–64
-    // 8 Unit Costs — rows 69–78
-    for (let i = 0; i < UNITCOSTS.maxRows; i++) {
-        const r = UNITCOSTS.startRow + i;
-        const u = (input.formData.unitCosts || [])[i] || {};
-        set(`${UNITCOSTS.cols.name}${r}`, u.productName);
-        set(`${UNITCOSTS.cols.cost}${r}`, u.cost);
+    // 7 Let's Scale — v9 one continuous block, rows 44–63. Cost is per-row.
+    for (let i = 0; i < LETSSCALE.maxRows; i++) {
+        const r = LETSSCALE.startRow + i;
+        const l = (input.formData.letsScale || [])[i] || {};
+        set(`${LETSSCALE.cols.revenueType}${r}`, l.revenueType);
+        set(`${LETSSCALE.cols.customerName}${r}`, l.customerName);
+        set(`${LETSSCALE.cols.type}${r}`, l.type);
+        set(`${LETSSCALE.cols.territory}${r}`, l.territory);
+        set(`${LETSSCALE.cols.productName}${r}`, l.productName);
+        set(`${LETSSCALE.cols.price}${r}`, l.price);
+        set(`${LETSSCALE.cols.cost}${r}`, l.cost);
+        set(`${LETSSCALE.cols.q1}${r}`, l.q1);
+        set(`${LETSSCALE.cols.q2}${r}`, l.q2);
+        set(`${LETSSCALE.cols.q3}${r}`, l.q3);
+        set(`${LETSSCALE.cols.q4}${r}`, l.q4);
+        set(`${LETSSCALE.cols.y2}${r}`, l.y2);
     }
-    // 9 FTE — fixed 4 rows starting at 82: COGS, R&D, S&M, G&A
+    // 8 FTE — v9 rows 68–71: COGS, R&D, S&M, G&A
     const f = input.formData.fte || {};
     set(`${FTE.cols.y1}${FTE.startRow + 0}`, f.cogs_y1);
     set(`${FTE.cols.y2}${FTE.startRow + 0}`, f.cogs_y2);
@@ -313,6 +503,16 @@ async function run(input) {
         newSheetXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + newSheetXml;
     }
     zip.file(sheetPath, newSheetXml);
+    // ── Investor deck questionnaire sheet ──────────────────────────────────────
+    // Always (re)write the sheet with the latest schema + answers, so existing
+    // submissions also get the sheet on regenerate.
+    await upsertDeckSheet(zip, investor_deck_schema_1.INVESTOR_DECK_FIELDS, (input.formData.investorDeck || {}));
+    // upsertDeckSheet may have rewritten workbook.xml; re-read it before
+    // applying the recalc hint so we don't lose our new <sheet/> entry.
+    const refreshedWb = zip.file('xl/workbook.xml');
+    if (refreshedWb)
+        workbookXml = await refreshedWb.async('string');
+    console.log(`[xlsx-worker] deck-sheet heap=${heap()}`);
     // Force recalc on open.
     workbookXml = forceRecalcOnOpen(workbookXml);
     zip.file('xl/workbook.xml', workbookXml);

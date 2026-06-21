@@ -2,12 +2,15 @@
 /* ============================================================
    Visibility offering — Controller (Phase 1: Financial Structure)
    ============================================================ */
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.cfoChatController = exports.cfForecastController = exports.cfManualController = exports.cfSalariesController = exports.cfInventoryController = exports.cfReceivablesController = exports.cfPayablesController = exports.cashFlowController = exports.rcController = exports.salariesController = exports.budgetsController = exports.visibilityController = exports.BUDGET_CATEGORIES_BY_SECTION = exports.PL_SECTIONS = void 0;
 const zod_1 = require("zod");
-const sdk_1 = require("@anthropic-ai/sdk");
+const sdk_1 = __importDefault(require("@anthropic-ai/sdk"));
+const capitaflow_repository_1 = require("../db/capitaflow.repository");
 const ai_service_1 = require("../services/ai.service");
-const partner_repository_1 = require("../db/partner.repository");
 const visibility_repository_1 = require("../db/visibility.repository");
 const gl_parser_service_1 = require("../services/gl-parser.service");
 const salaries_service_1 = require("../services/salaries.service");
@@ -46,7 +49,8 @@ function resolveCustomerKey(req) {
     const key = (fromHeader || fromQuery).trim();
     if (!key)
         return null;
-    return partner_repository_1.customerKeyRepo.findByKey(key);
+    // Visibility endpoints only accept keys minted for the Visibility offering.
+    return capitaflow_repository_1.customerKeyRepo.findByKey(key, 'visibility');
 }
 function send401(res, message) {
     res.status(401).json({ error: { code: 'CUSTOMER_KEY_INVALID', message } });
@@ -514,6 +518,7 @@ exports.budgetsController = {
             currency: parsed.data.currency,
             scale: parsed.data.scale,
             sbEnabled: parsed.data.sbEnabled,
+            rcEnabled: parsed.data.rcEnabled ?? false,
         });
         res.status(201).json({ budget: serializeBudget(created) });
     },
@@ -1124,20 +1129,36 @@ function serializeRc(r) {
     };
 }
 exports.rcController = {
+    /** GET /api/visibility/budgets/:id/rc */
     list(req, res) {
-        const ctx = requireBudget(req, res); if (!ctx) return;
+        const ctx = requireBudget(req, res);
+        if (!ctx)
+            return;
         const rows = visibility_repository_1.rcRowRepo.listByBudget(ctx.budget.id);
-        res.json({ status: visibility_repository_1.rcStateRepo.getStatus(ctx.budget.id), rcEnabled: ctx.budget.rcEnabled, rows: rows.map(serializeRc) });
+        res.json({
+            status: visibility_repository_1.rcStateRepo.getStatus(ctx.budget.id),
+            rcEnabled: ctx.budget.rcEnabled,
+            rows: rows.map(serializeRc),
+        });
     },
+    /** POST /api/visibility/budgets/:id/rc */
     createRow(req, res) {
-        const ctx = requireBudget(req, res); if (!ctx) return;
+        const ctx = requireBudget(req, res);
+        if (!ctx)
+            return;
         const created = visibility_repository_1.rcRowRepo.create(ctx.budget.id);
         res.status(201).json({ row: serializeRc(created) });
     },
+    /** PATCH /api/visibility/budgets/:id/rc/:rowId */
     patchRow(req, res) {
-        const ctx = requireBudget(req, res); if (!ctx) return;
+        const ctx = requireBudget(req, res);
+        if (!ctx)
+            return;
         const row = visibility_repository_1.rcRowRepo.getById(req.params.rowId);
-        if (!row || row.budgetId !== ctx.budget.id) { res.status(404).json({ error: { code: 'NOT_FOUND', message: 'RC row not found.' } }); return; }
+        if (!row || row.budgetId !== ctx.budget.id) {
+            res.status(404).json({ error: { code: 'NOT_FOUND', message: 'RC row not found.' } });
+            return;
+        }
         const Schema = zod_1.z.object({
             companyId: zod_1.z.string().nullable().optional(),
             divisionId: zod_1.z.string().nullable().optional(),
@@ -1151,47 +1172,99 @@ exports.rcController = {
             cells: zod_1.z.record(zod_1.z.string(), zod_1.z.number()).optional(),
         });
         const parsed = Schema.safeParse(req.body);
-        if (!parsed.success) { res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid RC patch.' } }); return; }
-        const checkOrgId = (id) => { if (id == null || id === '') return true; const e = visibility_repository_1.orgEntityRepo.getById(id); return !!e && e.customerKeyId === ctx.customerKeyId; };
-        for (const k of ['companyId','divisionId','departmentId','productId','activityId']) {
-            if (parsed.data[k] !== undefined && !checkOrgId(parsed.data[k])) { res.status(400).json({ error: { code: 'BAD_ORG_REF', message: `${k} does not exist for this customer.` } }); return; }
+        if (!parsed.success) {
+            res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid RC patch.' } });
+            return;
         }
-        for (const k of ['revGlId','cogsGlId']) {
+        // Validate FK org IDs
+        const checkOrgId = (id) => {
+            if (id == null || id === '')
+                return true;
+            const e = visibility_repository_1.orgEntityRepo.getById(id);
+            return !!e && e.customerKeyId === ctx.customerKeyId;
+        };
+        for (const k of ['companyId', 'divisionId', 'departmentId', 'productId', 'activityId']) {
+            if (parsed.data[k] !== undefined && !checkOrgId(parsed.data[k])) {
+                res.status(400).json({ error: { code: 'BAD_ORG_REF', message: `${k} does not exist for this customer.` } });
+                return;
+            }
+        }
+        // Validate GL IDs
+        for (const k of ['revGlId', 'cogsGlId']) {
             const glId = parsed.data[k];
             if (glId !== undefined && glId) {
                 const gl = visibility_repository_1.glAccountRepo.getById(glId);
-                if (!gl || gl.customerKeyId !== ctx.customerKeyId) { res.status(400).json({ error: { code: 'BAD_GL_REF', message: `Unknown GL account for ${k}.` } }); return; }
+                if (!gl || gl.customerKeyId !== ctx.customerKeyId) {
+                    res.status(400).json({ error: { code: 'BAD_GL_REF', message: `Unknown GL account for ${k}.` } });
+                    return;
+                }
             }
         }
         const updated = visibility_repository_1.rcRowRepo.update(row.id, parsed.data);
         res.json({ row: updated ? serializeRc(updated) : null });
     },
+    /** DELETE /api/visibility/budgets/:id/rc/:rowId */
     removeRow(req, res) {
-        const ctx = requireBudget(req, res); if (!ctx) return;
+        const ctx = requireBudget(req, res);
+        if (!ctx)
+            return;
         const row = visibility_repository_1.rcRowRepo.getById(req.params.rowId);
-        if (!row || row.budgetId !== ctx.budget.id) { res.status(404).json({ error: { code: 'NOT_FOUND', message: 'RC row not found.' } }); return; }
+        if (!row || row.budgetId !== ctx.budget.id) {
+            res.status(404).json({ error: { code: 'NOT_FOUND', message: 'RC row not found.' } });
+            return;
+        }
         visibility_repository_1.rcRowRepo.deleteById(row.id);
         res.json({ ok: true });
     },
+    /**
+     * POST /api/visibility/budgets/:id/rc/finalize
+     * Pivot-aggregates RC rows → Revenue & COGS budget lines, flips status.
+     */
     finalize(req, res) {
-        const ctx = requireBudget(req, res); if (!ctx) return;
+        const ctx = requireBudget(req, res);
+        if (!ctx)
+            return;
         const rows = visibility_repository_1.rcRowRepo.listByBudget(ctx.budget.id);
-        if (rows.length === 0) { res.status(400).json({ error: { code: 'EMPTY_RC', message: 'Add at least one row before finalizing.' } }); return; }
+        if (rows.length === 0) {
+            res.status(400).json({ error: { code: 'EMPTY_RC', message: 'Add at least one row before finalizing.' } });
+            return;
+        }
+        // Every row must have a Revenue GL (COGS GL is optional)
         const missingRevGl = rows.filter(r => !r.revGlId);
-        if (missingRevGl.length > 0) { res.status(400).json({ error: { code: 'MISSING_REV_GL', message: `${missingRevGl.length} row${missingRevGl.length === 1 ? '' : 's'} need a Revenues GL account before finalizing.` } }); return; }
+        if (missingRevGl.length > 0) {
+            res.status(400).json({
+                error: {
+                    code: 'MISSING_REV_GL',
+                    message: `${missingRevGl.length} row${missingRevGl.length === 1 ? '' : 's'} need a Revenues GL account before finalizing.`,
+                },
+            });
+            return;
+        }
+        // Replace existing source='rc' budget lines
         const existingLines = visibility_repository_1.budgetLineRepo.listByBudget(ctx.budget.id).filter(l => l.source === 'rc');
-        for (const l of existingLines) visibility_repository_1.budgetLineRepo.deleteById(l.id);
+        for (const l of existingLines)
+            visibility_repository_1.budgetLineRepo.deleteById(l.id);
         const pivoted = (0, rc_service_1.pivotRcRows)(rows, ctx.budget.granularity);
         for (const p of pivoted) {
             const line = visibility_repository_1.budgetLineRepo.create(ctx.budget.id, 'rc');
-            visibility_repository_1.budgetLineRepo.update(line.id, { companyId: p.companyId, divisionId: p.divisionId, departmentId: p.departmentId, productId: p.productId, activityId: p.activityId, glAccountId: p.glAccountId });
+            visibility_repository_1.budgetLineRepo.update(line.id, {
+                companyId: p.companyId,
+                divisionId: p.divisionId,
+                departmentId: p.departmentId,
+                productId: p.productId,
+                activityId: p.activityId,
+                glAccountId: p.glAccountId,
+            });
             visibility_repository_1.budgetCellRepo.setAllForLine(line.id, p.cells);
         }
         visibility_repository_1.rcStateRepo.setStatus(ctx.budget.id, 'finalized');
         res.json({ status: 'finalized', pivotCount: pivoted.length });
     },
+    /** POST /api/visibility/budgets/:id/rc/edit */
     edit(req, res) {
-        const ctx = requireBudget(req, res); if (!ctx) return;
+        const ctx = requireBudget(req, res);
+        if (!ctx)
+            return;
         visibility_repository_1.rcStateRepo.setStatus(ctx.budget.id, 'editing');
         res.json({ status: 'editing' });
     },
@@ -1643,6 +1716,8 @@ exports.cfForecastController = {
    CFO Visibility Chat
    POST /api/visibility/cfo/chat
    Requires X-Customer-Key header.
+   Accepts { message, history?, context? } and returns Marcus Vale's
+   CFO-level response as XML parsed on the frontend.
    ============================================================ */
 exports.cfoChatController = {
     async chat(req, res) {
@@ -1673,5 +1748,4 @@ exports.cfoChatController = {
         const reply = await aiService.cfoVisibilityChat(message.trim(), history, context);
         res.json({ success: true, data: { reply } });
     },
-};
 };
