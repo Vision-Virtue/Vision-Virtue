@@ -20,20 +20,22 @@ export class LinkedInService {
   // ── OAuth ─────────────────────────────────────────────────────────────────────
 
   getAuthorizationUrl(state: string): string {
-    // App 241290093 has Community Management API approved (2026-06-21) and
-    // LinkedIn forbids any other product on the same app once CMA is added,
-    // so we can only request CMA scopes here. openid/profile/w_member_social
-    // would 400 with invalid_scope.
+    // App 241290093 has Community Management API at Development Tier — only
+    // the posting / social-read scopes are exposed at that tier. The admin
+    // scopes (r_organization_admin, rw_organization_admin) require the CMA
+    // Production Tier upgrade (separate LinkedIn review). LinkedIn rejects
+    // the entire OAuth request if we ask for a non-exposed scope, so we
+    // request only what Development Tier actually grants.
     //
-    //   w_organization_social — Post on the V&V company page
-    //   r_organization_social — Read company-page posts / engagement data
-    //   r_organization_admin  — Read company-page admin metadata
-    //   rw_organization_admin — Update company-page admin metadata
+    //   w_organization_social — Post on the V&V company page (REQUIRED)
+    //   r_organization_social — Read company-page posts / engagement
+    //
+    // Side-effect: /v2/organizations/{id} (the profile endpoint) needs
+    // r_organization_admin and will 401 — getOrganizationProfile() catches
+    // this and returns a placeholder so the UI doesn't go boom.
     const scopes = [
-      'r_organization_admin',
-      'rw_organization_admin',
-      'r_organization_social',
       'w_organization_social',
+      'r_organization_social',
     ].join(' ');
 
     const params = new URLSearchParams({
@@ -165,6 +167,20 @@ export class LinkedInService {
       );
       return response.data;
     } catch (err) {
+      // The /v2/organizations/{id} endpoint requires r_organization_admin,
+      // which Development-Tier CMA apps don't get. Return a stub profile
+      // so the LinkedIn Page UI still loads and we can publish — the page
+      // can call out the missing permission rather than 500-ing.
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 401 || status === 403) {
+        console.warn('[LINKEDIN] org profile fetch denied (likely missing r_organization_admin scope); returning stub.');
+        return {
+          id: this.organizationId,
+          name: 'Vision & Virtue',
+          permissionLimited: true,
+          message: 'Posting works, but the Vision & Virtue page profile (logo, description, follower count, etc.) requires the CMA Production-Tier upgrade. Posting is enabled.',
+        };
+      }
       throw this.mapLinkedInError(err, 'Failed to fetch organization profile');
     }
   }
