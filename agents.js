@@ -3146,6 +3146,42 @@ async function generatePptxDeck(d) {
     const isFinal = sub.status === 'finalized';
     const xlsxReady = sub.hasXlsx === true;
 
+    // Which offerings the customer key grants. Drives which per-offering
+    // sub-section we render. Falls back to showing CapitaFlow only if the
+    // backend hasn't yet populated customerKeyOfferings (legacy clients).
+    const offerings = Array.isArray(sub.customerKeyOfferings) && sub.customerKeyOfferings.length
+      ? sub.customerKeyOfferings
+      : ['capitaflow'];
+    const hasOffering = (o) => offerings.indexOf(o) !== -1;
+
+    // Direct admin link into the customer's Visibility portal (carrying the
+    // key + customer name as query params). Same URL as the Visibility pill
+    // on the folder header — surfaced again here so it sits inside the
+    // per-offering section the customer's data actually lives in.
+    const visibilityHref = (sub.customerKey && !sub.customerKeyRevoked)
+      ? `visibility.html?adminKey=${encodeURIComponent(sub.customerKey)}` +
+        `&adminName=${encodeURIComponent(sub.customerName || '')}`
+      : '';
+
+    const visibilitySection = hasOffering('visibility') ? `
+      <div class="cf-offering-section cf-offering-visibility">
+        <div class="cf-offering-section-head">
+          <span class="cf-offering-section-icon" aria-hidden="true">📊</span>
+          <div class="cf-offering-section-meta">
+            <h4 class="cf-offering-section-title">Visibility</h4>
+            <p class="cf-offering-section-sub">Customer's portal — GL accounts, org structure, budgets, cash-flow forecast.</p>
+          </div>
+        </div>
+        <div class="cf-offering-section-body">
+          ${visibilityHref
+            ? `<a class="capitaflow-subs-action capitaflow-subs-download" href="${visibilityHref}" target="_blank" rel="noopener" data-open-portal="1">
+                 🔗 Open Visibility Portal
+               </a>`
+            : `<span class="cf-offering-section-empty">Key missing — open from the Customer Keys list above to resend.</span>`}
+        </div>
+      </div>
+    ` : '';
+
     // ── Customer-uploaded materials (Section 10 of the questionnaire) ──
     // List is fetched async on folder expand; placeholder rendered here.
     const uploadsBlock = `
@@ -3184,36 +3220,52 @@ async function generatePptxDeck(d) {
         : `<button type="button" class="capitaflow-subs-action capitaflow-subs-generate" data-action="generate" data-product="pptx" ${xlsxReady ? '' : 'disabled'}>${xlsxReady ? 'Generate pptx' : 'Generate xlsx first'}</button>`}
     `;
 
+    const capitaflowSection = hasOffering('capitaflow') ? `
+      <div class="cf-offering-section cf-offering-capitaflow">
+        <div class="cf-offering-section-head">
+          <span class="cf-offering-section-icon" aria-hidden="true">🤝</span>
+          <div class="cf-offering-section-meta">
+            <h4 class="cf-offering-section-title">CapitaFlow</h4>
+            <p class="cf-offering-section-sub">Customer's Questionnaire submission + finalized Financial Model + populated Investor Deck.</p>
+          </div>
+        </div>
+        <div class="cf-offering-section-body">
+          ${uploadsBlock}
+          <div class="capitaflow-subs-deliverable">
+            <div class="capitaflow-subs-deliverable-icon capitaflow-subs-deliverable-icon-excel">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2"/>
+                <line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/>
+                <line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>
+              </svg>
+            </div>
+            <div class="capitaflow-subs-deliverable-meta">
+              <div class="capitaflow-subs-deliverable-title">Financial Model</div>
+              <div class="capitaflow-subs-deliverable-sub">Customer's Questionnaire populated · downstream sheets calculated by formulas</div>
+            </div>
+            <div class="capitaflow-subs-deliverable-actions">${excelActions}</div>
+          </div>
+          <div class="capitaflow-subs-deliverable">
+            <div class="capitaflow-subs-deliverable-icon capitaflow-subs-deliverable-icon-ppt">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="2" y="3" width="20" height="14" rx="2"/>
+                <line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+              </svg>
+            </div>
+            <div class="capitaflow-subs-deliverable-meta">
+              <div class="capitaflow-subs-deliverable-title">Investor Deck</div>
+              <div class="capitaflow-subs-deliverable-sub">PowerPoint populated from xlsx · regenerate after refreshing calculations in Excel</div>
+            </div>
+            <div class="capitaflow-subs-deliverable-actions">${pptxActions}</div>
+          </div>
+        </div>
+      </div>
+    ` : '';
+
     return `
       <div class="capitaflow-subs-deliverables">
-        ${uploadsBlock}
-        <div class="capitaflow-subs-deliverable">
-          <div class="capitaflow-subs-deliverable-icon capitaflow-subs-deliverable-icon-excel">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2"/>
-              <line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/>
-              <line x1="9" y1="3" x2="9" y2="21"/><line x1="15" y1="3" x2="15" y2="21"/>
-            </svg>
-          </div>
-          <div class="capitaflow-subs-deliverable-meta">
-            <div class="capitaflow-subs-deliverable-title">Financial Model</div>
-            <div class="capitaflow-subs-deliverable-sub">Customer's Questionnaire populated · downstream sheets calculated by formulas</div>
-          </div>
-          <div class="capitaflow-subs-deliverable-actions">${excelActions}</div>
-        </div>
-        <div class="capitaflow-subs-deliverable">
-          <div class="capitaflow-subs-deliverable-icon capitaflow-subs-deliverable-icon-ppt">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="2" y="3" width="20" height="14" rx="2"/>
-              <line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
-            </svg>
-          </div>
-          <div class="capitaflow-subs-deliverable-meta">
-            <div class="capitaflow-subs-deliverable-title">Investor Deck</div>
-            <div class="capitaflow-subs-deliverable-sub">PowerPoint populated from xlsx · regenerate after refreshing calculations in Excel</div>
-          </div>
-          <div class="capitaflow-subs-deliverable-actions">${pptxActions}</div>
-        </div>
+        ${visibilitySection}
+        ${capitaflowSection}
       </div>
     `;
   }

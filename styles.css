@@ -870,6 +870,40 @@ body {
   55%      { box-shadow: 0 0 0 28px rgba(91, 141, 224, 0),    inset 0 0 30px rgba(91, 141, 224, 0.18); }
 }
 
+/* Small pill next to the pulsing V — same target as the big V, just an
+   explicit affordance for visitors who don't realise the V itself is a
+   play button. */
+.what-v-learn {
+  position: absolute;
+  top: calc(2.5rem + 100px);                 /* vertical centre of the 200px V */
+  left: calc(2.5rem + 200px + 1rem);         /* 1rem to the right of the V */
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid rgba(91, 141, 224, 0.55);
+  background: rgba(91, 141, 224, 0.12);
+  color: #cfe1ff;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  z-index: 3;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease, color 0.18s ease;
+}
+.what-v-learn:hover,
+.what-v-learn:focus-visible {
+  background: rgba(91, 141, 224, 0.22);
+  border-color: rgba(255, 255, 255, 0.85);
+  color: #ffffff;
+  transform: translateY(-50%) scale(1.04);
+  outline: none;
+}
+.what-v-learn svg { flex-shrink: 0; }
+
 @media (max-width: 900px) {
   .what-v-play {
     width: 140px;
@@ -881,6 +915,14 @@ body {
   .what-v-play-letter { font-size: 5rem; }
   .what-v-play:hover,
   .what-v-play:focus-visible { transform: translateX(-50%) scale(1.06); }
+  /* Below the (centered) V on mobile, also centered. */
+  .what-v-learn {
+    top: calc(1.5rem + 140px + 0.85rem);
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  .what-v-learn:hover,
+  .what-v-learn:focus-visible { transform: translateX(-50%) scale(1.04); }
 }
 
 .what-right {

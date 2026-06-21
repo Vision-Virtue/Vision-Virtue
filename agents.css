@@ -1932,3 +1932,59 @@
 .ckl-row-trash:hover { background: rgba(220, 70, 70, 0.18); color: #ffb6b6; }
 .ckl-row-trash svg { width: 16px; height: 16px; }
 .ckl-row-saving { font-size: 0.75rem; color: rgba(255, 255, 255, 0.55); }
+
+/* Per-offering sub-sections inside a Customer Submissions folder body —
+   one card per offering the key actually grants, each owning its own
+   deliverables. Keeps the Visibility portal link and the CapitaFlow
+   uploads/xlsx/pptx cleanly separated for Raphael when a single customer
+   has both products. */
+.cf-offering-section {
+  margin-top: 0.85rem;
+  padding: 0.85rem 0.95rem 0.95rem;
+  border-radius: 9px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+}
+.cf-offering-section.cf-offering-visibility {
+  border-color: rgba(91, 141, 224, 0.30);
+  background: rgba(91, 141, 224, 0.06);
+}
+.cf-offering-section.cf-offering-capitaflow {
+  border-color: rgba(232, 168, 96, 0.30);
+  background: rgba(232, 168, 96, 0.05);
+}
+.cf-offering-section-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  margin-bottom: 0.7rem;
+}
+.cf-offering-section-icon {
+  flex-shrink: 0;
+  font-size: 1.1rem;
+  line-height: 1.2;
+}
+.cf-offering-section-meta { flex: 1 1 auto; min-width: 0; }
+.cf-offering-section-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: 0.01em;
+}
+.cf-offering-section-sub {
+  margin: 0.15rem 0 0;
+  font-size: 0.78rem;
+  color: rgba(255, 255, 255, 0.55);
+  line-height: 1.4;
+}
+.cf-offering-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+.cf-offering-section-empty {
+  font-size: 0.82rem;
+  color: rgba(255, 255, 255, 0.45);
+  font-style: italic;
+}

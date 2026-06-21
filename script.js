@@ -469,3 +469,7 @@ function setupVideoModal(playBtnId, modalId, closeBtnId, videoId) {
 setupVideoModal('visibilityPlayBtn', 'vdemoModal', 'vdemoClose', 'vdemoVideo');
 // Vision & Virtue brand film (pulsing V on the "Our Vision" panel)
 setupVideoModal('brandPlayBtn',      'brandModal', 'brandClose', 'brandVideo');
+// Twin trigger — the "Learn more" pill next to the V opens the same modal.
+document.getElementById('brandLearnBtn')?.addEventListener('click', function () {
+  document.getElementById('brandPlayBtn')?.click();
+});
