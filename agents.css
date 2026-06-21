@@ -1821,3 +1821,114 @@
   font-size: 0.8rem;
   color: rgba(255, 255, 255, 0.55);
 }
+
+/* Offerings checkbox group — used both in the minter form and inline on the
+   Customer Keys list to flip access without re-minting a key. */
+.capitaflow-keys-offerings {
+  display: flex;
+  gap: 0.55rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.capitaflow-keys-offering {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.85rem;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.06);
+  color: #d8e0ee;
+  font-size: 0.86rem;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s, border-color 0.12s;
+}
+.capitaflow-keys-offering input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+.capitaflow-keys-offering:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.30);
+}
+
+/* Customer Keys list — one row per key with offering checkboxes + trash. */
+.ckl-row {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.75rem 0.95rem;
+  margin-top: 0.55rem;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.04);
+  flex-wrap: wrap;
+}
+.ckl-row.is-revoked { opacity: 0.55; }
+.ckl-row-name {
+  font-weight: 700;
+  color: #fff;
+  font-size: 0.95rem;
+  flex: 1 1 200px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.ckl-row-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: #9bbdf2;
+  padding: 0.25rem 0.55rem;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+}
+.ckl-row-key:hover { background: rgba(0, 0, 0, 0.40); }
+.ckl-row-key.is-copied { background: rgba(120, 200, 120, 0.25); color: #c4f5c4; }
+.ckl-row-offerings {
+  display: flex;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+.ckl-row-offering {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: #d8e0ee;
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+}
+.ckl-row-offering input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+.ckl-row-offering.is-active {
+  border-color: rgba(120, 200, 120, 0.55);
+  background: rgba(120, 200, 120, 0.14);
+  color: #c4f5c4;
+}
+.ckl-row-trash {
+  background: none;
+  border: 1px solid rgba(220, 70, 70, 0.3);
+  color: rgba(255, 150, 150, 0.85);
+  border-radius: 6px;
+  padding: 0.4rem 0.55rem;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.ckl-row-trash:hover { background: rgba(220, 70, 70, 0.18); color: #ffb6b6; }
+.ckl-row-trash svg { width: 16px; height: 16px; }
+.ckl-row-saving { font-size: 0.75rem; color: rgba(255, 255, 255, 0.55); }

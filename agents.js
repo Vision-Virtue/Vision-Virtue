@@ -2839,7 +2839,7 @@ async function generatePptxDeck(d) {
 (function capitaflowKeysPanel() {
   const form    = document.getElementById('capitaflowKeysForm');
   const nameInp = document.getElementById('capitaflowKeysCustomerName');
-  const offerSel= document.getElementById('capitaflowKeysOffering');
+  const offBox  = document.getElementById('capitaflowKeysOfferings');
   const submit  = document.getElementById('capitaflowKeysSubmit');
   const result  = document.getElementById('capitaflowKeysResult');
   if (!form || !nameInp || !submit || !result) return;
@@ -2855,12 +2855,23 @@ async function generatePptxDeck(d) {
       .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
       .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
   }
+  function readCheckedOfferings() {
+    if (!offBox) return ['visibility'];
+    return Array.from(offBox.querySelectorAll('input[type="checkbox"]'))
+      .filter(cb => cb.checked)
+      .map(cb => cb.value);
+  }
+  function offeringLabel(o) { return o === 'capitaflow' ? 'CapitaFlow' : 'Visibility'; }
 
   form.addEventListener('submit', async (ev) => {
     ev.preventDefault();
     const customerName = nameInp.value.trim();
-    const offering     = (offerSel && offerSel.value) || 'visibility';
+    const offerings    = readCheckedOfferings();
     if (!customerName) return;
+    if (!offerings.length) {
+      alert('Pick at least one offering for this key.');
+      return;
+    }
     submit.disabled = true;
     const original = submit.textContent;
     submit.textContent = 'Generating…';
@@ -2869,22 +2880,23 @@ async function generatePptxDeck(d) {
       const res = await fetch(adminUrl('/api/admin/customer-keys'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ customerName, offering }),
+        body: JSON.stringify({ customerName, offerings }),
       });
       if (!res.ok) {
         const text = await res.text().catch(() => '');
         throw new Error(`HTTP ${res.status} ${text.slice(0, 160)}`);
       }
       const data = await res.json();
-      const offeringLabel = data.offering === 'capitaflow' ? 'CapitaFlow' : 'Visibility';
+      const granted = (data.offerings && data.offerings.length ? data.offerings : [data.offering])
+        .map(offeringLabel).join(' + ');
       result.innerHTML = `
         <div class="capitaflow-keys-card">
-          <div class="capitaflow-keys-card-label">New <strong>${offeringLabel}</strong> key for <strong>${htmlEsc(data.customerName)}</strong></div>
+          <div class="capitaflow-keys-card-label">New key for <strong>${htmlEsc(data.customerName)}</strong> — access to <strong>${htmlEsc(granted)}</strong></div>
           <div class="capitaflow-keys-card-row">
             <code class="capitaflow-keys-code" id="capitaflowKeysCode">${htmlEsc(data.key)}</code>
             <button type="button" class="capitaflow-keys-copy" id="capitaflowKeysCopy">Copy</button>
           </div>
-          <div class="capitaflow-keys-card-hint">Share this key with the customer. It opens the ${offeringLabel} area only — generate a separate key for the other offering if needed.</div>
+          <div class="capitaflow-keys-card-hint">Share this key with the customer. The customer can use the same key on every offering you ticked above. Toggle offerings later from the Customer Keys list below.</div>
         </div>
       `;
       result.hidden = false;
@@ -2899,6 +2911,9 @@ async function generatePptxDeck(d) {
           alert('Copy failed — select the key and copy manually.');
         }
       });
+      if (typeof window.__refreshCustomerKeysList === 'function') {
+        window.__refreshCustomerKeysList();
+      }
     } catch (err) {
       alert('Generate key failed.\n\n' + (err && err.message ? err.message : ''));
     } finally {
@@ -2906,6 +2921,174 @@ async function generatePptxDeck(d) {
       submit.textContent = original;
     }
   });
+})();
+
+/* ============================================================
+   CAPITAFLOW CUSTOMER KEYS — persistent list
+   Each row shows the key + customer name + two offering checkboxes
+   (Visibility / CapitaFlow) and a trash icon. Ticking/unticking a
+   checkbox PATCHes /api/admin/customer-keys/:id so a single key can
+   grant access to multiple offerings without re-minting.
+   ============================================================ */
+(function capitaflowCustomerKeysList() {
+  const list    = document.getElementById('customerKeysList');
+  const summary = document.getElementById('customerKeysListSummary');
+  const refresh = document.getElementById('customerKeysListRefresh');
+  if (!list || !summary || !refresh) return;
+
+  const API = 'https://vv-marketing-api.onrender.com';
+  function pin() { return sessionStorage.getItem('vv_admin_pin') || ''; }
+  function adminUrl(path) {
+    const sep = path.includes('?') ? '&' : '?';
+    return `${API}${path}${sep}pin=${encodeURIComponent(pin())}`;
+  }
+  function htmlEsc(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  async function load() {
+    summary.textContent = 'Loading…';
+    list.innerHTML = '';
+    try {
+      const res = await fetch(adminUrl('/api/admin/customer-keys'));
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const data = await res.json();
+      const keys = Array.isArray(data.keys) ? data.keys : [];
+      if (!keys.length) {
+        summary.textContent = 'No customer keys minted yet.';
+        return;
+      }
+      summary.textContent = keys.length + ' customer key' + (keys.length === 1 ? '' : 's') + ' total.';
+      keys.forEach(k => list.appendChild(renderRow(k)));
+    } catch (err) {
+      summary.textContent = 'Failed to load customer keys.';
+      console.error('[customerKeysList]', err);
+    }
+  }
+
+  function renderRow(k) {
+    const offerings = Array.isArray(k.offerings) && k.offerings.length
+      ? k.offerings
+      : (k.offering ? [k.offering] : []);
+    const has = (o) => offerings.indexOf(o) !== -1;
+
+    const row = document.createElement('div');
+    row.className = 'ckl-row' + (k.revoked ? ' is-revoked' : '');
+    row.innerHTML =
+      '<div class="ckl-row-name">' +
+        '<span>' + htmlEsc(k.customerName || '(unnamed)') + '</span>' +
+        '<code class="ckl-row-key" data-key="' + htmlEsc(k.key) + '" title="Click to copy">' + htmlEsc(k.key) + '</code>' +
+      '</div>' +
+      '<div class="ckl-row-offerings">' +
+        '<label class="ckl-row-offering ' + (has('visibility') ? 'is-active' : '') + '">' +
+          '<input type="checkbox" data-offering="visibility" ' + (has('visibility') ? 'checked' : '') + '>' +
+          '<span>Visibility</span>' +
+        '</label>' +
+        '<label class="ckl-row-offering ' + (has('capitaflow') ? 'is-active' : '') + '">' +
+          '<input type="checkbox" data-offering="capitaflow" ' + (has('capitaflow') ? 'checked' : '') + '>' +
+          '<span>CapitaFlow</span>' +
+        '</label>' +
+        '<span class="ckl-row-saving" hidden>Saving…</span>' +
+      '</div>' +
+      '<button type="button" class="ckl-row-trash" title="Delete this customer key + all their data">' +
+        '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+          '<polyline points="3 6 5 6 21 6"/>' +
+          '<path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>' +
+          '<path d="M10 11v6M14 11v6"/>' +
+          '<path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>' +
+        '</svg>' +
+      '</button>';
+
+    // Copy key to clipboard on click
+    const keyEl = row.querySelector('.ckl-row-key');
+    keyEl.addEventListener('click', async () => {
+      try {
+        await navigator.clipboard.writeText(k.key);
+        keyEl.classList.add('is-copied');
+        const t = keyEl.textContent;
+        keyEl.textContent = 'Copied ✓';
+        setTimeout(() => { keyEl.classList.remove('is-copied'); keyEl.textContent = t; }, 1200);
+      } catch { /* clipboard blocked */ }
+    });
+
+    // Checkbox toggles — PATCH the offerings array
+    const checkboxes = row.querySelectorAll('.ckl-row-offerings input[type="checkbox"]');
+    const savingEl   = row.querySelector('.ckl-row-saving');
+    checkboxes.forEach(cb => {
+      cb.addEventListener('change', async () => {
+        const next = Array.from(checkboxes).filter(c => c.checked).map(c => c.dataset.offering);
+        if (!next.length) {
+          alert('A key must grant at least one offering. To remove all access, delete the key instead.');
+          cb.checked = true;
+          return;
+        }
+        savingEl.hidden = false;
+        checkboxes.forEach(c => c.disabled = true);
+        try {
+          const res = await fetch(adminUrl('/api/admin/customer-keys/' + encodeURIComponent(k.id)), {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ offerings: next }),
+          });
+          if (!res.ok) {
+            const text = await res.text().catch(() => '');
+            throw new Error('HTTP ' + res.status + ' ' + text.slice(0, 160));
+          }
+          // Update the row's pill styling in place
+          checkboxes.forEach(c => {
+            c.parentElement.classList.toggle('is-active', c.checked);
+          });
+        } catch (err) {
+          alert('Failed to update offerings.\n\n' + (err && err.message ? err.message : ''));
+          // Revert the checkbox to its previous state
+          cb.checked = !cb.checked;
+          cb.parentElement.classList.toggle('is-active', cb.checked);
+        } finally {
+          savingEl.hidden = true;
+          checkboxes.forEach(c => c.disabled = false);
+        }
+      });
+    });
+
+    // Trash — hard delete + cascade. Same confirmation pattern as the
+    // Customer Submissions panel.
+    const trashBtn = row.querySelector('.ckl-row-trash');
+    trashBtn.addEventListener('click', async () => {
+      const confirmMsg =
+        'Delete customer key "' + (k.customerName || k.key) + '"?\n\n' +
+        'This permanently removes the key and ALL their data: submissions, ' +
+        'finalized models, marketplace listings, Visibility GLs/budgets, NDAs.\n\n' +
+        'This action cannot be undone.';
+      if (!confirm(confirmMsg)) return;
+      trashBtn.disabled = true;
+      try {
+        const res = await fetch(adminUrl('/api/admin/customer-keys/' + encodeURIComponent(k.id)), {
+          method: 'DELETE',
+        });
+        if (!res.ok) {
+          const text = await res.text().catch(() => '');
+          throw new Error('HTTP ' + res.status + ' ' + text.slice(0, 160));
+        }
+        await load();
+        // Also refresh the submissions panel (deleted key cascades to submissions).
+        if (typeof window.__refreshCapitaflowSubsPanel === 'function') {
+          window.__refreshCapitaflowSubsPanel();
+        }
+      } catch (err) {
+        alert('Failed to delete customer key.\n\n' + (err && err.message ? err.message : ''));
+        trashBtn.disabled = false;
+      }
+    });
+
+    return row;
+  }
+
+  refresh.addEventListener('click', load);
+  load();
+  // Expose so the minter form can refresh us right after creating a key.
+  window.__refreshCustomerKeysList = load;
 })();
 
 /* ============================================================
@@ -3043,24 +3226,31 @@ async function generatePptxDeck(d) {
     const card = document.createElement('div');
     card.className = 'capitaflow-subs-folder';
     card.dataset.subId = sub.id;
-    // Customer key chip: shows VV-XXXXXX in the folder header. Authorized
-    // personnel can copy it to clipboard for the customer if they lose it,
-    // or open the customer's Visibility / CapitaFlow portal directly via the
-    // adjacent pills (both offerings share the same customer key).
+    // Customer key chip + portal-pill rows. The pills are direct links to
+    // the customer's Visibility / CapitaFlow portal (carrying the admin key
+    // as a query param). We render only the pills for offerings the key
+    // ACTUALLY grants — otherwise a Visibility-only key would show a
+    // CapitaFlow pill that just bounces the admin back to the home page.
+    // Toggle which offerings a key grants from the Customer Keys list above.
     const portalKey = sub.customerKey && !sub.customerKeyRevoked ? sub.customerKey : '';
     const portalName = sub.customerName || '';
+    const grantedOfferings = Array.isArray(sub.customerKeyOfferings) && sub.customerKeyOfferings.length
+      ? sub.customerKeyOfferings
+      : (sub.customerKeyOffering ? [sub.customerKeyOffering] : ['visibility', 'capitaflow']);
     const buildPortalUrl = (page) => page +
       `?adminKey=${encodeURIComponent(portalKey)}` +
       `&adminName=${encodeURIComponent(portalName)}`;
-    const portalPills = portalKey
+    const visibilityPill = portalKey && grantedOfferings.indexOf('visibility') !== -1
       ? `<a class="capitaflow-subs-folder-portal"
              href="${buildPortalUrl('visibility.html')}"
              target="_blank" rel="noopener" data-open-portal="1"
              title="Open this customer's Visibility portal in a new tab">
            <span class="capitaflow-subs-folder-portal-icon" aria-hidden="true">📊</span>
            <span class="capitaflow-subs-folder-portal-label">Visibility</span>
-         </a>
-         <a class="capitaflow-subs-folder-portal"
+         </a>`
+      : '';
+    const capitaflowPill = portalKey && grantedOfferings.indexOf('capitaflow') !== -1
+      ? `<a class="capitaflow-subs-folder-portal"
              href="${buildPortalUrl('capitaflow.html')}"
              target="_blank" rel="noopener" data-open-portal="1"
              title="Open this customer's CapitaFlow portal in a new tab">
@@ -3068,6 +3258,7 @@ async function generatePptxDeck(d) {
            <span class="capitaflow-subs-folder-portal-label">CapitaFlow</span>
          </a>`
       : '';
+    const portalPills = visibilityPill + capitaflowPill;
     const keyChip = sub.customerKey
       ? `<span class="capitaflow-subs-folder-key${sub.customerKeyRevoked ? ' is-revoked' : ''}"
               data-customer-key="${htmlEsc(sub.customerKey)}"
@@ -3412,4 +3603,6 @@ async function generatePptxDeck(d) {
 
   refresh.addEventListener('click', loadSubmissions);
   loadSubmissions();
+  // Expose so the Customer Keys list can refresh us after a cascade-delete.
+  window.__refreshCapitaflowSubsPanel = loadSubmissions;
 })();

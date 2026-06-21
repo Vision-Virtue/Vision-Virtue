@@ -12,6 +12,7 @@ import {
   investorKeyRepo, InvestorKeyRow,
   marketplaceListingRepo, MarketplaceListingKpis,
   ndaSignatureRepo,
+  parseOfferings, Offering,
 } from '../db/capitaflow.repository';
 import {
   storeDeckPdf, readDeckPdf, MAX_DECK_PDF_BYTES,
@@ -139,11 +140,17 @@ export const capitaflowController = {
       res.status(401).json({ valid: false });
       return;
     }
+    const offerings = parseOfferings(row.offering);
     res.json({
       valid: true,
       customerKeyId: row.id,
       customerName: row.customer_name,
-      offering: row.offering,
+      // `offering` (singular) kept for backwards-compat: returns the
+      // requested offering if it matched, else the first granted offering.
+      offering: parsed.data.offering && offerings.includes(parsed.data.offering)
+        ? parsed.data.offering
+        : offerings[0],
+      offerings,
     });
   },
 
@@ -614,6 +621,7 @@ export const capitaflowController = {
           customerKey:         keyRow?.key       ?? null,
           customerKeyOwner:    keyRow?.customer_name ?? null,
           customerKeyRevoked:  keyRow?.revoked === 1,
+          customerKeyOfferings: keyRow ? parseOfferings(keyRow.offering) : [],
           status:              s.status,
           submittedAt:         s.submittedAt,
           finalizedAt:         s.finalizedAt,
@@ -861,27 +869,40 @@ export const capitaflowController = {
 
   /**
    * POST /api/admin/customer-keys
-   * Body: { customerName }   →  generates a new VV-XXXXXX key.
+   * Body: { customerName, offerings: ('visibility'|'capitaflow')[] }
+   *
+   * Generates a new VV-XXXXXX key. `offerings` is an array — pass one entry
+   * to mint a single-offering key, or both to grant access to Visibility AND
+   * CapitaFlow under one key. The legacy `offering: 'visibility'` single-string
+   * form is still accepted and converted to a one-element array.
    */
   adminCreateKey(req: Request, res: Response): void {
     const parsed = z.object({
       customerName: z.string().trim().min(1).max(200),
-      // Required — every key is scoped to one offering. Admin UI picks one.
-      offering:     z.enum(['visibility', 'capitaflow']),
+      offerings:    z.array(z.enum(['visibility', 'capitaflow'])).min(1).optional(),
+      offering:     z.enum(['visibility', 'capitaflow']).optional(),
+    }).refine(d => !!d.offerings || !!d.offering, {
+      message: 'offerings (array) or offering (string) is required.',
     }).safeParse(req.body);
     if (!parsed.success) {
-      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'customerName and offering are required.' } });
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'customerName and at least one offering are required.' } });
       return;
     }
+    const offerings: Offering[] = parsed.data.offerings && parsed.data.offerings.length
+      ? parsed.data.offerings
+      : [parsed.data.offering as Offering];
     const row = customerKeyRepo.create({
       customerName: parsed.data.customerName,
-      offering:     parsed.data.offering,
+      offerings,
     });
+    const rowOfferings = parseOfferings(row.offering);
     res.status(201).json({
       id:           row.id,
       key:          row.key,
       customerName: row.customer_name,
-      offering:     row.offering,
+      // Legacy single field — picks the first granted offering.
+      offering:     rowOfferings[0],
+      offerings:    rowOfferings,
       createdAt:    row.created_at,
     });
   },
@@ -892,15 +913,66 @@ export const capitaflowController = {
   adminListKeys(_req: Request, res: Response): void {
     const rows = customerKeyRepo.list();
     res.json({
-      keys: rows.map(r => ({
-        id:           r.id,
-        key:          r.key,
-        customerName: r.customer_name,
-        offering:     r.offering,
-        createdAt:    r.created_at,
-        revoked:      r.revoked === 1,
-      })),
+      keys: rows.map(r => {
+        const offerings = parseOfferings(r.offering);
+        return {
+          id:           r.id,
+          key:          r.key,
+          customerName: r.customer_name,
+          // Legacy single field — first granted offering.
+          offering:     offerings[0],
+          offerings,
+          createdAt:    r.created_at,
+          revoked:      r.revoked === 1,
+        };
+      }),
     });
+  },
+
+  /**
+   * PATCH /api/admin/customer-keys/:id
+   * Body: { offerings: ('visibility'|'capitaflow')[] }
+   *
+   * Replaces the offerings array on an existing key. Use this to flip a
+   * customer's access between offerings without minting a new key — e.g.
+   * a Visibility customer who is now also using CapitaFlow gets both
+   * offerings on the same VV-XXXXXX. Empty array is rejected (use the
+   * delete or revoke endpoints to remove access).
+   */
+  adminUpdateKeyOfferings(req: Request, res: Response): void {
+    const id = String(req.params.id || '').trim();
+    if (!id) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'id is required.' } });
+      return;
+    }
+    if (!customerKeyRepo.findById(id)) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Customer key not found.' } });
+      return;
+    }
+    const parsed = z.object({
+      offerings: z.array(z.enum(['visibility', 'capitaflow'])).min(1),
+    }).safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'offerings (non-empty array) is required.' } });
+      return;
+    }
+    try {
+      const updated = customerKeyRepo.updateOfferings(id, parsed.data.offerings);
+      if (!updated) { res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Customer key not found.' } }); return; }
+      const offerings = parseOfferings(updated.offering);
+      res.json({
+        id:           updated.id,
+        key:          updated.key,
+        customerName: updated.customer_name,
+        offering:     offerings[0],
+        offerings,
+        createdAt:    updated.created_at,
+        revoked:      updated.revoked === 1,
+      });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Update failed.';
+      res.status(400).json({ error: { code: 'UPDATE_FAILED', message: msg } });
+    }
   },
 
   // ────────────────────────────────────────────────────────────────────────────

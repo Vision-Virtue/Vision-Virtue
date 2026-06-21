@@ -11,14 +11,43 @@ import { getDb } from './database';
 
 export type Offering = 'visibility' | 'capitaflow';
 
+/** Every offering a customer key can grant — used to validate admin input
+ *  and to clean up parsed CSV values from the DB. */
+export const ALL_OFFERINGS: Offering[] = ['visibility', 'capitaflow'];
+
 export interface CustomerKeyRow {
   id: string;
   key: string;
   customer_name: string;
-  offering: Offering;
+  /** Comma-separated list of offerings the key grants, e.g. 'visibility' or
+   *  'visibility,capitaflow'. Stored as a single TEXT column for backwards
+   *  compatibility with the original single-offering schema — parsed via
+   *  parseOfferings() at every read. */
+  offering: string;
   created_at: string;
   created_by: string;
   revoked: number; // 0 | 1
+}
+
+/** Split the stored CSV value into the canonical Offering[] list, dropping
+ *  any unknown / blank entries. Order-preserving + deduped. */
+export function parseOfferings(stored: string | null | undefined): Offering[] {
+  if (!stored) return [];
+  const seen = new Set<Offering>();
+  for (const raw of String(stored).split(',')) {
+    const v = raw.trim().toLowerCase();
+    if (v === 'visibility' || v === 'capitaflow') seen.add(v as Offering);
+  }
+  return Array.from(seen);
+}
+
+/** Inverse of parseOfferings — dedupes + filters + joins back to CSV. */
+export function serializeOfferings(list: Offering[]): string {
+  const dedup: Offering[] = [];
+  for (const o of list) {
+    if ((o === 'visibility' || o === 'capitaflow') && !dedup.includes(o)) dedup.push(o);
+  }
+  return dedup.join(',');
 }
 
 export interface CapitaFlowSubmissionRow {
@@ -49,14 +78,16 @@ export interface CapitaFlowSubmission {
 
 export const customerKeyRepo = {
   /** Look up an active (non-revoked) key. Returns null if missing or revoked.
-   *  Pass `offering` to require the key was minted for that specific offering;
-   *  omit it for endpoints that need to accept either (legacy / admin paths). */
+   *  Pass `offering` to require the key grants access to that specific
+   *  offering; omit it for endpoints that need to accept any (legacy /
+   *  admin paths). A single key can grant multiple offerings — the column
+   *  stores a CSV list, parsed via parseOfferings(). */
   findByKey(key: string, offering?: Offering): CustomerKeyRow | null {
     const row = getDb()
       .prepare('SELECT * FROM customer_keys WHERE key = ?')
       .get(key) as CustomerKeyRow | undefined;
     if (!row || row.revoked === 1) return null;
-    if (offering && row.offering !== offering) return null;
+    if (offering && !parseOfferings(row.offering).includes(offering)) return null;
     return row;
   },
 
@@ -67,18 +98,26 @@ export const customerKeyRepo = {
     return row ?? null;
   },
 
-  /** Create a new key with a generated VV-XXXX value, scoped to one offering. */
-  create(input: { customerName: string; offering: Offering; createdBy?: string; key?: string }): CustomerKeyRow {
+  /** Create a new key. `offerings` is the array of offerings this key
+   *  grants access to; at least one must be provided. */
+  create(input: {
+    customerName: string;
+    offerings: Offering[];
+    createdBy?: string;
+    key?: string;
+  }): CustomerKeyRow {
     const id = uuidv4();
     const key = input.key || generateKey();
     const createdAt = new Date().toISOString();
     const createdBy = input.createdBy || 'admin';
+    const offeringCsv = serializeOfferings(input.offerings);
+    if (!offeringCsv) throw new Error('At least one offering is required.');
     getDb()
       .prepare(
         `INSERT INTO customer_keys (id, key, customer_name, offering, created_at, created_by, revoked)
          VALUES (?, ?, ?, ?, ?, ?, 0)`,
       )
-      .run(id, key, input.customerName, input.offering, createdAt, createdBy);
+      .run(id, key, input.customerName, offeringCsv, createdAt, createdBy);
     return this.findById(id) as CustomerKeyRow;
   },
 
@@ -86,6 +125,18 @@ export const customerKeyRepo = {
     return getDb()
       .prepare('SELECT * FROM customer_keys ORDER BY created_at DESC')
       .all() as CustomerKeyRow[];
+  },
+
+  /** Replace the offerings array on an existing key. Throws if the new list
+   *  is empty (an active key must grant at least one offering — to remove
+   *  all access, use revoke() or delete()). */
+  updateOfferings(id: string, offerings: Offering[]): CustomerKeyRow | null {
+    const offeringCsv = serializeOfferings(offerings);
+    if (!offeringCsv) throw new Error('At least one offering is required.');
+    getDb()
+      .prepare('UPDATE customer_keys SET offering = ? WHERE id = ?')
+      .run(offeringCsv, id);
+    return this.findById(id);
   },
 
   revoke(id: string): void {

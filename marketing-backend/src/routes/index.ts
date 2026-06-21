@@ -542,6 +542,11 @@ router.get(
   requireAdminPin,
   (req, res) => capitaflowController.adminListKeys(req, res),
 );
+router.patch(
+  '/admin/customer-keys/:id',
+  requireAdminPin,
+  (req, res) => capitaflowController.adminUpdateKeyOfferings(req, res),
+);
 router.delete(
   '/admin/customer-keys/:id',
   requireAdminPin,
