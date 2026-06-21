@@ -20,23 +20,16 @@ export class LinkedInService {
   // ── OAuth ─────────────────────────────────────────────────────────────────────
 
   getAuthorizationUrl(state: string): string {
-    // Default Tier (no approval):
-    //   openid + profile     — "Sign In with LinkedIn using OpenID Connect"
-    //   w_member_social      — "Share on LinkedIn" (legacy fallback: personal posting)
+    // App 241290093 has Community Management API approved (2026-06-21) and
+    // LinkedIn forbids any other product on the same app once CMA is added,
+    // so we can only request CMA scopes here. openid/profile/w_member_social
+    // would 400 with invalid_scope.
     //
-    // Community Management API (requires LinkedIn approval — granted to app
-    // 241290093 on 2026-06-21):
     //   w_organization_social — Post on the V&V company page
     //   r_organization_social — Read company-page posts / engagement data
-    //   r_organization_admin  — Read company-page admin metadata (name, logo, etc.)
+    //   r_organization_admin  — Read company-page admin metadata
     //   rw_organization_admin — Update company-page admin metadata
-    //
-    // The org scopes are skipped automatically if the app doesn't yet have
-    // the Community Management product approved — LinkedIn silently drops
-    // unrequestable scopes from the consent screen rather than 400ing.
     const scopes = [
-      'openid', 'profile',
-      'w_member_social',
       'r_organization_admin',
       'rw_organization_admin',
       'r_organization_social',
