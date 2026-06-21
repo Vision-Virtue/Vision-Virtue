@@ -104,10 +104,11 @@ export class LinkedInService {
     const envUrn = process.env.LINKEDIN_PERSON_URN;
     if (envUrn) return envUrn;
 
-    throw this.mapLinkedInError(
-      new Error('Could not determine LinkedIn person URN. Set LINKEDIN_PERSON_URN in Render env vars.'),
-      'getPersonUrn',
-    );
+    // No personal URN obtainable. Return empty — caller stores '' on the
+    // account row and posts use the organization URN instead. Only the
+    // legacy "post as Raphael" path needs the person URN; org-page posting
+    // (the new default) is unaffected.
+    return '';
   }
 
   async exchangeCodeForToken(code: string): Promise<LinkedInAccount> {
@@ -133,7 +134,14 @@ export class LinkedInService {
       };
 
       const expiresAt = Date.now() + data.expires_in * 1000;
-      const personUrn = await this.getPersonUrn(data.access_token);
+      // Best-effort person URN: useful for legacy personal posting and for
+      // logging who authorized. Posting on the V&V page never depends on it.
+      let personUrn = '';
+      try {
+        personUrn = await this.getPersonUrn(data.access_token);
+      } catch (err) {
+        console.warn('[AUTH] person URN lookup failed (non-fatal):', (err as Error).message);
+      }
 
       return {
         id: uuidv4(),
