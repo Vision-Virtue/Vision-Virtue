@@ -565,17 +565,23 @@ export class ContentController {
       console.warn('[TOKEN] introspection failed:', (e as Error).message);
     }
 
-    // Use personal posting (Share on LinkedIn — available now) until LinkedIn
-    // approves the Community Management API. Then switch to:
-    //   urn:li:organization:${token.organization_id || process.env.LINKEDIN_ORGANIZATION_ID}
-    const authorUrn = token.person_urn ||
-      (token.organization_id ? `urn:li:organization:${token.organization_id}` : '');
+    // Publish on Vision & Virtue's company page (Community Management API,
+    // approved on app 241290093 / 2026-06-21). Org URN comes from the
+    // stored token first, then the LINKEDIN_ORGANIZATION_ID env var. Falls
+    // back to personal posting only if no org id is configured at all —
+    // useful when re-connecting an old token before the env var is set,
+    // and for local dev against a personal LinkedIn app.
+    const orgId = token.organization_id || process.env.LINKEDIN_ORGANIZATION_ID || '';
+    const authorUrn = orgId
+      ? `urn:li:organization:${orgId}`
+      : (token.person_urn || '');
     if (!authorUrn) {
       res.status(400).json({
-        error: { code: 'NO_AUTHOR_URN', message: 'LinkedIn account has no person URN — please reconnect LinkedIn.' },
+        error: { code: 'NO_AUTHOR_URN', message: 'No author URN — set LINKEDIN_ORGANIZATION_ID or reconnect LinkedIn.' },
       });
       return;
     }
+    console.log(`[PUBLISH] author resolution: orgId=${orgId || '(none)'} person_urn=${token.person_urn || '(none)'} → ${authorUrn}`);
 
     const errors: string[] = [];
     let hebrewPostId: string | undefined;

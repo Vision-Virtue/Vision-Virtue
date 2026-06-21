@@ -20,10 +20,28 @@ export class LinkedInService {
   // ── OAuth ─────────────────────────────────────────────────────────────────────
 
   getAuthorizationUrl(state: string): string {
-    // openid + profile: "Sign In with LinkedIn using OpenID Connect" (Default Tier, no approval)
-    // w_member_social:  "Share on LinkedIn" (Default Tier, no approval)
-    // Together they let us get the correct member sub from /v2/userinfo for posting.
-    const scopes = ['openid', 'profile', 'w_member_social'].join(' ');
+    // Default Tier (no approval):
+    //   openid + profile     — "Sign In with LinkedIn using OpenID Connect"
+    //   w_member_social      — "Share on LinkedIn" (legacy fallback: personal posting)
+    //
+    // Community Management API (requires LinkedIn approval — granted to app
+    // 241290093 on 2026-06-21):
+    //   w_organization_social — Post on the V&V company page
+    //   r_organization_social — Read company-page posts / engagement data
+    //   r_organization_admin  — Read company-page admin metadata (name, logo, etc.)
+    //   rw_organization_admin — Update company-page admin metadata
+    //
+    // The org scopes are skipped automatically if the app doesn't yet have
+    // the Community Management product approved — LinkedIn silently drops
+    // unrequestable scopes from the consent screen rather than 400ing.
+    const scopes = [
+      'openid', 'profile',
+      'w_member_social',
+      'r_organization_admin',
+      'rw_organization_admin',
+      'r_organization_social',
+      'w_organization_social',
+    ].join(' ');
 
     const params = new URLSearchParams({
       response_type: 'code',
