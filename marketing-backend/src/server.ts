@@ -5,6 +5,7 @@ import v8 from 'v8';
 import app from './app';
 import { getDb, closeDb } from './db/database';
 import { verifyEncryptionKey } from './db/encryption';
+import { runAutoMigrations, logMigrationSummary } from './migrations/autoMigrate';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
@@ -28,6 +29,17 @@ async function start(): Promise<void> {
     } catch (err) {
       console.error('[SERVER] Encryption key verification failed:', err);
       process.exit(1);
+    }
+
+    // Run auto-migrations: hash existing customer/investor keys, encrypt
+    // existing salary/budget/CF cleartext rows. Idempotent — only acts on
+    // rows that haven't been migrated yet. Skip if key isn't set
+    // (cleartext-only mode in dev).
+    try {
+      const summary = await runAutoMigrations();
+      logMigrationSummary(summary, (m) => console.log(`[SERVER] ${m}`));
+    } catch (err) {
+      console.error('[SERVER] WARNING: auto-migration failed (server will continue):', err);
     }
   } else {
     console.warn('[SERVER] WARNING: DATA_ENCRYPTION_KEY is not set — sensitive columns will be stored in cleartext.');
