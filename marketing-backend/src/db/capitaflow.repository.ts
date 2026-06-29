@@ -6,6 +6,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes } from 'crypto';
 import { getDb } from './database';
+import { hashKey, verifyKey, keyDisplayPrefix, isHashed } from './keyHash';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -17,12 +18,16 @@ export const ALL_OFFERINGS: Offering[] = ['visibility', 'capitaflow'];
 
 export interface CustomerKeyRow {
   id: string;
+  /** Legacy cleartext key column. Kept during the hash migration so existing
+   *  customers stay logged in. New keys write '' here. After backfill +
+   *  verification, the column will be dropped. */
   key: string;
+  /** scrypt hash of the key (preferred lookup). Empty until migration runs
+   *  on this row. Format: "scrypt:<salt_b64>:<hash_b64>". */
+  key_hash: string;
+  /** Non-secret display prefix ("VV-AB12••••") for admin UIs. */
+  key_prefix: string;
   customer_name: string;
-  /** Comma-separated list of offerings the key grants, e.g. 'visibility' or
-   *  'visibility,capitaflow'. Stored as a single TEXT column for backwards
-   *  compatibility with the original single-offering schema — parsed via
-   *  parseOfferings() at every read. */
   offering: string;
   created_at: string;
   created_by: string;
@@ -77,11 +82,11 @@ export interface CapitaFlowSubmission {
 // ─── Customer Keys ────────────────────────────────────────────────────────────
 
 export const customerKeyRepo = {
-  /** Look up an active (non-revoked) key. Returns null if missing or revoked.
-   *  Pass `offering` to require the key grants access to that specific
-   *  offering; omit it for endpoints that need to accept any (legacy /
-   *  admin paths). A single key can grant multiple offerings — the column
-   *  stores a CSV list, parsed via parseOfferings(). */
+  /** Legacy synchronous lookup — tries the cleartext `key` column first.
+   *  Use `findByKeyAsync` for the hash-aware path going forward. This
+   *  remains for existing endpoints that aren't yet awaiting; once all
+   *  rows have key_hash populated (post-backfill) and call sites are
+   *  awaiting, this will be removed and the `key` column dropped. */
   findByKey(key: string, offering?: Offering): CustomerKeyRow | null {
     const row = getDb()
       .prepare('SELECT * FROM customer_keys WHERE key = ?')
@@ -91,6 +96,34 @@ export const customerKeyRepo = {
     return row;
   },
 
+  /** Hash-aware lookup. Iterates active rows + verifies scrypt hash in
+   *  constant time per row. For <1000 active keys this is <50ms total —
+   *  fine for the V&V customer base. Past that, switch to an HMAC index
+   *  column for O(1) lookup. */
+  async findByKeyAsync(key: string, offering?: Offering): Promise<CustomerKeyRow | null> {
+    // Try fast path first: legacy cleartext match (still in DB during transition)
+    const legacy = getDb()
+      .prepare('SELECT * FROM customer_keys WHERE key = ? AND revoked = 0')
+      .get(key) as CustomerKeyRow | undefined;
+    if (legacy) {
+      if (offering && !parseOfferings(legacy.offering).includes(offering)) return null;
+      return legacy;
+    }
+    // Slow path: iterate hashed rows and verify
+    const rows = getDb()
+      .prepare(`SELECT * FROM customer_keys WHERE revoked = 0 AND key_hash != ''`)
+      .all() as CustomerKeyRow[];
+    for (const row of rows) {
+      // eslint-disable-next-line no-await-in-loop
+      const ok = await verifyKey(key, row.key_hash);
+      if (ok) {
+        if (offering && !parseOfferings(row.offering).includes(offering)) return null;
+        return row;
+      }
+    }
+    return null;
+  },
+
   findById(id: string): CustomerKeyRow | null {
     const row = getDb()
       .prepare('SELECT * FROM customer_keys WHERE id = ?')
@@ -98,9 +131,39 @@ export const customerKeyRepo = {
     return row ?? null;
   },
 
-  /** Create a new key. `offerings` is the array of offerings this key
-   *  grants access to; at least one must be provided. */
-  create(input: {
+  /** Create a new key. Writes the cleartext `key` column AND `key_hash` so
+   *  both lookup paths work during the migration. Once verified, `create`
+   *  will switch to hash-only (set `key = ''`).
+   *
+   *  Returns the row + the cleartext key (only available on creation —
+   *  callers must display/email this to the customer immediately because
+   *  the system can never recover it later from the DB). */
+  async create(input: {
+    customerName: string;
+    offerings: Offering[];
+    createdBy?: string;
+    key?: string;
+  }): Promise<{ row: CustomerKeyRow; cleartextKey: string }> {
+    const id = uuidv4();
+    const key = input.key || generateKey();
+    const createdAt = new Date().toISOString();
+    const createdBy = input.createdBy || 'admin';
+    const offeringCsv = serializeOfferings(input.offerings);
+    if (!offeringCsv) throw new Error('At least one offering is required.');
+    const keyHashStr = await hashKey(key);
+    const keyPrefix = keyDisplayPrefix(key);
+    getDb()
+      .prepare(
+        `INSERT INTO customer_keys (id, key, key_hash, key_prefix, customer_name, offering, created_at, created_by, revoked)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      )
+      .run(id, key, keyHashStr, keyPrefix, input.customerName, offeringCsv, createdAt, createdBy);
+    return { row: this.findById(id) as CustomerKeyRow, cleartextKey: key };
+  },
+
+  /** Legacy synchronous create — preserves existing call sites. Writes
+   *  cleartext only. Prefer the async create() above for new code. */
+  createSync(input: {
     customerName: string;
     offerings: Offering[];
     createdBy?: string;
@@ -112,12 +175,13 @@ export const customerKeyRepo = {
     const createdBy = input.createdBy || 'admin';
     const offeringCsv = serializeOfferings(input.offerings);
     if (!offeringCsv) throw new Error('At least one offering is required.');
+    const keyPrefix = keyDisplayPrefix(key);
     getDb()
       .prepare(
-        `INSERT INTO customer_keys (id, key, customer_name, offering, created_at, created_by, revoked)
-         VALUES (?, ?, ?, ?, ?, ?, 0)`,
+        `INSERT INTO customer_keys (id, key, key_hash, key_prefix, customer_name, offering, created_at, created_by, revoked)
+         VALUES (?, ?, '', ?, ?, ?, ?, ?, 0)`,
       )
-      .run(id, key, input.customerName, offeringCsv, createdAt, createdBy);
+      .run(id, key, keyPrefix, input.customerName, offeringCsv, createdAt, createdBy);
     return this.findById(id) as CustomerKeyRow;
   },
 

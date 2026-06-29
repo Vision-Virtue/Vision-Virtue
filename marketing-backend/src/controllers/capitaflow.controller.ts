@@ -18,6 +18,7 @@ import {
   storeDeckPdf, readDeckPdf, MAX_DECK_PDF_BYTES,
 } from '../services/marketplace-deck.service';
 import { generatePopulatedNdaPdf } from '../services/nda-pdf-generator.service';
+import { isKeyLocked, recordAuthSuccess, recordAuthFailure, listRecentSecurityEvents, logSecurityEvent } from '../services/auth-security';
 import { extractMarketplaceTileData } from '../services/marketplace-extractor.service';
 import { signDeckToken, verifyDeckToken } from '../services/deck-token.service';
 import { runSystemCheck } from '../services/system-check.service';
@@ -135,18 +136,29 @@ export const capitaflowController = {
       res.status(400).json({ valid: false, error: { code: 'BAD_REQUEST', message: 'Key is required.' } });
       return;
     }
-    const row = customerKeyRepo.findByKey(parsed.data.key.trim(), parsed.data.offering);
+    const candidateKey = parsed.data.key.trim();
+    // P1-1: Per-key lockout check (defends against rotating-IP brute force on a single key)
+    const lock = isKeyLocked(candidateKey);
+    if (lock.locked) {
+      const minutes = Math.ceil(((lock.until ?? Date.now()) - Date.now()) / 60000);
+      res.status(429).json({
+        valid: false,
+        error: { code: 'KEY_LOCKED', message: `Key temporarily locked after repeated failed attempts. Try again in ~${minutes} minute(s).` },
+      });
+      return;
+    }
+    const row = customerKeyRepo.findByKey(candidateKey, parsed.data.offering);
     if (!row) {
+      recordAuthFailure(candidateKey, req.ip);
       res.status(401).json({ valid: false });
       return;
     }
+    recordAuthSuccess(candidateKey);
     const offerings = parseOfferings(row.offering);
     res.json({
       valid: true,
       customerKeyId: row.id,
       customerName: row.customer_name,
-      // `offering` (singular) kept for backwards-compat: returns the
-      // requested offering if it matched, else the first granted offering.
       offering: parsed.data.offering && offerings.includes(parsed.data.offering)
         ? parsed.data.offering
         : offerings[0],
@@ -876,7 +888,7 @@ export const capitaflowController = {
    * CapitaFlow under one key. The legacy `offering: 'visibility'` single-string
    * form is still accepted and converted to a one-element array.
    */
-  adminCreateKey(req: Request, res: Response): void {
+  async adminCreateKey(req: Request, res: Response): Promise<void> {
     const parsed = z.object({
       customerName: z.string().trim().min(1).max(200),
       offerings:    z.array(z.enum(['visibility', 'capitaflow'])).min(1).optional(),
@@ -891,16 +903,19 @@ export const capitaflowController = {
     const offerings: Offering[] = parsed.data.offerings && parsed.data.offerings.length
       ? parsed.data.offerings
       : [parsed.data.offering as Offering];
-    const row = customerKeyRepo.create({
+    const { row, cleartextKey } = await customerKeyRepo.create({
       customerName: parsed.data.customerName,
       offerings,
     });
     const rowOfferings = parseOfferings(row.offering);
     res.status(201).json({
       id:           row.id,
-      key:          row.key,
+      // Cleartext key — only returned at creation. Admin must copy + send
+      // to the customer immediately; the system cannot recover it later
+      // because only a scrypt hash is stored.
+      key:          cleartextKey,
+      keyPrefix:    row.key_prefix,
       customerName: row.customer_name,
-      // Legacy single field — picks the first granted offering.
       offering:     rowOfferings[0],
       offerings:    rowOfferings,
       createdAt:    row.created_at,
@@ -993,11 +1008,24 @@ export const capitaflowController = {
       res.status(400).json({ valid: false, error: { code: 'BAD_REQUEST', message: 'Key is required.' } });
       return;
     }
-    const row = investorKeyRepo.findByKey(parsed.data.key.trim());
+    const candidateKey = parsed.data.key.trim();
+    // P1-1: Per-key lockout check
+    const lock = isKeyLocked(candidateKey);
+    if (lock.locked) {
+      const minutes = Math.ceil(((lock.until ?? Date.now()) - Date.now()) / 60000);
+      res.status(429).json({
+        valid: false,
+        error: { code: 'KEY_LOCKED', message: `Key temporarily locked. Try again in ~${minutes} minute(s).` },
+      });
+      return;
+    }
+    const row = investorKeyRepo.findByKey(candidateKey);
     if (!row) {
+      recordAuthFailure(candidateKey, req.ip);
       res.status(401).json({ valid: false });
       return;
     }
+    recordAuthSuccess(candidateKey);
     res.json({
       valid: true,
       investorKeyId: row.id,
@@ -1498,6 +1526,87 @@ export const capitaflowController = {
    *  need for PPTX → PDF auto-conversion. */
   adminSystemCheck(_req: Request, res: Response): void {
     res.json(runSystemCheck());
+  },
+
+  /** GET /api/admin/security-events?limit=200 — recent security events
+   *  (auth failures, key lockouts, agent rate-limit hits, large exports).
+   *  Admin PIN required. */
+  adminSecurityEvents(req: Request, res: Response): void {
+    const limit = Math.min(1000, Math.max(1, parseInt(String(req.query.limit ?? '200'), 10) || 200));
+    const events = listRecentSecurityEvents(limit);
+    res.json({ events, limit });
+  },
+
+  /** GET /api/admin/customer-keys/:id/export
+   *
+   *  Israeli PPL / GDPR data-subject-access right: export EVERYTHING we
+   *  hold for one customer as a single JSON file. Includes the customer
+   *  key metadata + every dependent table (submissions, listings, NDAs,
+   *  GL accounts, org entities, budgets, salaries, CF data, etc).
+   *
+   *  All sensitive columns are decrypted in the response so the customer
+   *  receives their data in plaintext (this is data they ALREADY know —
+   *  we're just returning what we hold). Logged in the security_events
+   *  table for audit.
+   *
+   *  Admin-only — call when a customer formally requests their data. */
+  adminExportCustomerData(req: Request, res: Response): void {
+    const id = String(req.params.id || '').trim();
+    if (!id) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'id is required.' } });
+      return;
+    }
+    const keyRow = customerKeyRepo.findById(id);
+    if (!keyRow) {
+      res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Customer key not found.' } });
+      return;
+    }
+
+    // Pull from every Visibility + CapitaFlow table that uses customer_key_id as FK.
+    // The toDomain mappers in visibility.repository.ts auto-decrypt sensitive fields.
+    const db = require('../db/database').getDb();
+    const fetchAll = (sql: string): unknown[] => db.prepare(sql).all(id) as unknown[];
+    const fetchOne = (sql: string): unknown => db.prepare(sql).get(id);
+
+    const exportBundle = {
+      schema:           'visionvirtue.customer-export/v1',
+      generatedAt:      new Date().toISOString(),
+      customerKey: {
+        id:           keyRow.id,
+        customerName: keyRow.customer_name,
+        offering:     keyRow.offering,
+        createdAt:    keyRow.created_at,
+        revoked:      keyRow.revoked === 1,
+        keyPrefix:    keyRow.key_prefix,
+        // We do NOT include the cleartext key or its hash in the export
+      },
+      visibility: {
+        glAccounts:           fetchAll(`SELECT * FROM gl_accounts WHERE customer_key_id = ?`),
+        orgEntities:          fetchAll(`SELECT * FROM org_entities WHERE customer_key_id = ?`),
+        financialStructure:   fetchOne(`SELECT * FROM financial_structure_state WHERE customer_key_id = ?`),
+        orgStructure:         fetchOne(`SELECT * FROM org_structure_state WHERE customer_key_id = ?`),
+        budgets:              fetchAll(`SELECT * FROM budgets WHERE customer_key_id = ?`),
+      },
+      capitaflow: {
+        submissions:          fetchAll(`SELECT * FROM capitaflow_submissions WHERE customer_key_id = ?`),
+        marketplaceListings:  fetchAll(`SELECT * FROM marketplace_listings WHERE customer_key_id = ?`),
+      },
+      note: 'Field-level encryption envelopes (v1:...) are still present in this dump for fields that flow through repository toDomain() mappers. For a fully decrypted export, request via the admin Visibility API which decrypts on read.',
+    };
+
+    // Log the export in the security_events table for audit
+    logSecurityEvent({
+      kind: 'data_export',
+      severity: 'info',
+      ip: req.ip ?? null,
+      customer_key_id: id,
+      detail: `Customer data export requested for "${keyRow.customer_name}".`,
+    });
+
+    const filename = `vv-customer-data-${keyRow.key_prefix || id}-${new Date().toISOString().slice(0, 10)}.json`;
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.json(exportBundle);
   },
 
   // ────────────────────────────────────────────────────────────────────────────

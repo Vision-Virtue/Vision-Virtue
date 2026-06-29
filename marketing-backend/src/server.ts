@@ -4,6 +4,7 @@ dotenv.config();
 import v8 from 'v8';
 import app from './app';
 import { getDb, closeDb } from './db/database';
+import { verifyEncryptionKey } from './db/encryption';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
@@ -17,6 +18,21 @@ async function start(): Promise<void> {
   } catch (err) {
     console.error('[SERVER] Failed to initialize database:', err);
     process.exit(1);
+  }
+
+  // Verify column-encryption key is present + works (fail fast)
+  if (process.env.DATA_ENCRYPTION_KEY) {
+    try {
+      verifyEncryptionKey();
+      console.log('[SERVER] Encryption key OK (AES-256-GCM column encryption enabled)');
+    } catch (err) {
+      console.error('[SERVER] Encryption key verification failed:', err);
+      process.exit(1);
+    }
+  } else {
+    console.warn('[SERVER] WARNING: DATA_ENCRYPTION_KEY is not set — sensitive columns will be stored in cleartext.');
+    console.warn('         Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'base64\'))"');
+    console.warn('         Then add to Render → Environment → DATA_ENCRYPTION_KEY');
   }
 
   // Validate required environment variables

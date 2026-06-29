@@ -27,6 +27,15 @@ services:
         sync: false
       - key: SESSION_SECRET
         generateValue: true
+      # Customer-data column encryption key (AES-256-GCM). Render auto-generates
+      # a strong value on first deploy. 32 bytes base64-encoded. Rotating
+      # requires re-encrypting all sensitive columns — see src/db/encryption.ts.
+      - key: DATA_ENCRYPTION_KEY
+        generateValue: true
+      # Backup encryption key — held separately so a Render disk compromise
+      # cannot decrypt off-site backups too.
+      - key: BACKUP_ENCRYPTION_KEY
+        generateValue: true
       - key: DB_PATH
         value: /data/marketing.db
       - key: LINKEDIN_CLIENT_ID

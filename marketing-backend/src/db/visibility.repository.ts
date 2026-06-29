@@ -5,6 +5,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { getDb } from './database';
+import { encryptString, decryptString, encryptNumber, decryptNumber } from './encryption';
 
 export interface GLAccountRow {
   id: string;
@@ -419,8 +420,9 @@ function toBudgetLineDomain(r: DbBudgetLineRow): BudgetLineRow {
     id:                  r.id,
     budgetId:            r.budget_id,
     companyId:           r.company_id,
-    serviceProviderName: r.service_provider_name,
-    serviceDescription:  r.service_description,
+    // P1-2: decrypt sensitive vendor / description at read
+    serviceProviderName: decryptString(r.service_provider_name) ?? '',
+    serviceDescription:  decryptString(r.service_description) ?? '',
     divisionId:          r.division_id,
     departmentId:        r.department_id,
     productId:           r.product_id,
@@ -583,8 +585,9 @@ export const budgetLineRepo = {
     const vals: Array<string | null> = [];
     const norm = (v: string | null | undefined): string | null => (v === '' || v == null ? null : v);
     if (fields.companyId           !== undefined) { sets.push('company_id = ?');             vals.push(norm(fields.companyId)); }
-    if (fields.serviceProviderName !== undefined) { sets.push('service_provider_name = ?');  vals.push(fields.serviceProviderName); }
-    if (fields.serviceDescription  !== undefined) { sets.push('service_description = ?');    vals.push(fields.serviceDescription); }
+    // P1-2: encrypt vendor + description at rest
+    if (fields.serviceProviderName !== undefined) { sets.push('service_provider_name = ?');  vals.push(encryptString(fields.serviceProviderName) ?? ''); }
+    if (fields.serviceDescription  !== undefined) { sets.push('service_description = ?');    vals.push(encryptString(fields.serviceDescription) ?? ''); }
     if (fields.divisionId          !== undefined) { sets.push('division_id = ?');            vals.push(norm(fields.divisionId)); }
     if (fields.departmentId        !== undefined) { sets.push('department_id = ?');          vals.push(norm(fields.departmentId)); }
     if (fields.productId           !== undefined) { sets.push('product_id = ?');             vals.push(norm(fields.productId)); }
@@ -700,29 +703,38 @@ interface DbSalariesRow {
   id: string;
   budget_id: string;
   company_id: string | null;
+  /** AES-256-GCM encrypted envelope (or legacy cleartext during transition). */
   employee_name: string;
   division_id: string | null;
   department_id: string | null;
   product_id: string | null;
   activity_id: string | null;
   product_activity_pct: number;
-  monthly_salary: number;
+  /** Stored as TEXT — encrypted envelope of the salary number. Legacy
+   *  rows may still hold REAL numbers; decryptNumber() handles both. */
+  monthly_salary: string | number;
   gl_account_id: string | null;
   order_index: number;
 }
 
 function toSalariesDomain(r: DbSalariesRow): SalariesRow {
+  // Decrypt sensitive fields on read. Legacy cleartext rows pass through
+  // unchanged thanks to the prefix check in decryptString/decryptNumber.
+  const empName = typeof r.employee_name === 'string' ? (decryptString(r.employee_name) ?? '') : '';
+  const salary  = typeof r.monthly_salary === 'string'
+    ? (decryptNumber(r.monthly_salary) ?? 0)
+    : (typeof r.monthly_salary === 'number' ? r.monthly_salary : 0);
   return {
     id:                  r.id,
     budgetId:            r.budget_id,
     companyId:           r.company_id,
-    employeeName:        r.employee_name,
+    employeeName:        empName,
     divisionId:          r.division_id,
     departmentId:        r.department_id,
     productId:           r.product_id,
     activityId:          r.activity_id,
     productActivityPct:  r.product_activity_pct,
-    monthlySalary:       r.monthly_salary,
+    monthlySalary:       salary,
     glAccountId:         r.gl_account_id,
     orderIndex:          r.order_index,
   };
@@ -782,13 +794,14 @@ export const salariesRowRepo = {
       .run(
         id, budgetId,
         seed?.companyId ?? null,
-        seed?.employeeName ?? '',
+        // P0-3: encrypt sensitive employee name + salary at rest
+        encryptString(seed?.employeeName ?? '') ?? '',
         seed?.divisionId ?? null,
         seed?.departmentId ?? null,
         seed?.productId ?? null,
         seed?.activityId ?? null,
         seed?.productActivityPct ?? 0,
-        seed?.monthlySalary ?? 0,
+        encryptNumber(seed?.monthlySalary ?? 0) ?? '0',
         seed?.glAccountId ?? null,
         insertAt, now, now,
       );
@@ -809,13 +822,14 @@ export const salariesRowRepo = {
     const sets: string[] = [];
     const vals: Array<string | number | null> = [];
     if (fields.companyId           !== undefined) { sets.push('company_id = ?');            vals.push(norm(fields.companyId)); }
-    if (fields.employeeName        !== undefined) { sets.push('employee_name = ?');         vals.push(fields.employeeName); }
+    // P0-3: encrypt sensitive employee name + salary at rest
+    if (fields.employeeName        !== undefined) { sets.push('employee_name = ?');         vals.push(encryptString(fields.employeeName) ?? ''); }
     if (fields.divisionId          !== undefined) { sets.push('division_id = ?');           vals.push(norm(fields.divisionId)); }
     if (fields.departmentId        !== undefined) { sets.push('department_id = ?');         vals.push(norm(fields.departmentId)); }
     if (fields.productId           !== undefined) { sets.push('product_id = ?');            vals.push(norm(fields.productId)); }
     if (fields.activityId          !== undefined) { sets.push('activity_id = ?');           vals.push(norm(fields.activityId)); }
     if (fields.productActivityPct  !== undefined) { sets.push('product_activity_pct = ?');  vals.push(fields.productActivityPct); }
-    if (fields.monthlySalary       !== undefined) { sets.push('monthly_salary = ?');        vals.push(fields.monthlySalary); }
+    if (fields.monthlySalary       !== undefined) { sets.push('monthly_salary = ?');        vals.push(encryptNumber(fields.monthlySalary) ?? '0'); }
     if (fields.glAccountId         !== undefined) { sets.push('gl_account_id = ?');         vals.push(norm(fields.glAccountId)); }
     if (sets.length === 0) return this.getById(id);
     sets.push('updated_at = ?');
@@ -1138,7 +1152,8 @@ function toPayablesRowDomain(r: DbCfPayablesRow): CfPayablesRow {
     plSection:           r.pl_section,
     budgetCategory:      r.budget_category,
     glAccountId:         r.gl_account_id,
-    serviceProviderName: r.service_provider_name,
+    // P1-2: decrypt vendor name at read
+    serviceProviderName: r.service_provider_name == null ? null : (decryptString(r.service_provider_name) ?? null),
     paymentTerm:         r.payment_term,
     orderIndex:          r.order_index,
   };
@@ -1319,7 +1334,8 @@ function toReceivablesRowDomain(r: DbCfReceivablesRow): CfReceivablesRow {
     plSection:      r.pl_section,
     budgetCategory: r.budget_category,
     glAccountId:    r.gl_account_id,
-    customerName:   r.customer_name,
+    // P1-2: decrypt customer name at read
+    customerName:   r.customer_name == null ? null : (decryptString(r.customer_name) ?? null),
     paymentTerm:    r.payment_term,
     orderIndex:     r.order_index,
   };

@@ -552,6 +552,13 @@ router.delete(
   requireAdminPin,
   (req, res) => capitaflowController.adminDeleteCustomerKey(req, res),
 );
+// Data subject rights (Israeli PPL / GDPR): export everything for one customer
+// as a single JSON file. Admin-only, requires admin PIN.
+router.get(
+  '/admin/customer-keys/:id/export',
+  requireAdminPin,
+  (req, res) => capitaflowController.adminExportCustomerData(req, res),
+);
 
 // Admin diagnostic: confirms libreoffice (and other optional system deps)
 // are actually available in the Render image.
@@ -559,6 +566,14 @@ router.get(
   '/admin/system-check',
   requireAdminPin,
   (req, res) => capitaflowController.adminSystemCheck(req, res),
+);
+
+// Admin security: recent auth failures, lockouts, agent rate-limit hits,
+// data-export volume anomalies. Backed by the security_events table.
+router.get(
+  '/admin/security-events',
+  requireAdminPin,
+  (req, res) => capitaflowController.adminSecurityEvents(req, res),
 );
 
 // ─── Admin: Investor Keys (Investors Marketplace) ────────────────────────────

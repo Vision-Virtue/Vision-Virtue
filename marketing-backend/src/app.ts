@@ -98,12 +98,14 @@ app.use(
   }),
 );
 
-// Stricter limit on customer key auth (prevents key enumeration / brute-force)
+// Strict limit on customer key auth (prevents key enumeration / brute-force).
+// Tightened P1: 5 attempts / 15 min / IP (was 20). Combined with per-key
+// lockout in auth.security.ts (5 consecutive failures on a single key → 1h lock).
 app.use(
   '/api/customer/auth',
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 20,
+    max: 5,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: { code: 'RATE_LIMITED', message: 'Too many auth requests, please try again later.' } },
@@ -115,7 +117,7 @@ app.use(
   '/api/investor/auth',
   rateLimit({
     windowMs: 15 * 60 * 1000,
-    max: 20,
+    max: 5,
     standardHeaders: true,
     legacyHeaders: false,
     message: { error: { code: 'RATE_LIMITED', message: 'Too many auth requests, please try again later.' } },

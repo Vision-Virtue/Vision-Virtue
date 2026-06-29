@@ -18,6 +18,7 @@ import {
   cfoVisibilitySystemPrompt,
 } from '../agents/prompts';
 import { BraveSearchService } from './search.service';
+import { guardCustomerScope, filterOutputForLeaks, auditAICall, checkAgentRateLimit, sanitizeForPrompt } from './ai-security';
 
 const MODEL = 'claude-opus-4-7';
 const MAX_TOKENS = 8096;
@@ -268,12 +269,26 @@ export class AIService {
     message: string,
     history: Array<{ role: 'user' | 'assistant'; content: string }>,
     customerContext: Record<string, unknown>,
+    customerKeyId: string,                                 // ← now required for security guard
   ): Promise<string> {
-    const systemPrompt = cfoVisibilitySystemPrompt(customerContext);
+    // ─── Security guards (P0-4 hardening) ──────────────────────────────────
+    // 1. Per-customer scoping — fail fast if the context doesn't belong to this customer
+    const { sanitizedContext } = guardCustomerScope(customerKeyId, customerContext);
+    // 2. Per-customer rate limit — caps exfiltration via repeated Q&A
+    if (!checkAgentRateLimit(customerKeyId, 100)) {
+      throw new ApiError(429, 'Too many AI queries — please wait a few minutes and try again.', 'AI_RATE_LIMIT');
+    }
+    // 3. Sanitize the user-typed message (strip prompt-injection patterns)
+    const safeMessage = sanitizeForPrompt(message, 4000) as string;
+
+    const systemPrompt = cfoVisibilitySystemPrompt(sanitizedContext);
     const messages: Anthropic.MessageParam[] = [
-      ...history.map(h => ({ role: h.role as 'user' | 'assistant', content: h.content })),
-      { role: 'user', content: message },
+      ...history.map(h => ({ role: h.role as 'user' | 'assistant', content: sanitizeForPrompt(h.content, 4000) as string })),
+      { role: 'user', content: safeMessage },
     ];
+    const startedAt = Date.now();
+    let replyText = '';
+    let leaks: string[] = [];
     try {
       const response = await this.client.messages.create({
         model: MODEL,
@@ -285,9 +300,24 @@ export class AIService {
       if (content.type !== 'text') {
         throw new ApiError(500, 'Unexpected response type from Claude', 'AI_UNEXPECTED_RESPONSE');
       }
-      return content.text.trim();
+      replyText = content.text.trim();
+      // 4. Output filter — redact cross-tenant leaks
+      const filtered = filterOutputForLeaks(replyText, customerKeyId);
+      replyText = filtered.text;
+      leaks = filtered.leaks;
+      return replyText;
     } catch (err) {
       throw this.mapAnthropicError(err, 'CFO Visibility chat failed');
+    } finally {
+      // 5. Audit log (best-effort; never blocks)
+      auditAICall({
+        customerKeyId,
+        agent: 'cfo-visibility',
+        prompt: safeMessage,
+        reply: replyText,
+        leaksFound: leaks,
+        durationMs: Date.now() - startedAt,
+      });
     }
   }
 

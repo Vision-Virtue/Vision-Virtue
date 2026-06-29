@@ -35,7 +35,7 @@
 
   <div class="legal-header">
     <h1>Privacy Policy</h1>
-    <p>Last updated: May 2026</p>
+    <p>Last updated: June 2026</p>
   </div>
 
   <div class="legal-body">
@@ -74,12 +74,26 @@
       <li><strong>Visibility Portal data:</strong> Stored server-side solely to power the Visibility Portal's budget, cash flow, and financial planning features. This data is not shared with third parties (other than infrastructure hosting on Render, Inc.) and is not used for any purpose other than delivering the service to you.</li>
     </ul>
 
-    <h2>4. Third-Party Processors</h2>
-    <p>We share data with the following processors only to the extent necessary:</p>
+    <h2>4. Sub-Processors</h2>
+    <p>We engage the following sub-processors to deliver the Service. Each is bound by a written Data Processing Agreement (DPA) that requires equivalent security and confidentiality standards:</p>
     <ul>
-      <li><strong>Anthropic, Inc.</strong> — Processes text extracted from uploaded files and user-provided prompts via the Claude API. Data is used to generate AI responses and is subject to Anthropic's data handling policies.</li>
-      <li><strong>LinkedIn Corporation</strong> — We authenticate with LinkedIn using OAuth 2.0 to publish content. LinkedIn's use of data is governed by <a href="https://www.linkedin.com/legal/privacy-policy" target="_blank" rel="noopener">LinkedIn's Privacy Policy</a>.</li>
-      <li><strong>Render, Inc.</strong> — Our backend infrastructure provider. Data in transit is encrypted via TLS. The database is stored on an encrypted persistent disk.</li>
+      <li><strong>Anthropic, PBC</strong> (United States) — Provides the Claude Large Language Model API powering Finance AI, the Visibility CFO Agent, and Marketing AI. Text and structured customer context are sent over TLS-encrypted HTTPS to Anthropic's API. Under our commercial agreement and Anthropic's <a href="https://www.anthropic.com/legal/privacy" target="_blank" rel="noopener">Privacy Policy</a>, customer prompts and responses are <strong>not used to train models</strong>. When enabled on our tier, Zero Data Retention prevents Anthropic from logging prompt/response content. Data residency: United States.</li>
+      <li><strong>Render Services, Inc.</strong> (United States) — Hosts our backend application and SQLite database on encrypted persistent storage. Data in transit between users and Render is encrypted via TLS 1.2+. Render staff have access only as required for support under their <a href="https://render.com/dpa" target="_blank" rel="noopener">DPA</a> and SOC 2 controls. Data residency: United States.</li>
+      <li><strong>LinkedIn Corporation</strong> (United States) — Used only for the Marketing AI publishing flow. We authenticate via OAuth 2.0 and publish content to the V&amp;V company page. LinkedIn's use of data is governed by <a href="https://www.linkedin.com/legal/privacy-policy" target="_blank" rel="noopener">LinkedIn's Privacy Policy</a>.</li>
+    </ul>
+    <p>No other sub-processors are engaged. We will provide 30 days' notice before adding any new sub-processor that handles Visibility Portal customer data.</p>
+
+    <h2>4a. Security Measures (Visibility Portal)</h2>
+    <p>For customer data stored in the Visibility Portal we apply the following controls:</p>
+    <ul>
+      <li><strong>Encryption in transit:</strong> TLS 1.2+ on every API call between browser, our backend, and all sub-processors.</li>
+      <li><strong>Encryption at rest:</strong> AES-256-GCM column-level encryption on sensitive fields (employee names, salary amounts, budget descriptions, vendor names). The encryption key is held only as a Render environment variable; not in source code, version control, or backups.</li>
+      <li><strong>Customer key hashing:</strong> Customer access keys (VV-XXXXXX) are stored as scrypt hashes; the original key cannot be recovered from the database. Even a full database leak would not reveal active keys.</li>
+      <li><strong>Authentication rate limiting:</strong> Failed customer-key attempts are limited per IP and per key to defeat brute-force.</li>
+      <li><strong>AI scoping guards:</strong> Every CFO Agent call is bound to a single customer key. Cross-tenant context is rejected at the application layer, and agent responses are scanned for cross-customer leakage before being returned.</li>
+      <li><strong>Audit log:</strong> Every AI Agent prompt and response is hashed and logged with a timestamp and customer-key id, retained for 90 days, and available to the customer on request.</li>
+      <li><strong>Off-site encrypted backups:</strong> Daily backups are encrypted with a separate key and stored in a different region.</li>
+      <li><strong>Breach notification:</strong> We notify affected customers and the Israeli Privacy Protection Authority within 72 hours of confirming a personal data breach, per the Protection of Privacy Law 5741-1981.</li>
     </ul>
 
     <h2>5. Data Retention</h2>

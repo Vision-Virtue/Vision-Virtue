@@ -1773,7 +1773,23 @@ export const cfoChatController = {
     }
 
     const aiService = new AIService(new Anthropic({ apiKey }));
-    const reply = await aiService.cfoVisibilityChat(message.trim(), history, context as Record<string, unknown>);
-    res.json({ success: true, data: { reply } });
+    try {
+      // P0-4 hardening: pass customer_key_id so the AI security guard can
+      // verify scoping, rate-limit, sanitize the prompt, filter the output,
+      // and audit-log the call.
+      const reply = await aiService.cfoVisibilityChat(
+        message.trim(),
+        history,
+        { ...(context as Record<string, unknown>), customer_key_id: keyRow.id },
+        keyRow.id,
+      );
+      res.json({ success: true, data: { reply } });
+    } catch (err) {
+      if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === 'AI_RATE_LIMIT') {
+        res.status(429).json({ error: { code: 'RATE_LIMIT', message: (err as { message: string }).message } });
+        return;
+      }
+      throw err;
+    }
   },
 };

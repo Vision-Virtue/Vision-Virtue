@@ -548,6 +548,16 @@ function initializeSchema(database: Database.Database): void {
     database.exec(`ALTER TABLE customer_keys ADD COLUMN offering TEXT NOT NULL DEFAULT 'visibility'`);
   } catch { /* already exists */ }
 
+  // ─── Security hardening (2026-06-29) ──────────────────────────────────────
+  // Customer + investor keys: scrypt hash columns for at-rest protection.
+  // The `key` column stays during transition (dual-write so existing customers
+  // can still log in). After the backfill migration verifies, drop `key`.
+  // `key_prefix` is a non-secret 7-char display value ("VV-AB12") for admin UIs.
+  try { database.exec(`ALTER TABLE customer_keys ADD COLUMN key_hash TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
+  try { database.exec(`ALTER TABLE customer_keys ADD COLUMN key_prefix TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
+  try { database.exec(`ALTER TABLE investor_keys ADD COLUMN key_hash TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
+  try { database.exec(`ALTER TABLE investor_keys ADD COLUMN key_prefix TEXT NOT NULL DEFAULT ''`); } catch { /* exists */ }
+
   // Seed the VV-TEST123 customer key (idempotent) — Visibility offering.
   try {
     database
