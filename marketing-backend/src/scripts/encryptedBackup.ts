@@ -8,14 +8,15 @@
    - Off-site upload to S3 / B2 is optional and gated on BACKUP_S3_URI
      env var (which is NOT set by default — no extra payments)
 
-   Schedule via Render Cron Job:
-     0 3 * * *   node dist/scripts/encryptedBackup.js
-   (3am UTC daily; light load period)
+   Two ways to invoke:
+   1. STANDALONE SCRIPT (CLI / Render Cron Job):
+        node dist/scripts/encryptedBackup.js
+   2. IN-PROCESS (from server.ts daily scheduler):
+        import { runEncryptedBackup } from './scripts/encryptedBackup';
+        await runEncryptedBackup();
 
    To restore:
      node dist/scripts/restoreBackup.js <path-to-.enc>
-   (see restoreBackup.ts below — for now restore is a manual openssl
-   command documented in the comments)
    ============================================================ */
 
 import dotenv from 'dotenv';
@@ -28,17 +29,26 @@ import { createCipheriv, randomBytes } from 'crypto';
 const RETENTION_DAYS = 30;
 const ALGO = 'aes-256-gcm';
 
+export interface BackupResult {
+  ok: boolean;
+  path?: string;
+  srcSizeBytes?: number;
+  encSizeBytes?: number;
+  kept?: number;
+  deleted?: number;
+  s3Uploaded?: boolean;
+  durationMs: number;
+  error?: string;
+}
+
 function getBackupKey(): Buffer {
   const raw = process.env.BACKUP_ENCRYPTION_KEY;
   if (!raw) {
-    console.error('[backup] BACKUP_ENCRYPTION_KEY not set. Generate with:');
-    console.error('  node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'base64\'))"');
-    process.exit(1);
+    throw new Error('BACKUP_ENCRYPTION_KEY not set. Generate with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'base64\'))"');
   }
   const buf = Buffer.from(raw, 'base64');
   if (buf.length !== 32) {
-    console.error(`[backup] BACKUP_ENCRYPTION_KEY must decode to 32 bytes (got ${buf.length}).`);
-    process.exit(1);
+    throw new Error(`BACKUP_ENCRYPTION_KEY must decode to 32 bytes (got ${buf.length}).`);
   }
   return buf;
 }
@@ -76,15 +86,9 @@ function pruneOld(dir: string, retentionDays: number): { kept: number; deleted: 
   return { kept, deleted };
 }
 
-async function maybeUploadToS3(localPath: string): Promise<void> {
+async function maybeUploadToS3(localPath: string): Promise<boolean> {
   const s3Uri = process.env.BACKUP_S3_URI;
-  if (!s3Uri) {
-    console.log('[backup] BACKUP_S3_URI not set — skipping off-site upload.');
-    console.log('[backup] To enable off-site backup, set BACKUP_S3_URI=s3://bucket/prefix/ (requires AWS SDK + AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY).');
-    return;
-  }
-  // Lazy-load AWS SDK so the dep is optional. If user enables S3 backup later,
-  // they install @aws-sdk/client-s3 and we use it here.
+  if (!s3Uri) return false;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
@@ -95,42 +99,71 @@ async function maybeUploadToS3(localPath: string): Promise<void> {
     const client = new S3Client({});
     const body = fs.readFileSync(localPath);
     await client.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ServerSideEncryption: 'AES256' }));
-    console.log(`[backup] uploaded to s3://${bucket}/${key}`);
+    return true;
   } catch (err) {
     console.error('[backup] S3 upload failed (non-blocking):', err);
+    return false;
   }
 }
 
-async function main(): Promise<void> {
-  const dbPath = process.env.DB_PATH || './data/marketing.db';
-  if (!fs.existsSync(dbPath)) {
-    console.error(`[backup] DB file not found at ${dbPath}`);
-    process.exit(1);
+/** Public entry point — callable from either the standalone script OR from
+ *  the in-process daily scheduler in server.ts. Never throws — returns a
+ *  BackupResult with ok:false on any failure. */
+export async function runEncryptedBackup(): Promise<BackupResult> {
+  const t0 = Date.now();
+  try {
+    const dbPath = process.env.DB_PATH || './data/marketing.db';
+    if (!fs.existsSync(dbPath)) {
+      return { ok: false, durationMs: Date.now() - t0, error: `DB file not found at ${dbPath}` };
+    }
+
+    const backupDir = path.join(path.dirname(dbPath), 'backups');
+    if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
+
+    const key = getBackupKey();
+    const dstName = `marketing-${timestamp()}.db.enc`;
+    const dstPath = path.join(backupDir, dstName);
+
+    encryptFile(dbPath, dstPath, key);
+
+    const srcSize = fs.statSync(dbPath).size;
+    const encSize = fs.statSync(dstPath).size;
+    const pruned = pruneOld(backupDir, RETENTION_DAYS);
+    const s3Uploaded = await maybeUploadToS3(dstPath);
+
+    return {
+      ok: true,
+      path: dstPath,
+      srcSizeBytes: srcSize,
+      encSizeBytes: encSize,
+      kept: pruned.kept,
+      deleted: pruned.deleted,
+      s3Uploaded,
+      durationMs: Date.now() - t0,
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      durationMs: Date.now() - t0,
+      error: err instanceof Error ? err.message : String(err),
+    };
   }
-
-  const backupDir = path.join(path.dirname(dbPath), 'backups');
-  if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir, { recursive: true });
-
-  const key = getBackupKey();
-  const dstName = `marketing-${timestamp()}.db.enc`;
-  const dstPath = path.join(backupDir, dstName);
-
-  console.log(`[backup] encrypting ${dbPath} → ${dstPath}`);
-  encryptFile(dbPath, dstPath, key);
-
-  const srcSize = fs.statSync(dbPath).size;
-  const dstSize = fs.statSync(dstPath).size;
-  console.log(`[backup] source: ${(srcSize / 1024).toFixed(1)} KB → encrypted: ${(dstSize / 1024).toFixed(1)} KB`);
-
-  const pruned = pruneOld(backupDir, RETENTION_DAYS);
-  console.log(`[backup] retention: kept ${pruned.kept}, deleted ${pruned.deleted} old backup(s)`);
-
-  await maybeUploadToS3(dstPath);
-
-  console.log('[backup] done');
 }
 
-main().catch(err => {
-  console.error('[backup] FAILED:', err);
-  process.exit(1);
-});
+/** Standalone CLI entry — only runs if invoked directly (not when imported). */
+if (require.main === module) {
+  (async () => {
+    const result = await runEncryptedBackup();
+    if (!result.ok) {
+      console.error(`[backup] FAILED in ${result.durationMs}ms: ${result.error}`);
+      process.exit(1);
+    }
+    console.log(`[backup] OK in ${result.durationMs}ms`);
+    if (result.path) console.log(`[backup]   path: ${result.path}`);
+    if (result.srcSizeBytes != null) console.log(`[backup]   source: ${(result.srcSizeBytes / 1024).toFixed(1)} KB → encrypted: ${((result.encSizeBytes ?? 0) / 1024).toFixed(1)} KB`);
+    console.log(`[backup]   retention: kept ${result.kept}, deleted ${result.deleted}`);
+    if (result.s3Uploaded) console.log(`[backup]   uploaded to S3`);
+    else console.log(`[backup]   BACKUP_S3_URI not set — skipping off-site upload`);
+    process.exit(0);
+  })();
+}

@@ -6,6 +6,7 @@ import app from './app';
 import { getDb, closeDb } from './db/database';
 import { verifyEncryptionKey } from './db/encryption';
 import { runAutoMigrations, logMigrationSummary } from './migrations/autoMigrate';
+import { startDailyBackupScheduler } from './services/backup-scheduler';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
@@ -41,6 +42,11 @@ async function start(): Promise<void> {
     } catch (err) {
       console.error('[SERVER] WARNING: auto-migration failed (server will continue):', err);
     }
+
+    // Start the in-process daily backup scheduler (no external cron needed).
+    // Fires at 03:00 UTC (= 05:00 Israel). No-ops silently if
+    // BACKUP_ENCRYPTION_KEY is unset.
+    startDailyBackupScheduler(3);
   } else {
     console.warn('[SERVER] WARNING: DATA_ENCRYPTION_KEY is not set — sensitive columns will be stored in cleartext.');
     console.warn('         Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'base64\'))"');
