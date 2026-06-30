@@ -24,6 +24,7 @@ import {
 } from '../db/encryption';
 import { hashKey, verifyKey } from '../db/keyHash';
 import { logSecurityEvent } from './auth-security';
+import { listOutstandingDpas } from './dpa-status';
 
 const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const ONE_DAY_MS  = 24 * 60 * 60 * 1000;
@@ -80,6 +81,36 @@ async function runChecks(): Promise<CheckResult[]> {
     });
   } catch (err) {
     checks.push({ name: 'key_hashing', ok: false, detail: `error: ${err instanceof Error ? err.message : err}` });
+  }
+
+  // 5. Anthropic DPA + ZDR status (human action — flagged until marked done via admin endpoint)
+  try {
+    const out = listOutstandingDpas();
+    const anth = out.anthropic;
+    const anthOk = anth.status === 'signed' || anth.status === 'zdr_enabled';
+    checks.push({
+      name: 'anthropic_dpa',
+      ok: anthOk,
+      detail: anthOk
+        ? `Anthropic DPA ${anth.status} (signed ${anth.signed_at ?? 'date unknown'})`
+        : `OUTSTANDING: Anthropic DPA status is "${anth.status}". Submit via ANTHROPIC-DPA-REQUEST.md, then mark via POST /api/admin/dpa-status.`,
+    });
+    if (out.customers.length > 0) {
+      const pending = out.customers.map(c => `${c.customer_name}(${c.status})`).join(', ');
+      checks.push({
+        name: 'customer_dpas',
+        ok: false,
+        detail: `OUTSTANDING: ${out.customers.length} customer DPA(s) not yet signed: ${pending}`,
+      });
+    } else {
+      checks.push({
+        name: 'customer_dpas',
+        ok: true,
+        detail: 'No outstanding customer DPAs',
+      });
+    }
+  } catch (err) {
+    checks.push({ name: 'anthropic_dpa', ok: false, detail: `error: ${err instanceof Error ? err.message : err}` });
   }
 
   // 4. Recent encrypted backup exists (within last 36h — covers 24h cadence + retries)

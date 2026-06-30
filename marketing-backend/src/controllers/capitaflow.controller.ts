@@ -20,6 +20,12 @@ import {
 import { generatePopulatedNdaPdf } from '../services/nda-pdf-generator.service';
 import { isKeyLocked, recordAuthSuccess, recordAuthFailure, listRecentSecurityEvents, logSecurityEvent } from '../services/auth-security';
 import { runSecuritySelfTestNow } from '../services/security-self-test';
+import {
+  getAnthropicStatus,
+  listCustomerDpas,
+  setAnthropicStatus,
+  upsertCustomerDpa,
+} from '../services/dpa-status';
 import { extractMarketplaceTileData } from '../services/marketplace-extractor.service';
 import { signDeckToken, verifyDeckToken } from '../services/deck-token.service';
 import { runSystemCheck } from '../services/system-check.service';
@@ -1544,6 +1550,74 @@ export const capitaflowController = {
   async adminSecuritySelfTest(_req: Request, res: Response): Promise<void> {
     const result = await runSecuritySelfTestNow();
     res.json(result);
+  },
+
+  /** GET /api/admin/dpa-status — read Anthropic + all customer DPA statuses. */
+  adminGetDpaStatus(_req: Request, res: Response): void {
+    res.json({
+      anthropic: getAnthropicStatus(),
+      customers: listCustomerDpas(),
+    });
+  },
+
+  /** POST /api/admin/dpa-status — mark a DPA milestone.
+   *
+   *  Body for Anthropic:
+   *    { "kind": "anthropic", "status": "submitted"|"signed"|"zdr_enabled",
+   *      "submittedAt": "2026-07-01", "signedAt": "2026-07-15", "notes": "..." }
+   *
+   *  Body for customer:
+   *    { "kind": "customer", "customer": "Acme Corp", "status": "submitted"|"signed",
+   *      "submittedAt": "2026-07-01", "signedAt": "2026-07-15", "notes": "..." }
+   */
+  adminUpdateDpaStatus(req: Request, res: Response): void {
+    const body = req.body as {
+      kind?: 'anthropic' | 'customer';
+      customer?: string;
+      status?: 'pending' | 'submitted' | 'signed' | 'zdr_enabled';
+      submittedAt?: string;
+      signedAt?: string;
+      notes?: string;
+    };
+    if (!body.kind || (body.kind !== 'anthropic' && body.kind !== 'customer')) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'kind must be "anthropic" or "customer".' } });
+      return;
+    }
+    if (!body.status) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'status is required.' } });
+      return;
+    }
+    if (body.kind === 'anthropic') {
+      if (body.status === 'pending' || body.status === 'submitted' || body.status === 'signed' || body.status === 'zdr_enabled') {
+        const row = setAnthropicStatus({
+          status: body.status,
+          submittedAt: body.submittedAt,
+          signedAt: body.signedAt,
+          notes: body.notes,
+        });
+        res.json({ ok: true, row });
+        return;
+      }
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid anthropic status.' } });
+      return;
+    }
+    // customer
+    if (!body.customer) {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'customer is required for kind=customer.' } });
+      return;
+    }
+    if (body.status !== 'pending' && body.status !== 'submitted' && body.status !== 'signed') {
+      res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Invalid customer status (must be pending|submitted|signed).' } });
+      return;
+    }
+    const row = upsertCustomerDpa({
+      customer: body.customer,
+      status: body.status,
+      submittedAt: body.submittedAt,
+      signedAt: body.signedAt,
+      notes: body.notes,
+    });
+    res.json({ ok: true, row });
   },
 
   /** GET /api/admin/customer-keys/:id/export

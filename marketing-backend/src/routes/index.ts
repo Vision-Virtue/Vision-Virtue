@@ -583,6 +583,20 @@ router.post(
   (req, res) => capitaflowController.adminSecuritySelfTest(req, res),
 );
 
+// DPA status — read all outstanding + history
+router.get(
+  '/admin/dpa-status',
+  requireAdminPin,
+  (req, res) => capitaflowController.adminGetDpaStatus(req, res),
+);
+// DPA status — mark milestones reached (Anthropic submitted, customer signed, etc).
+// Removes the item from the self-test "OUTSTANDING" list.
+router.post(
+  '/admin/dpa-status',
+  requireAdminPin,
+  (req, res) => capitaflowController.adminUpdateDpaStatus(req, res),
+);
+
 // ─── Admin: Investor Keys (Investors Marketplace) ────────────────────────────
 router.post(
   '/admin/investor-keys',
