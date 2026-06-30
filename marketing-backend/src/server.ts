@@ -7,6 +7,7 @@ import { getDb, closeDb } from './db/database';
 import { verifyEncryptionKey } from './db/encryption';
 import { runAutoMigrations, logMigrationSummary } from './migrations/autoMigrate';
 import { startDailyBackupScheduler } from './services/backup-scheduler';
+import { startWeeklySecuritySelfTest } from './services/security-self-test';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
@@ -47,6 +48,11 @@ async function start(): Promise<void> {
     // Fires at 03:00 UTC (= 05:00 Israel). No-ops silently if
     // BACKUP_ENCRYPTION_KEY is unset.
     startDailyBackupScheduler(3);
+
+    // Weekly security self-test — every Sunday 04:00 UTC. Verifies the
+    // full crypto stack is healthy and writes to security_events so admin
+    // has documented proof-of-life.
+    startWeeklySecuritySelfTest();
   } else {
     console.warn('[SERVER] WARNING: DATA_ENCRYPTION_KEY is not set — sensitive columns will be stored in cleartext.');
     console.warn('         Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'base64\'))"');

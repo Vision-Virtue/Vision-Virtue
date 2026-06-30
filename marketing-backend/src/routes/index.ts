@@ -575,6 +575,13 @@ router.get(
   requireAdminPin,
   (req, res) => capitaflowController.adminSecurityEvents(req, res),
 );
+// Run the full security self-test on demand and return the results.
+// Same checks run automatically every Sunday 04:00 UTC.
+router.post(
+  '/admin/security-self-test',
+  requireAdminPin,
+  (req, res) => capitaflowController.adminSecuritySelfTest(req, res),
+);
 
 // ─── Admin: Investor Keys (Investors Marketplace) ────────────────────────────
 router.post(

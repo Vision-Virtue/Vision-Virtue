@@ -100,7 +100,9 @@ app.use(
 
 // Strict limit on customer key auth (prevents key enumeration / brute-force).
 // Tightened P1: 5 attempts / 15 min / IP (was 20). Combined with per-key
-// lockout in auth.security.ts (5 consecutive failures on a single key → 1h lock).
+// lockout in auth-security.ts (5 consecutive failures on a single key → 1h lock).
+// `skipSuccessfulRequests` so a legitimate logged-in user can hit auth from
+// the same IP without consuming budget — only failed attempts count.
 app.use(
   '/api/customer/auth',
   rateLimit({
@@ -108,6 +110,7 @@ app.use(
     max: 5,
     standardHeaders: true,
     legacyHeaders: false,
+    skipSuccessfulRequests: true,
     message: { error: { code: 'RATE_LIMITED', message: 'Too many auth requests, please try again later.' } },
   }),
 );
@@ -120,6 +123,7 @@ app.use(
     max: 5,
     standardHeaders: true,
     legacyHeaders: false,
+    skipSuccessfulRequests: true,
     message: { error: { code: 'RATE_LIMITED', message: 'Too many auth requests, please try again later.' } },
   }),
 );

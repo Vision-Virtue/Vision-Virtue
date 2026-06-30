@@ -19,6 +19,7 @@ import {
 } from '../services/marketplace-deck.service';
 import { generatePopulatedNdaPdf } from '../services/nda-pdf-generator.service';
 import { isKeyLocked, recordAuthSuccess, recordAuthFailure, listRecentSecurityEvents, logSecurityEvent } from '../services/auth-security';
+import { runSecuritySelfTestNow } from '../services/security-self-test';
 import { extractMarketplaceTileData } from '../services/marketplace-extractor.service';
 import { signDeckToken, verifyDeckToken } from '../services/deck-token.service';
 import { runSystemCheck } from '../services/system-check.service';
@@ -1535,6 +1536,14 @@ export const capitaflowController = {
     const limit = Math.min(1000, Math.max(1, parseInt(String(req.query.limit ?? '200'), 10) || 200));
     const events = listRecentSecurityEvents(limit);
     res.json({ events, limit });
+  },
+
+  /** POST /api/admin/security-self-test — run the full crypto stack check
+   *  on demand. Same checks fire automatically every Sunday 04:00 UTC.
+   *  Admin PIN required. */
+  async adminSecuritySelfTest(_req: Request, res: Response): Promise<void> {
+    const result = await runSecuritySelfTestNow();
+    res.json(result);
   },
 
   /** GET /api/admin/customer-keys/:id/export
