@@ -76,32 +76,27 @@ if (podcastCard) {
 // ── OneSource card → direct redirect to the hosted OneSource ERP.
 //
 // Unlike the PIN-gated products above, OneSource has its own multi-user
-// login page (username + password + company-scope picker + license gate),
-// so the website just hands off — no PIN required at this layer.
-//
-// PRODUCTION SWITCH: fill in ONESOURCE_URL below when the deployment
-// (Render / subdomain / etc.) is live. Leaving it empty keeps the card
-// visibly "Coming Soon" and disabled.
-const ONESOURCE_URL = 'https://one-source-web.onrender.com';   // e.g. 'https://onesource.visionvirtuepartnership.com'
+// login system so we don't gate it with the shared PIN.
+const ONESOURCE_URL = 'https://one-source-web.onrender.com';
 const onesourceCard = document.getElementById('onesourceCard');
 const onesourceCta  = document.getElementById('onesourceCustomerCta');
 const onesourceComingBadge = document.getElementById('onesourceComingBadge');
 if (ONESOURCE_URL && onesourceCta) {
-  // Deployment is live — activate the CTA + hide the "Coming Soon" badge.
   onesourceCta.classList.remove('is-disabled');
   onesourceCta.removeAttribute('aria-disabled');
-  onesourceCta.removeAttribute('title');
-  if (onesourceComingBadge) onesourceComingBadge.style.display = 'none';
-  onesourceCta.addEventListener('click', () => {
+  onesourceCta.title = 'Enter OneSource';
+  onesourceCta.addEventListener('click', (e) => {
+    e.stopPropagation();
     window.location.href = ONESOURCE_URL;
   });
   if (onesourceCard) {
-    onesourceCard.addEventListener('click', (ev) => {
-      // Ignore clicks on child elements that already have their own handler.
-      if (ev.target.closest('button, a, .offering-play-btn')) return;
+    onesourceCard.style.cursor = 'pointer';
+    onesourceCard.addEventListener('click', (e) => {
+      if (e.target.closest('.offering-cta')) return;
       window.location.href = ONESOURCE_URL;
     });
   }
+  if (onesourceComingBadge) onesourceComingBadge.style.display = 'none';
 }
 
 // ── Agreements card → open gate then redirect to signed-NDA listing ──
