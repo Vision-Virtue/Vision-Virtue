@@ -73,6 +73,32 @@ if (podcastCard) {
   });
 }
 
+// ── OneSource card → direct redirect to the hosted OneSource ERP.
+//
+// Unlike the PIN-gated products above, OneSource has its own multi-user
+// login system so we don't gate it with the shared PIN.
+const ONESOURCE_URL = 'https://one-source-web.onrender.com';
+const onesourceCard = document.getElementById('onesourceCard');
+const onesourceCta  = document.getElementById('onesourceCustomerCta');
+const onesourceComingBadge = document.getElementById('onesourceComingBadge');
+if (ONESOURCE_URL && onesourceCta) {
+  onesourceCta.classList.remove('is-disabled');
+  onesourceCta.removeAttribute('aria-disabled');
+  onesourceCta.title = 'Enter OneSource';
+  onesourceCta.addEventListener('click', (e) => {
+    e.stopPropagation();
+    window.location.href = ONESOURCE_URL;
+  });
+  if (onesourceCard) {
+    onesourceCard.style.cursor = 'pointer';
+    onesourceCard.addEventListener('click', (e) => {
+      if (e.target.closest('.offering-cta')) return;
+      window.location.href = ONESOURCE_URL;
+    });
+  }
+  if (onesourceComingBadge) onesourceComingBadge.style.display = 'none';
+}
+
 // ── Agreements card → open gate then redirect to signed-NDA listing ──
 const agreementsCard = document.getElementById('agreementsCard');
 if (agreementsCard) {
