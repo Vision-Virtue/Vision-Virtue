@@ -77,7 +77,7 @@ if (podcastCard) {
 //
 // Unlike the PIN-gated products above, OneSource has its own multi-user
 // login system so we don't gate it with the shared PIN.
-const ONESOURCE_URL = 'https://one-source-web.onrender.com';
+const ONESOURCE_URL = '/onesource/';
 const onesourceCard = document.getElementById('onesourceCard');
 const onesourceCta  = document.getElementById('onesourceCustomerCta');
 const onesourceComingBadge = document.getElementById('onesourceComingBadge');
