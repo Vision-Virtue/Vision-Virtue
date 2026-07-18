@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vision & Virtue</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script>
+  // Scoped SPA fallback — only for OneSource deep links (/onesource/*).
+  // Encodes the path as ?/<path> and redirects to /onesource/; the
+  // OneSource index.html decodes it back with history.replaceState so
+  // React Router picks up the deep route. Source: rafgraph/spa-github-pages (MIT).
+  (function () {
+    var l = window.location;
+    if (l.pathname.indexOf('/onesource/') === 0 && l.pathname !== '/onesource/') {
+      var segments = l.pathname.slice(1).split('/');   // ['onesource', 'login', ...]
+      l.replace(
+        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+        '/onesource/?/' +
+        segments.slice(1).join('/').replace(/&/g, '~and~') +
+        (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+        l.hash
+      );
+    }
+  })();
+</script>
+<style>
+body{font-family:-apple-system,system-ui,sans-serif;background:#f6f7f9;color:#0f1a33;text-align:center;padding:80px 20px;margin:0}
+.wrap{max-width:520px;margin:0 auto}
+h1{font-weight:600;font-size:32px;margin:0 0 12px}
+p{color:#4a5568;line-height:1.6}
+a{color:#0f1a33;text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>Page not found</h1>
+<p>Nothing at this address on <strong>visionvirtuepartnership.com</strong>.</p>
+<p><a href="/">Return home</a></p>
+</div>
+</body>
+</html>
