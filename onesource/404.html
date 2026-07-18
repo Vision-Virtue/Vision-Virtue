@@ -1,16 +1,23 @@
 <!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/png" href="/onesource/1000102438.png" />
-    <link rel="apple-touch-icon" href="/onesource/1000102438.png" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>One Source</title>
-    <script type="module" crossorigin src="/onesource/assets/index-DHhihn0U.js"></script>
-    <link rel="modulepreload" crossorigin href="/onesource/assets/x-DYXEDFtO.js">
-    <link rel="stylesheet" crossorigin href="/onesource/assets/index-BljMzRex.css">
-  </head>
-  <body>
-    <div id="root"></div>
-  </body>
+<html>
+<head>
+<meta charset="utf-8">
+<title>One Source</title>
+<script>
+  // SPA fallback for GitHub Pages — encodes deep path as ?/<path>,
+  // then /onesource/index.html decodes it back. Source: rafgraph/spa-github-pages (MIT).
+  (function () {
+    var pathSegmentsToKeep = 1;   // '/onesource/' = 1 segment
+    var l = window.location;
+    l.replace(
+      l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+      l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
+      l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+      (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+      l.hash
+    );
+  })();
+</script>
+</head>
+<body></body>
 </html>
